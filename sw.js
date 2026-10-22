@@ -1,4 +1,4 @@
-var CACHE_NAME = "health-coach-v1";
+var CACHE_NAME = "upkeep-v1";
 var SHELL_FILES = [
   "./",
   "./index.html",

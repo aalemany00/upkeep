@@ -1,4 +1,4 @@
-# Health Coach (working title)
+# Upkeep
 
 TCSS 490 Artifact 3. A personal health tracker — food/calories/protein, gym
 workouts, water, steps, weight, vitamins, and goals — synced between phone

@@ -1,4 +1,4 @@
-# Health Coach (working title)
+# Upkeep
 
 TCSS 490 Artifact 3 ("AI Inside It"). A health tracker — food/calories/
 protein, gym workouts, water, steps, weight, vitamins/supplements, and goals —

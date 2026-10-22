@@ -1,9 +1,9 @@
 {
-  "name": "health-coach-scripts",
+  "name": "upkeep-scripts",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Local-only helper scripts for the Health Coach app (not deployed with the static site).",
+  "description": "Local-only helper scripts for the Upkeep app (not deployed with the static site).",
   "scripts": {
     "coach-note": "node coach-note.js"
   },

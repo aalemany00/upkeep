@@ -1,6 +1,6 @@
 {
-  "name": "Health Coach",
-  "short_name": "Health Coach",
+  "name": "Upkeep",
+  "short_name": "Upkeep",
   "description": "Track food, gym, water, steps, weight, and vitamins, with a weekly AI coaching note.",
   "start_url": "./index.html",
   "scope": "./",

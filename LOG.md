@@ -1,4 +1,4 @@
-# Plans/Changes Log — Artifact 3 (Health Coach)
+# Plans/Changes Log — Artifact 3 (Upkeep)
 
 Course requirement: a record of what I set out to build, what I asked the
 agent for, what I decided, what I abandoned. Kept here, in this artifact's
@@ -110,7 +110,8 @@ own repo, as required.
 - Delete the `test-coach@example.com` test account and its food entry from
   Firebase once real use starts (there's also now a real test coach note
   attached to it).
-- Decide on a real name (currently "Health Coach" working title).
+- ~~Decide on a real name~~ — named **Upkeep** (2026-10-22), picked from a
+  shortlist (Upkeep, Baseline, Pulsecheck, CoachLog).
 - First real week of logged data + first generated coach note, to see if the
   advice is actually useful or needs prompt changes.
 - Push to its own GitHub repo and enable Pages (not done yet — only a local
