@@ -260,6 +260,23 @@
         <button type="submit" class="btn primary">Save goals</button>
         <p id="goals-saved" class="subtle" hidden>Saved.</p>
       </form>
+
+      <div class="panel danger-zone">
+        <h2>Delete account</h2>
+        <p class="subtle small">Permanently deletes your account and every bit of your data (logs, goals, split, coach notes) from Firebase. This cannot be undone.</p>
+        <button type="button" class="btn danger" id="delete-account-start-btn">Delete my account</button>
+
+        <form id="delete-account-form" hidden>
+          <p class="subtle small">Re-enter your password to confirm — Firebase requires a recent sign-in before it allows account deletion.</p>
+          <input type="password" id="delete-account-password" placeholder="Password" autocomplete="current-password" required />
+          <div class="row" style="margin-top:8px;">
+            <button type="submit" class="btn danger">Permanently delete everything</button>
+            <button type="button" class="btn" id="delete-account-cancel-btn">Cancel</button>
+          </div>
+          <p id="delete-account-error" class="error" hidden></p>
+          <p id="delete-account-progress" class="subtle small" hidden>Deleting your data...</p>
+        </form>
+      </div>
     </section>
 
     <!-- Coach -->

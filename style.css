@@ -215,6 +215,11 @@ input[type="number"] {
 
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #06130b; font-weight: 600; }
 .btn.small { padding: 6px 12px; font-size: 0.85em; }
+.btn.danger { background: transparent; border-color: var(--danger); color: var(--danger); }
+.btn.danger:hover { background: var(--danger); color: #1a0b08; }
+
+.danger-zone { border-color: var(--danger); }
+.danger-zone #delete-account-form { margin-top: 12px; display: flex; flex-direction: column; gap: 4px; }
 
 .entry-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 

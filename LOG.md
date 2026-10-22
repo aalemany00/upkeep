@@ -179,6 +179,20 @@ own repo, as required.
   account → onboarding → change days in Goals → checked Firestore directly
   for the new split).
 
+## 2026-10-22 — Delete account
+
+- Asked for an in-app way to permanently delete an account and its data
+  from Firebase, not just stop using it.
+- Added a "Delete account" danger zone to Goals: re-enter your password
+  (Firebase won't let you delete an account without a recent sign-in),
+  then it deletes every Firestore doc under that user and the Firebase
+  Auth user itself, in that order — deleting Auth first would lock out the
+  Firestore cleanup, since the security rules check who's signed in.
+- Tested the whole thing with a throwaway account: wrong password shows a
+  clear error and changes nothing; the correct password actually deletes
+  it, confirmed with the Admin SDK that the Auth user was really gone
+  afterward (not just signed out).
+
 ## Open items
 
 - Delete the `test-coach@example.com` test account and its food entry from

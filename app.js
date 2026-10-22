@@ -2,11 +2,12 @@ import { firebaseConfig } from "./firebase-config.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword,
-  createUserWithEmailAndPassword, signOut
+  createUserWithEmailAndPassword, signOut, deleteUser,
+  reauthenticateWithCredential, EmailAuthProvider
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 import {
-  getFirestore, collection, doc, addDoc, setDoc, getDoc, deleteDoc,
-  query, orderBy, limit, onSnapshot, Timestamp
+  getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc,
+  query, orderBy, limit, onSnapshot, writeBatch, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { assignSplit, targetFor } from "./gym.js";
 
@@ -319,6 +320,7 @@ function teardownSubscriptions() {
   showingOnboardingReview = false;
   document.getElementById("onboarding-form").hidden = false;
   document.getElementById("onboarding-review").hidden = true;
+  resetDeleteAccountUi();
   renderDashboard();
   renderTodayEntries();
   renderFoodEntries();
@@ -639,6 +641,78 @@ goalsForm.addEventListener("submit", async (e) => {
   const saved = document.getElementById("goals-saved");
   saved.hidden = false;
   setTimeout(() => (saved.hidden = true), 2000);
+});
+
+// ---------------------------------------------------------------------
+// Delete account — irreversible: wipes every Firestore doc under this
+// user, then the Firebase Auth user itself. Firebase requires a recent
+// sign-in to delete an account, so this re-asks for the password rather
+// than silently using the existing (possibly old) session.
+// ---------------------------------------------------------------------
+const deleteStartBtn = document.getElementById("delete-account-start-btn");
+const deleteForm = document.getElementById("delete-account-form");
+const deleteCancelBtn = document.getElementById("delete-account-cancel-btn");
+const deletePasswordInput = document.getElementById("delete-account-password");
+const deleteErrorEl = document.getElementById("delete-account-error");
+const deleteProgressEl = document.getElementById("delete-account-progress");
+
+function resetDeleteAccountUi() {
+  deleteForm.hidden = true;
+  deleteStartBtn.hidden = false;
+  deleteForm.reset();
+  deleteErrorEl.hidden = true;
+  deleteProgressEl.hidden = true;
+  deleteForm.querySelector("button[type=submit]").disabled = false;
+}
+
+deleteStartBtn.addEventListener("click", () => {
+  deleteStartBtn.hidden = true;
+  deleteForm.hidden = false;
+  deletePasswordInput.focus();
+});
+
+deleteCancelBtn.addEventListener("click", resetDeleteAccountUi);
+
+async function deleteAllDocs(colRef) {
+  const snap = await getDocs(colRef);
+  const docs = snap.docs;
+  for (let i = 0; i < docs.length; i += 450) {
+    const batch = writeBatch(db);
+    docs.slice(i, i + 450).forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+}
+
+deleteForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!currentUid || !auth.currentUser) return;
+
+  deleteErrorEl.hidden = true;
+  deleteProgressEl.hidden = false;
+  const submitBtn = deleteForm.querySelector("button[type=submit]");
+  submitBtn.disabled = true;
+
+  try {
+    const credential = EmailAuthProvider.credential(auth.currentUser.email, deletePasswordInput.value);
+    await reauthenticateWithCredential(auth.currentUser, credential);
+
+    const uid = currentUid;
+    await deleteAllDocs(collection(db, "users", uid, "entries"));
+    await deleteAllDocs(collection(db, "users", uid, "workoutLogs"));
+    await deleteAllDocs(collection(db, "users", uid, "coachNotes"));
+    await deleteDoc(doc(db, "users", uid, "meta", "goals"));
+    await deleteDoc(doc(db, "users", uid, "profile", "me"));
+    await deleteDoc(doc(db, "users", uid, "split", "current"));
+
+    await deleteUser(auth.currentUser);
+    // onAuthStateChanged fires with null from here, which returns to the
+    // sign-in screen and resets this form via teardownSubscriptions.
+  } catch (err) {
+    deleteErrorEl.textContent = err.message.replace("Firebase: ", "");
+    deleteErrorEl.hidden = false;
+    deleteProgressEl.hidden = true;
+    submitBtn.disabled = false;
+  }
 });
 
 // ---------------------------------------------------------------------

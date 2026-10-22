@@ -41,6 +41,12 @@ number of people can sign up, each sees only their own data.
 - Onboarding ends on a plain "Your plan" review screen (split, days/week,
   default exercise per slot) before dropping into the app — still no AI
   call, just the `assignSplit` output made visible instead of silent.
+- Goals has a "Delete account" danger zone: re-enter your password (Firebase
+  requires a recent sign-in before it allows deletion), then it wipes every
+  Firestore doc under that user (entries, workoutLogs, coachNotes, goals,
+  profile, split) before deleting the Firebase Auth user itself. Tested
+  both paths (wrong password → clear error, correct password → account and
+  data actually gone, confirmed via the Admin SDK).
 - "Your info" in Goals doubles as account settings (age/sex/height/weight,
   editable anytime, not just at onboarding). Saving any of it, the goal, or
   availability bumps `profile.updatedAt`; if that's newer than the latest
