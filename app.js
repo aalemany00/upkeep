@@ -594,8 +594,14 @@ goalsForm.addEventListener("submit", async (e) => {
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const availabilityChanged = goalsDays.length !== (goals.daysPerWeek || 0)
-    || JSON.stringify(goalsDays) !== JSON.stringify(goals.preferredDays || []);
+  // Snapshot goalsDays now — writing the profile doc below triggers its
+  // onSnapshot listener, which calls fillGoalsForm() and would otherwise
+  // reset this module-level variable mid-submit (a real race that silently
+  // dropped availability changes — confirmed by testing).
+  const selectedDays = goalsDays.slice();
+
+  const availabilityChanged = selectedDays.length !== (goals.daysPerWeek || 0)
+    || JSON.stringify(selectedDays) !== JSON.stringify(goals.preferredDays || []);
   const goalTypeChanged = data.get("goalType") !== goals.goalType;
 
   const newProfileFields = {
@@ -622,12 +628,12 @@ goalsForm.addEventListener("submit", async (e) => {
     weightGoal: Number(data.get("weightGoal")) || null,
     vitaminsList,
     goalType: data.get("goalType"),
-    daysPerWeek: goalsDays.length,
-    preferredDays: goalsDays
+    daysPerWeek: selectedDays.length,
+    preferredDays: selectedDays
   }, { merge: true });
 
-  if (availabilityChanged && goalsDays.length) {
-    await rebuildSplit(goalsDays.length);
+  if (availabilityChanged && selectedDays.length) {
+    await rebuildSplit(selectedDays.length);
   }
 
   const saved = document.getElementById("goals-saved");
