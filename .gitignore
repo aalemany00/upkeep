@@ -2,6 +2,7 @@ node_modules/
 *.log
 .DS_Store
 
-# Firebase service account key used by the local coach-note script —
-# never commit real credentials.
+# Firebase service account key and local config used by the coach-note
+# script — never commit real credentials or your personal UID.
 scripts/serviceAccountKey.json
+scripts/config.json

@@ -1,0 +1,13 @@
+{
+  "name": "health-coach-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-only helper scripts for the Health Coach app (not deployed with the static site).",
+  "scripts": {
+    "coach-note": "node coach-note.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.6.0"
+  }
+}

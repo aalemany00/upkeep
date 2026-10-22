@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Health Coach</title>
+<meta name="theme-color" content="#14532d" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- Auth gate -->
+<section id="auth-screen" class="screen">
+  <div class="auth-card">
+    <h1>Health Coach</h1>
+    <p class="subtle">Food, gym, water, steps, weight, vitamins — one place, synced across your devices.</p>
+    <form id="auth-form">
+      <input type="email" id="auth-email" placeholder="Email" autocomplete="email" required />
+      <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password" required minlength="6" />
+      <div class="auth-actions">
+        <button type="submit" id="auth-signin-btn" class="btn primary">Sign in</button>
+        <button type="button" id="auth-signup-btn" class="btn">Create account</button>
+      </div>
+    </form>
+    <p id="auth-error" class="error" hidden></p>
+  </div>
+</section>
+
+<!-- App shell -->
+<div id="app" hidden>
+  <header class="topbar">
+    <h1>Health Coach</h1>
+    <button id="signout-btn" class="btn small">Sign out</button>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-view="dashboard">Dashboard</button>
+    <button class="tab" data-view="log">Log</button>
+    <button class="tab" data-view="goals">Goals</button>
+    <button class="tab" data-view="coach">Coach</button>
+  </nav>
+
+  <main id="views">
+
+    <!-- Dashboard -->
+    <section id="view-dashboard" class="view active">
+      <div class="card-grid" id="dashboard-stats"></div>
+
+      <div class="panel">
+        <h2>Vitamins &amp; supplements today</h2>
+        <div id="dashboard-vitamins" class="chip-row"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Latest coach note</h2>
+          <button class="link-btn" data-switch-view="coach">See all</button>
+        </div>
+        <div id="dashboard-coach-preview" class="coach-note">
+          <p class="subtle">No coach note yet. See <code>scripts/README.md</code> to generate your first weekly note.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Log -->
+    <section id="view-log" class="view">
+      <div class="log-grid">
+
+        <form class="log-form" id="form-food" data-type="food">
+          <h3>Food</h3>
+          <input type="text" name="name" placeholder="What did you eat?" required />
+          <div class="row">
+            <input type="number" name="calories" placeholder="Calories (kcal)" min="0" required />
+            <input type="number" name="protein" placeholder="Protein (g)" min="0" step="0.1" />
+          </div>
+          <button type="submit" class="btn primary small">Add</button>
+        </form>
+
+        <form class="log-form" id="form-workout" data-type="workout">
+          <h3>Gym</h3>
+          <input type="text" name="name" placeholder="Exercise (e.g. Bench press)" required />
+          <div class="row">
+            <input type="number" name="sets" placeholder="Sets" min="0" />
+            <input type="number" name="reps" placeholder="Reps" min="0" />
+            <input type="number" name="weight" placeholder="Weight (lb)" min="0" step="0.5" />
+          </div>
+          <input type="text" name="notes" placeholder="Notes (optional)" />
+          <button type="submit" class="btn primary small">Add</button>
+        </form>
+
+        <form class="log-form" id="form-water" data-type="water">
+          <h3>Water</h3>
+          <input type="number" name="ml" placeholder="Amount (ml)" min="0" required />
+          <div class="quick-row">
+            <button type="button" class="chip-btn" data-quick-ml="250">+250ml</button>
+            <button type="button" class="chip-btn" data-quick-ml="500">+500ml</button>
+            <button type="button" class="chip-btn" data-quick-ml="750">+750ml</button>
+          </div>
+          <button type="submit" class="btn primary small">Add</button>
+        </form>
+
+        <form class="log-form" id="form-weight" data-type="weight">
+          <h3>Weight</h3>
+          <input type="number" name="lb" placeholder="Weight (lb)" min="0" step="0.1" required />
+          <button type="submit" class="btn primary small">Add</button>
+        </form>
+
+        <form class="log-form" id="form-activity" data-type="activity">
+          <h3>Activity</h3>
+          <div class="row">
+            <input type="number" name="steps" placeholder="Steps" min="0" />
+            <input type="number" name="caloriesBurned" placeholder="Calories burned" min="0" />
+          </div>
+          <button type="submit" class="btn primary small">Add</button>
+        </form>
+
+        <form class="log-form" id="form-vitamin" data-type="vitamin">
+          <h3>Vitamins / supplements</h3>
+          <p class="subtle small">Mark the ones you took today — manage the list in Goals.</p>
+          <div id="vitamin-quick-list" class="chip-row"></div>
+        </form>
+
+      </div>
+
+      <div class="panel">
+        <h2>Today's entries</h2>
+        <ul id="today-entries" class="entry-list"></ul>
+      </div>
+    </section>
+
+    <!-- Goals -->
+    <section id="view-goals" class="view">
+      <form id="goals-form" class="panel">
+        <h2>Daily goals</h2>
+        <label>Calories (kcal)
+          <input type="number" name="calorieGoal" min="0" />
+        </label>
+        <label>Protein (g)
+          <input type="number" name="proteinGoal" min="0" />
+        </label>
+        <label>Water (ml)
+          <input type="number" name="waterGoal" min="0" />
+        </label>
+        <label>Steps
+          <input type="number" name="stepsGoal" min="0" />
+        </label>
+        <label>Target weight (lb)
+          <input type="number" name="weightGoal" min="0" step="0.1" />
+        </label>
+        <label>Vitamins / supplements to track
+          <input type="text" name="vitaminsList" placeholder="Comma-separated, e.g. Vitamin D, Omega-3, Multivitamin" />
+        </label>
+        <button type="submit" class="btn primary">Save goals</button>
+        <p id="goals-saved" class="subtle" hidden>Saved.</p>
+      </form>
+    </section>
+
+    <!-- Coach -->
+    <section id="view-coach" class="view">
+      <div class="panel">
+        <h2>Weekly coach notes</h2>
+        <p class="subtle">Generated by running <code>scripts/coach-note.js</code> yourself — see
+          <code>scripts/README.md</code>. Not automatic; it's a step you run (e.g. once a week).</p>
+        <div id="coach-notes-list"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

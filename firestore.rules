@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Every user only ever reads/writes their own subtree. The coach-note
+    // script writes coachNotes using a service account, which bypasses
+    // these rules by design (Admin SDK), so it doesn't need its own clause.
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "Health Coach",
+  "short_name": "Health Coach",
+  "description": "Track food, gym, water, steps, weight, and vitamins, with a weekly AI coaching note.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f1713",
+  "theme_color": "#14532d",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
