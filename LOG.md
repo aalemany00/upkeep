@@ -56,10 +56,27 @@ own repo, as required.
   action to set up, not the agent's. `firebase-config.js` still has
   placeholder values.
 
+## 2026-10-22 — Firebase wired up and verified live
+
+- Created the `health-coach-36a28` Firebase project myself (Standard edition
+  Firestore, `nam5` multi-region, Production mode), enabled Email/Password
+  auth, published `firestore.rules` as-is.
+- Gave Claude the real `firebaseConfig` values to drop into
+  `firebase-config.js` (safe to commit — it's a public client identifier,
+  not a secret).
+- First test run hit `auth/configuration-not-found` (expected — Auth wasn't
+  enabled yet) and then `permission-denied` on every Firestore read/write
+  even after enabling Auth and publishing the rules (rules propagation lag).
+  Waited and retried — a real test account, a real food log entry (650
+  kcal / 45g protein), and the dashboard math all worked end to end.
+- Left the `test-coach@example.com` throwaway test account + its one food
+  entry in the project; harmless since rules scope everything per-uid, but
+  should delete it from Authentication → Users before this is "done."
+
 ## Open items
 
-- Create the actual Firebase project (my own action, not the agent's) and
-  drop the real config into `firebase-config.js`.
+- Delete the `test-coach@example.com` test account and its food entry from
+  Firebase once real use starts.
 - Set up `scripts/serviceAccountKey.json` and `scripts/config.json` so the
   coach-note script can run — see `scripts/README.md`.
 - Decide on a real name (currently "Health Coach" working title).
