@@ -168,6 +168,16 @@ own repo, as required.
   was never a real Firestore/security leak (confirmed each account's actual
   data was correctly isolated), just a client-side rendering gap, but
   worth catching given multiple people share this app.
+- Asked Claude to actually test the full flow itself: create an account,
+  fill in onboarding, then go change the settings. Good thing I asked —
+  it found a third real bug this way: saving a changed availability in
+  Goals silently kept the old split. The profile write's own live-sync
+  listener was resetting the day-picker state mid-submit, before the goals
+  doc got written with the new days. Fixed by snapshotting the selected
+  days at the start of the save instead of re-reading that variable after
+  the write. Confirmed fixed by re-running the exact same test (new
+  account → onboarding → change days in Goals → checked Firestore directly
+  for the new split).
 
 ## Open items
 
