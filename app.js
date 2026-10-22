@@ -41,6 +41,7 @@ let exerciseById = new Map();
 
 let calViewDate = new Date();   // month currently shown in the Gym calendar
 let selectedDateKey = null;     // date the Gym day-panel is showing
+let showingOnboardingReview = false; // gate: stay on onboarding screen to show the just-built plan
 
 async function fetchCatalogWithRetry(attempts = 2) {
   for (let i = 0; i < attempts; i++) {
@@ -133,6 +134,11 @@ onAuthStateChanged(auth, (user) => {
 
 function updateScreenVisibility() {
   const hasProfile = !!profile;
+  if (hasProfile && showingOnboardingReview) {
+    document.getElementById("onboarding-screen").hidden = false;
+    document.getElementById("app").hidden = true;
+    return;
+  }
   document.getElementById("onboarding-screen").hidden = hasProfile;
   document.getElementById("app").hidden = !hasProfile;
 }
@@ -170,6 +176,7 @@ async function rebuildSplit(daysPerWeek) {
   }
   const newSplit = assignSplit(daysPerWeek, exerciseCatalog);
   await setDoc(doc(db, "users", currentUid, "split", "current"), newSplit);
+  return newSplit;
 }
 
 let onboardingDays = DEFAULT_DAY_PATTERN[3];
@@ -187,29 +194,58 @@ onboardingForm.daysPerWeek.addEventListener("input", (e) => {
   drawOnboardingDays();
 });
 
+const GOAL_LABELS = { gain: "Build muscle", lean: "Lose fat", both: "Recomposition (both)" };
+
+function renderOnboardingReview(newSplit, goalType) {
+  const el = document.getElementById("onboarding-review-content");
+  const dayList = newSplit.days
+    .map((day) => {
+      const names = day.slots.map((s) => exerciseById.get(s.defaultId)?.name || "—").join(", ");
+      return `<li><strong>${day.dayType}:</strong> ${names}</li>`;
+    })
+    .join("");
+  el.innerHTML = `
+    <p><strong>${newSplit.name}</strong> — ${newSplit.daysPerWeek} day${newSplit.daysPerWeek === 1 ? "" : "s"}/week, goal: ${GOAL_LABELS[goalType] || goalType}</p>
+    <ul>${dayList}</ul>
+  `;
+}
+
 onboardingForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!currentUid || !onboardingDays.length) return;
   const data = new FormData(onboardingForm);
 
   const startWeightLb = Number(data.get("startWeightLb"));
+  const goalType = data.get("goalType");
 
   await setDoc(doc(db, "users", currentUid, "profile", "me"), {
     age: Number(data.get("age")),
     sex: data.get("sex"),
     heightIn: Number(data.get("heightIn")),
     startWeightLb,
-    createdAt: Timestamp.now()
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now()
   });
 
   await setDoc(doc(db, "users", currentUid, "meta", "goals"), {
-    goalType: data.get("goalType"),
+    goalType,
     daysPerWeek: onboardingDays.length,
     preferredDays: onboardingDays
   }, { merge: true });
 
-  await rebuildSplit(onboardingDays.length);
+  const newSplit = await rebuildSplit(onboardingDays.length);
   await addEntry("weight", { lb: startWeightLb });
+
+  showingOnboardingReview = true;
+  onboardingForm.hidden = true;
+  document.getElementById("onboarding-review").hidden = false;
+  renderOnboardingReview(newSplit, goalType);
+  updateScreenVisibility();
+});
+
+document.getElementById("onboarding-continue-btn").addEventListener("click", () => {
+  showingOnboardingReview = false;
+  updateScreenVisibility();
 });
 
 // ---------------------------------------------------------------------
@@ -239,12 +275,15 @@ function subscribeAll(uid) {
   unsubCoach = onSnapshot(coachQuery, (snap) => {
     coachNotes = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     renderCoachNotes();
+    renderCoachReviewBanner();
   });
 
   const profileRef = doc(db, "users", uid, "profile", "me");
   unsubProfile = onSnapshot(profileRef, (snap) => {
     profile = snap.exists() ? snap.data() : null;
     updateScreenVisibility();
+    fillGoalsForm();
+    renderCoachReviewBanner();
   });
 
   const splitRef = doc(db, "users", uid, "split", "current");
@@ -273,6 +312,21 @@ function teardownSubscriptions() {
   profile = null;
   split = null;
   workoutLogs = [];
+
+  // Reset UI left over from a previous account in this same browser tab
+  // (shared devices, multiple people signing in/out) so nothing stale
+  // lingers for the next person who signs in.
+  showingOnboardingReview = false;
+  document.getElementById("onboarding-form").hidden = false;
+  document.getElementById("onboarding-review").hidden = true;
+  renderDashboard();
+  renderTodayEntries();
+  renderFoodEntries();
+  renderVitaminChips();
+  renderGym();
+  fillGoalsForm();
+  renderCoachNotes();
+  renderCoachReviewBanner();
 }
 
 async function addEntry(type, fields) {
@@ -375,7 +429,10 @@ function wireApplyButtons(container) {
 
 function renderCoachPreview() {
   const el = document.getElementById("dashboard-coach-preview");
-  if (!coachNotes.length) return;
+  if (!coachNotes.length) {
+    el.innerHTML = `<p class="subtle">No coach note yet. See <code>scripts/README.md</code> to generate your first weekly note.</p>`;
+    return;
+  }
   el.innerHTML = coachNoteHtml(coachNotes[0]);
   wireApplyButtons(el);
 }
@@ -493,6 +550,15 @@ function renderVitaminChips() {
 // ---------------------------------------------------------------------
 // Goals view
 // ---------------------------------------------------------------------
+function renderCoachReviewBanner() {
+  const banner = document.getElementById("coach-review-banner");
+  if (!banner) return;
+  const updatedAt = profile?.updatedAt;
+  const latestNoteAt = coachNotes[0]?.createdAt;
+  const needsReview = !!updatedAt && (!latestNoteAt || updatedAt.toMillis() > latestNoteAt.toMillis());
+  banner.hidden = !needsReview;
+}
+
 const goalsForm = document.getElementById("goals-form");
 const goalsDaysEl = document.getElementById("goals-days");
 let goalsDays = [1, 3, 5];
@@ -502,6 +568,11 @@ function drawGoalsDays() {
 }
 
 function fillGoalsForm() {
+  goalsForm.age.value = profile?.age ?? "";
+  goalsForm.sex.value = profile?.sex || "male";
+  goalsForm.heightIn.value = profile?.heightIn ?? "";
+  goalsForm.startWeightLb.value = profile?.startWeightLb ?? "";
+
   goalsForm.calorieGoal.value = goals.calorieGoal ?? "";
   goalsForm.proteinGoal.value = goals.proteinGoal ?? "";
   goalsForm.waterGoal.value = goals.waterGoal ?? "";
@@ -525,6 +596,23 @@ goalsForm.addEventListener("submit", async (e) => {
 
   const availabilityChanged = goalsDays.length !== (goals.daysPerWeek || 0)
     || JSON.stringify(goalsDays) !== JSON.stringify(goals.preferredDays || []);
+  const goalTypeChanged = data.get("goalType") !== goals.goalType;
+
+  const newProfileFields = {
+    age: Number(data.get("age")),
+    sex: data.get("sex"),
+    heightIn: Number(data.get("heightIn")),
+    startWeightLb: Number(data.get("startWeightLb"))
+  };
+  const bioChanged = ["age", "sex", "heightIn", "startWeightLb"].some(
+    (key) => newProfileFields[key] !== (profile?.[key] ?? (key === "sex" ? undefined : NaN))
+  );
+  const settingsChanged = availabilityChanged || goalTypeChanged || bioChanged;
+
+  await setDoc(doc(db, "users", currentUid, "profile", "me"), {
+    ...newProfileFields,
+    ...(settingsChanged ? { updatedAt: Timestamp.now() } : {})
+  }, { merge: true });
 
   await setDoc(doc(db, "users", currentUid, "meta", "goals"), {
     calorieGoal: Number(data.get("calorieGoal")) || null,

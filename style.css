@@ -200,7 +200,7 @@ input[type="number"] {
   gap: 8px;
 }
 
-.log-form .row { display: flex; gap: 8px; }
+.row { display: flex; gap: 8px; }
 .log-form .quick-row { display: flex; gap: 6px; }
 
 .btn {

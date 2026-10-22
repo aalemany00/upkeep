@@ -141,6 +141,34 @@ own repo, as required.
   12/11/10 with 13/12/11" progression target → ran `coach-note.js` and got a
   note that correctly named the actual exercise, weight, and reps logged.
 
+## 2026-10-22 — Onboarding review screen + account settings
+
+- Asked for two things: a way to review the coach's main suggestions right
+  after giving it my info, and an account settings area to view/change that
+  info later.
+- Confirmed the architecture limit again before building: there's no way to
+  trigger a live AI call the instant a setting is saved without a backend,
+  which goes back to the paid-API tradeoff already ruled out. Landed on:
+  the onboarding review is the plain-code split summary made visible (no AI
+  involved, since the split itself was never AI-generated), and settings
+  changes instantly recompute the split (already free) plus show a banner
+  that a fresh coach review is due, since actually generating one still
+  needs `coach-note.js` run by hand.
+- Added the review screen (shown once, right after onboarding, before the
+  app itself) and a "Your info" section in Goals (age/sex/height/weight,
+  editable anytime — previously onboarding-only with no way back to it).
+- Found two real bugs testing this with a second throwaway account on the
+  same device without reloading the page: `renderCoachPreview` silently
+  left a previous account's coach note on screen when the new account had
+  none (it only handled "has a note," not "really has zero"), and the
+  onboarding form/review screen could do the same to a fresh account if a
+  previous one in the same tab had just finished onboarding. Fixed both —
+  every account switch now explicitly re-renders every view instead of
+  leaving whatever the last account's state happened to be on screen. This
+  was never a real Firestore/security leak (confirmed each account's actual
+  data was correctly isolated), just a client-side rendering gap, but
+  worth catching given multiple people share this app.
+
 ## Open items
 
 - Delete the `test-coach@example.com` test account and its food entry from

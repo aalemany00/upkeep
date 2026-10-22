@@ -38,6 +38,15 @@ number of people can sign up, each sees only their own data.
 - The weekly coach note's prompt explicitly says not to recompute per-set
   targets itself — that's this module's job — and only comment on
   cross-session patterns (stalling, skipped days, uneven effort).
+- Onboarding ends on a plain "Your plan" review screen (split, days/week,
+  default exercise per slot) before dropping into the app — still no AI
+  call, just the `assignSplit` output made visible instead of silent.
+- "Your info" in Goals doubles as account settings (age/sex/height/weight,
+  editable anytime, not just at onboarding). Saving any of it, the goal, or
+  availability bumps `profile.updatedAt`; if that's newer than the latest
+  coach note, a banner says a fresh coach review is due — there's no backend
+  to trigger `coach-note.js` automatically the instant you save, so this is
+  a visible reminder, not a live regeneration.
 
 ## Where the AI is (the Artifact 3 requirement)
 
