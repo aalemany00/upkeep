@@ -193,6 +193,45 @@ own repo, as required.
   it, confirmed with the Admin SDK that the Auth user was really gone
   afterward (not just signed out).
 
+## 2026-10-22 — More goal types, coach-computed daily goals, diet catalog, free-form exercise logging
+
+- Four asks at once: more goal types than just build-muscle/lose-fat; daily
+  calorie/protein/water/steps goals computed for me instead of typed in
+  (except target weight and vitamins, which stay manual since the app has
+  no way to know those); an in-depth diet suggestion system with real
+  variety, not the same food every day; and gym logging that's both
+  suggestion-based (what's already there) and fully free-form, like
+  Overload's exercise search.
+- Confirmed scope with Claude first: six goal types (added maintain,
+  endurance, general health); the computed goals are defaults I can still
+  override by hand, not locked; added a daily-activity-level question to
+  onboarding since the calorie formula needs it to mean anything.
+- Nutrition math (`nutrition.js`) is plain code — Mifflin-St Jeor BMR ×
+  activity factor × goal offset, protein per pound of bodyweight — not an
+  AI call, same reasoning as the gym split/progression engine.
+- Diet suggestions: a curated 60-item food catalog (`foods.json`, 15 each
+  of breakfast/lunch/dinner/snack, deliberately varied across cuisines and
+  diets) shown in Food with shuffle + one-tap logging, alongside the
+  existing manual entry for anything not in the list.
+- Gym: kept the suggested-slot UI, added a real exercise search (the same
+  932-exercise catalog) so I can log anything, not just what's assigned —
+  own progression target, own set grid, same Save.
+- Found two real bugs while testing this myself (new account → change
+  goal type → check the saved number; log a free-form exercise → reload →
+  check it's still there):
+  1. The daily-goals override logic initially would have silently
+     clobbered a manual edit on every save, not just when something
+     relevant changed — caught before it shipped by tracing through what
+     "editable default" actually requires.
+  2. A genuinely saved free-form exercise vanished on page reload. The
+     Gym day's in-memory draft gets built (and then cached) from whatever
+     `workoutLogs` holds the moment the tab first renders, which can
+     happen before Firestore's live listener delivers its first real
+     batch — so the draft got built empty, cached, and never rebuilt even
+     after the real data arrived a moment later. Fixed by forcing exactly
+     one rebuild the first time that listener actually delivers data.
+     Confirmed fixed by re-running the same test.
+
 ## Open items
 
 - Delete the `test-coach@example.com` test account and its food entry from

@@ -56,7 +56,21 @@
         <option value="gain">Build muscle</option>
         <option value="lean">Lose fat</option>
         <option value="both">Recomposition (both)</option>
+        <option value="maintain">Maintain weight</option>
+        <option value="endurance">Improve endurance / cardio</option>
+        <option value="general">General health (no specific body-comp goal)</option>
       </select>
+      <label class="small">Daily activity outside the gym
+        <select name="activityLevel" required>
+          <option value="" disabled selected>Pick one</option>
+          <option value="sedentary">Sedentary (little/no exercise)</option>
+          <option value="light">Lightly active (1-3 days/week)</option>
+          <option value="moderate">Moderately active (3-5 days/week)</option>
+          <option value="active">Active (6-7 days/week)</option>
+          <option value="veryActive">Very active (physical job + training)</option>
+        </select>
+      </label>
+      <p class="subtle small">Your calorie/protein/water/steps goals are computed from this — you can still edit the numbers directly in Goals afterward.</p>
 
       <h3>Gym availability</h3>
       <label class="small">Days per week you can get to the gym
@@ -116,8 +130,18 @@
 
     <!-- Food -->
     <section id="view-food" class="view">
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Diet suggestions</h2>
+          <button type="button" class="link-btn" id="food-shuffle-all-btn">Shuffle all</button>
+        </div>
+        <p class="subtle small">Picked to vary day to day so you're not eating the same thing every time — swap any slot, or shuffle it. "Log this" adds it straight to today's food below.</p>
+        <div class="log-grid" id="diet-suggestions"></div>
+      </div>
+
       <form class="log-form" id="form-food" data-type="food" style="margin-bottom:16px;">
-        <h3>Add food</h3>
+        <h3>Add anything else</h3>
         <input type="text" name="name" placeholder="What did you eat?" required />
         <div class="row">
           <input type="number" name="calories" placeholder="Calories (kcal)" min="0" required />
@@ -223,7 +247,29 @@
           </label>
         </div>
 
+        <h2 style="margin-top:12px;">Goal &amp; activity</h2>
+        <label>Goal
+          <select name="goalType">
+            <option value="gain">Build muscle</option>
+            <option value="lean">Lose fat</option>
+            <option value="both">Recomposition (both)</option>
+            <option value="maintain">Maintain weight</option>
+            <option value="endurance">Improve endurance / cardio</option>
+            <option value="general">General health (no specific body-comp goal)</option>
+          </select>
+        </label>
+        <label>Daily activity outside the gym
+          <select name="activityLevel">
+            <option value="sedentary">Sedentary (little/no exercise)</option>
+            <option value="light">Lightly active (1-3 days/week)</option>
+            <option value="moderate">Moderately active (3-5 days/week)</option>
+            <option value="active">Active (6-7 days/week)</option>
+            <option value="veryActive">Very active (physical job + training)</option>
+          </select>
+        </label>
+
         <h2 style="margin-top:12px;">Daily goals</h2>
+        <p class="subtle small">Calories/protein/water/steps are computed from your info above — changing your bio, goal, or activity recomputes them, but you can also type your own number any time.</p>
         <label>Calories (kcal)
           <input type="number" name="calorieGoal" min="0" />
         </label>
@@ -243,14 +289,7 @@
           <input type="text" name="vitaminsList" placeholder="Comma-separated, e.g. Vitamin D, Omega-3, Multivitamin" />
         </label>
 
-        <h2 style="margin-top:12px;">Goal &amp; gym availability</h2>
-        <label>Goal
-          <select name="goalType">
-            <option value="gain">Build muscle</option>
-            <option value="lean">Lose fat</option>
-            <option value="both">Recomposition (both)</option>
-          </select>
-        </label>
+        <h2 style="margin-top:12px;">Gym availability</h2>
         <label>Days per week you can get to the gym
           <input type="number" name="daysPerWeek" min="1" max="6" />
         </label>

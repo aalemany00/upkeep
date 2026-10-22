@@ -22,6 +22,7 @@ import { execFileSync } from "node:child_process";
 import { initializeApp, cert } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import { GOAL_LABELS } from "../nutrition.js";
 
 const here = (name) => new URL(name, import.meta.url);
 
@@ -60,7 +61,7 @@ Keep each list to at most 4 items.
 
 PROFILE: ${JSON.stringify(profile)}
 
-GOALS: ${JSON.stringify(goals)}
+GOALS: ${JSON.stringify({ ...goals, goalType: GOAL_LABELS[goals.goalType] || goals.goalType })}
 
 GYM SESSIONS THIS WEEK:
 ${workoutLines.length ? workoutLines.join("\n") : "(none logged)"}

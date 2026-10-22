@@ -10,6 +10,7 @@ import {
   query, orderBy, limit, onSnapshot, writeBatch, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { assignSplit, targetFor } from "./gym.js";
+import { computeDailyGoals, GOAL_LABELS } from "./nutrition.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -36,18 +37,22 @@ let coachNotes = [];   // generated weekly notes, newest first
 let profile = null;    // bio: age/sex/height/starting weight — null until onboarding finishes
 let split = null;      // the assigned workout split (gym.assignSplit output)
 let workoutLogs = [];  // one doc per logged gym day, newest first
+let workoutLogsReady = false; // has the live workoutLogs subscription delivered its first real snapshot yet
 
 let exerciseCatalog = [];
 let exerciseById = new Map();
+let foodCatalog = [];
+let foodById = new Map();
+let dietPicks = {}; // { breakfast: id, lunch: id, dinner: id, snack1: id, snack2: id } — per-device, not synced
 
 let calViewDate = new Date();   // month currently shown in the Gym calendar
 let selectedDateKey = null;     // date the Gym day-panel is showing
 let showingOnboardingReview = false; // gate: stay on onboarding screen to show the just-built plan
 
-async function fetchCatalogWithRetry(attempts = 2) {
+async function fetchJsonWithRetry(url, attempts = 2) {
   for (let i = 0; i < attempts; i++) {
     try {
-      const res = await fetch("exercises.json");
+      const res = await fetch(url);
       return await res.json();
     } catch (err) {
       if (i === attempts - 1) throw err;
@@ -56,7 +61,7 @@ async function fetchCatalogWithRetry(attempts = 2) {
 }
 
 let catalogError = null;
-const catalogReady = fetchCatalogWithRetry()
+const catalogReady = fetchJsonWithRetry("exercises.json")
   .then((list) => {
     exerciseCatalog = list;
     exerciseById = new Map(list.map((e) => [e.id, e]));
@@ -67,6 +72,14 @@ const catalogReady = fetchCatalogWithRetry()
     catalogError = err;
     renderGym();
   });
+
+const foodCatalogReady = fetchJsonWithRetry("foods.json")
+  .then((list) => {
+    foodCatalog = list;
+    foodById = new Map(list.map((f) => [f.id, f]));
+    renderDietSuggestions();
+  })
+  .catch((err) => console.error("Could not load food catalog", err));
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -90,6 +103,11 @@ function sumByType(list, type, field) {
 function barWidth(value, goal) {
   if (!goal) return 0;
   return Math.max(0, Math.min(100, (value / goal) * 100));
+}
+
+function latestWeightLb() {
+  const weightEntries = entries.filter((e) => e.type === "weight");
+  return weightEntries.length ? weightEntries[0].lb : null;
 }
 
 // ---------------------------------------------------------------------
@@ -195,9 +213,7 @@ onboardingForm.daysPerWeek.addEventListener("input", (e) => {
   drawOnboardingDays();
 });
 
-const GOAL_LABELS = { gain: "Build muscle", lean: "Lose fat", both: "Recomposition (both)" };
-
-function renderOnboardingReview(newSplit, goalType) {
+function renderOnboardingReview(newSplit, goalType, dailyGoals) {
   const el = document.getElementById("onboarding-review-content");
   const dayList = newSplit.days
     .map((day) => {
@@ -208,6 +224,13 @@ function renderOnboardingReview(newSplit, goalType) {
   el.innerHTML = `
     <p><strong>${newSplit.name}</strong> — ${newSplit.daysPerWeek} day${newSplit.daysPerWeek === 1 ? "" : "s"}/week, goal: ${GOAL_LABELS[goalType] || goalType}</p>
     <ul>${dayList}</ul>
+    <p><strong>Daily goals (computed, editable in Goals):</strong></p>
+    <ul>
+      <li>${dailyGoals.calorieGoal} kcal</li>
+      <li>${dailyGoals.proteinGoal}g protein</li>
+      <li>${dailyGoals.waterGoal}ml water</li>
+      <li>${dailyGoals.stepsGoal} steps</li>
+    </ul>
   `;
 }
 
@@ -218,20 +241,28 @@ onboardingForm.addEventListener("submit", async (e) => {
 
   const startWeightLb = Number(data.get("startWeightLb"));
   const goalType = data.get("goalType");
-
-  await setDoc(doc(db, "users", currentUid, "profile", "me"), {
+  const activityLevel = data.get("activityLevel");
+  const onboardingProfile = {
     age: Number(data.get("age")),
     sex: data.get("sex"),
     heightIn: Number(data.get("heightIn")),
-    startWeightLb,
+    startWeightLb
+  };
+
+  await setDoc(doc(db, "users", currentUid, "profile", "me"), {
+    ...onboardingProfile,
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now()
   });
 
+  const dailyGoals = computeDailyGoals(onboardingProfile, goalType, activityLevel, startWeightLb);
+
   await setDoc(doc(db, "users", currentUid, "meta", "goals"), {
     goalType,
+    activityLevel,
     daysPerWeek: onboardingDays.length,
-    preferredDays: onboardingDays
+    preferredDays: onboardingDays,
+    ...dailyGoals
   }, { merge: true });
 
   const newSplit = await rebuildSplit(onboardingDays.length);
@@ -240,7 +271,7 @@ onboardingForm.addEventListener("submit", async (e) => {
   showingOnboardingReview = true;
   onboardingForm.hidden = true;
   document.getElementById("onboarding-review").hidden = false;
-  renderOnboardingReview(newSplit, goalType);
+  renderOnboardingReview(newSplit, goalType, dailyGoals);
   updateScreenVisibility();
 });
 
@@ -296,6 +327,14 @@ function subscribeAll(uid) {
   const workoutsQuery = query(collection(db, "users", uid, "workoutLogs"), orderBy("dateKey", "desc"), limit(200));
   unsubWorkouts = onSnapshot(workoutsQuery, (snap) => {
     workoutLogs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    // gymDraft gets built (and cached by dateKey+dayType) from whatever's
+    // in `workoutLogs` the moment the Gym tab first renders — which can
+    // happen before this listener's first delivery. Force exactly one
+    // rebuild once real data arrives, so a previously-saved day (extras
+    // included) doesn't get permanently masked by an empty draft built
+    // from the pre-load state (confirmed via testing: without this, a
+    // saved "extra" exercise silently vanished on reload).
+    if (!workoutLogsReady) { workoutLogsReady = true; gymDraft = null; }
     renderGym();
   });
 }
@@ -313,6 +352,8 @@ function teardownSubscriptions() {
   profile = null;
   split = null;
   workoutLogs = [];
+  workoutLogsReady = false;
+  gymDraft = null;
 
   // Reset UI left over from a previous account in this same browser tab
   // (shared devices, multiple people signing in/out) so nothing stale
@@ -321,6 +362,8 @@ function teardownSubscriptions() {
   document.getElementById("onboarding-form").hidden = false;
   document.getElementById("onboarding-review").hidden = true;
   resetDeleteAccountUi();
+  loadDietPicks();
+  renderDietSuggestions();
   renderDashboard();
   renderTodayEntries();
   renderFoodEntries();
@@ -373,8 +416,7 @@ function renderDashboard() {
   const steps = sumByType(today, "activity", "steps");
   const burned = sumByType(today, "activity", "caloriesBurned");
 
-  const weightEntries = entries.filter((e) => e.type === "weight");
-  const latestWeight = weightEntries.length ? weightEntries[0].lb : null;
+  const latestWeight = latestWeightLb();
 
   const stats = [
     { label: "Calories", value: `${calories}`, goal: goals.calorieGoal, raw: calories, unit: "kcal" },
@@ -501,6 +543,114 @@ function renderFoodEntries() {
   });
 }
 
+// ---------------------------------------------------------------------
+// Diet suggestions — a curated, varied food catalog (foods.json), picked
+// per slot and shuffleable, logged with one tap. Per-device only (like
+// Lift Log's meal builder) — not synced, since it's just "what am I
+// thinking of eating," not real data.
+// ---------------------------------------------------------------------
+const DIET_SLOTS = [
+  { key: "breakfast", label: "Breakfast", category: "breakfast" },
+  { key: "lunch", label: "Lunch", category: "lunch" },
+  { key: "dinner", label: "Dinner", category: "dinner" },
+  { key: "snack1", label: "Snack 1", category: "snack" },
+  { key: "snack2", label: "Snack 2", category: "snack" }
+];
+
+function dietPicksStorageKey() {
+  return `upkeep.dietPicks.${currentUid}`;
+}
+
+function loadDietPicks() {
+  if (!currentUid) { dietPicks = {}; return; }
+  try {
+    dietPicks = JSON.parse(localStorage.getItem(dietPicksStorageKey())) || {};
+  } catch {
+    dietPicks = {};
+  }
+}
+
+function saveDietPicks() {
+  if (!currentUid) return;
+  try {
+    localStorage.setItem(dietPicksStorageKey(), JSON.stringify(dietPicks));
+  } catch { /* localStorage unavailable — picks just won't persist across reloads */ }
+}
+
+function foodsInCategory(category) {
+  return foodCatalog.filter((f) => f.category === category);
+}
+
+function pickForSlot(slot, excludeId) {
+  const options = foodsInCategory(slot.category);
+  if (!options.length) return null;
+  const current = dietPicks[slot.key];
+  const pool = options.filter((f) => f.id !== (excludeId ?? current)) ;
+  const chosen = pool.length ? pool[Math.floor(Math.random() * pool.length)] : options[0];
+  return chosen.id;
+}
+
+function renderDietSuggestions() {
+  const el = document.getElementById("diet-suggestions");
+  if (!el) return;
+  if (!foodCatalog.length) {
+    el.innerHTML = `<p class="subtle">Loading diet suggestions...</p>`;
+    return;
+  }
+
+  el.innerHTML = DIET_SLOTS.map((slot) => {
+    const options = foodsInCategory(slot.category);
+    if (!dietPicks[slot.key] || !foodById.get(dietPicks[slot.key])) {
+      dietPicks[slot.key] = options[0]?.id;
+    }
+    const food = foodById.get(dietPicks[slot.key]);
+    if (!food) return "";
+    const optionsHtml = options
+      .map((f) => `<option value="${f.id}" ${f.id === food.id ? "selected" : ""}>${f.name} (${f.calories} kcal, ${f.protein}g)</option>`)
+      .join("");
+
+    return `
+      <div class="log-form">
+        <h3>${slot.label}</h3>
+        <select data-diet-slot="${slot.key}">${optionsHtml}</select>
+        <p class="subtle small">${food.detail}</p>
+        <p class="subtle small"><strong>${food.calories} kcal, ${food.protein}g protein</strong></p>
+        <div class="row">
+          <button type="button" class="btn ghost small" data-diet-shuffle="${slot.key}">Shuffle</button>
+          <button type="button" class="btn primary small" data-diet-log="${slot.key}">Log this</button>
+        </div>
+      </div>`;
+  }).join("");
+
+  el.querySelectorAll("[data-diet-slot]").forEach((sel) => {
+    sel.addEventListener("change", (e) => {
+      dietPicks[e.target.dataset.dietSlot] = Number(e.target.value);
+      saveDietPicks();
+      renderDietSuggestions();
+    });
+  });
+  el.querySelectorAll("[data-diet-shuffle]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const slot = DIET_SLOTS.find((s) => s.key === btn.dataset.dietShuffle);
+      dietPicks[slot.key] = pickForSlot(slot);
+      saveDietPicks();
+      renderDietSuggestions();
+    });
+  });
+  el.querySelectorAll("[data-diet-log]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const food = foodById.get(dietPicks[btn.dataset.dietLog]);
+      if (food) addEntry("food", { name: food.name, calories: food.calories, protein: food.protein });
+    });
+  });
+}
+
+document.getElementById("food-shuffle-all-btn").addEventListener("click", () => {
+  DIET_SLOTS.forEach((slot) => { dietPicks[slot.key] = pickForSlot(slot); });
+  saveDietPicks();
+  renderDietSuggestions();
+});
+
 function describeEntry(e) {
   switch (e.type) {
     case "food": return `🍽 ${e.name} — ${e.calories || 0} kcal${e.protein ? `, ${e.protein}g protein` : ""}`;
@@ -582,6 +732,7 @@ function fillGoalsForm() {
   goalsForm.weightGoal.value = goals.weightGoal ?? "";
   goalsForm.vitaminsList.value = (goals.vitaminsList || []).join(", ");
   goalsForm.goalType.value = goals.goalType || "both";
+  goalsForm.activityLevel.value = goals.activityLevel || "moderate";
   goalsForm.daysPerWeek.value = goals.daysPerWeek ?? 3;
   goalsDays = goals.preferredDays || DEFAULT_DAY_PATTERN[goals.daysPerWeek || 3];
   drawGoalsDays();
@@ -604,7 +755,10 @@ goalsForm.addEventListener("submit", async (e) => {
 
   const availabilityChanged = selectedDays.length !== (goals.daysPerWeek || 0)
     || JSON.stringify(selectedDays) !== JSON.stringify(goals.preferredDays || []);
-  const goalTypeChanged = data.get("goalType") !== goals.goalType;
+  const goalType = data.get("goalType");
+  const activityLevel = data.get("activityLevel");
+  const goalTypeChanged = goalType !== goals.goalType;
+  const activityLevelChanged = activityLevel !== goals.activityLevel;
 
   const newProfileFields = {
     age: Number(data.get("age")),
@@ -615,21 +769,41 @@ goalsForm.addEventListener("submit", async (e) => {
   const bioChanged = ["age", "sex", "heightIn", "startWeightLb"].some(
     (key) => newProfileFields[key] !== (profile?.[key] ?? (key === "sex" ? undefined : NaN))
   );
-  const settingsChanged = availabilityChanged || goalTypeChanged || bioChanged;
+  const settingsChanged = availabilityChanged || goalTypeChanged || bioChanged || activityLevelChanged;
 
   await setDoc(doc(db, "users", currentUid, "profile", "me"), {
     ...newProfileFields,
     ...(settingsChanged ? { updatedAt: Timestamp.now() } : {})
   }, { merge: true });
 
-  await setDoc(doc(db, "users", currentUid, "meta", "goals"), {
+  // Calories/protein/water/steps are coach-computed by default (plain-code
+  // formula, see nutrition.js) but stay user-editable: only overwrite a
+  // field here if it wasn't manually changed away from what was already
+  // stored AND something that feeds the formula actually changed.
+  const shouldRecompute = bioChanged || goalTypeChanged || activityLevelChanged;
+  const typedGoalValues = {
     calorieGoal: Number(data.get("calorieGoal")) || null,
     proteinGoal: Number(data.get("proteinGoal")) || null,
     waterGoal: Number(data.get("waterGoal")) || null,
-    stepsGoal: Number(data.get("stepsGoal")) || null,
+    stepsGoal: Number(data.get("stepsGoal")) || null
+  };
+  let finalGoalValues = typedGoalValues;
+  if (shouldRecompute) {
+    const weightLb = latestWeightLb() ?? newProfileFields.startWeightLb;
+    const computed = computeDailyGoals(newProfileFields, goalType, activityLevel, weightLb);
+    finalGoalValues = {};
+    for (const key of Object.keys(typedGoalValues)) {
+      const untouched = typedGoalValues[key] === (goals[key] ?? null);
+      finalGoalValues[key] = untouched ? computed[key] : typedGoalValues[key];
+    }
+  }
+
+  await setDoc(doc(db, "users", currentUid, "meta", "goals"), {
+    ...finalGoalValues,
     weightGoal: Number(data.get("weightGoal")) || null,
     vitaminsList,
-    goalType: data.get("goalType"),
+    goalType,
+    activityLevel,
     daysPerWeek: selectedDays.length,
     preferredDays: selectedDays
   }, { merge: true });
@@ -759,15 +933,19 @@ function scheduledDayTypeFor(dateKey) {
   return split.days[idx] || null;
 }
 
-let gymDraft = null; // { dateKey, dayType, picks: [exerciseId...], sets: [[{w,r}...]...] }
+let gymDraft = null; // { dateKey, dayType, picks: [exerciseId...], sets: [[{w,r}...]...], extra: [{exerciseId, sets}] }
 
+// Template-slot entries are matched by slotLabel (not array position) so a
+// day that skipped a slot, or has extras mixed in, doesn't misalign.
 function buildGymDraft(dateKey, dayType) {
   const slots = slotsForDayType(dayType);
   const existing = logForDate(dateKey);
-  const picks = slots.map((slot, i) => existing?.entries[i]?.exerciseId ?? slot.defaultId);
+  const existingBySlotLabel = new Map((existing?.entries || []).filter((e) => !e.extra).map((e) => [e.slotLabel, e]));
+
+  const picks = slots.map((slot) => existingBySlotLabel.get(slot.label)?.exerciseId ?? slot.defaultId);
   const sets = slots.map((slot, i) => {
     const exId = picks[i];
-    const existingSets = existing?.entries[i]?.sets;
+    const existingSets = existingBySlotLabel.get(slot.label)?.sets;
     if (existingSets && existingSets.length) {
       return existingSets.map((s) => ({ w: String(s.w ?? ""), r: String(s.r ?? "") }));
     }
@@ -776,7 +954,33 @@ function buildGymDraft(dateKey, dayType) {
     const n = exMeta?.sets || 3;
     return Array.from({ length: n }, () => ({ w: tgt?.weight != null ? String(tgt.weight) : "", r: "" }));
   });
-  return { dateKey, dayType, picks, sets };
+
+  const extra = (existing?.entries || [])
+    .filter((e) => e.extra)
+    .map((e) => ({
+      exerciseId: e.exerciseId,
+      sets: (e.sets || []).map((s) => ({ w: String(s.w ?? ""), r: String(s.r ?? "") }))
+    }));
+
+  return { dateKey, dayType, picks, sets, extra };
+}
+
+function exerciseSlotCardHtml(ex, tgt, sets, rowAttrs) {
+  const rows = sets
+    .map((row, j) => `
+      <span class="n">${j + 1}</span>
+      <input type="number" inputmode="decimal" step="any" min="0" placeholder="lb" value="${row.w}" ${rowAttrs(j, "w")} />
+      <input type="number" inputmode="numeric" min="0" placeholder="${tgt.aim?.[j] ?? `${ex.lo}-${ex.hi}`}" value="${row.r}" ${rowAttrs(j, "r")} />
+    `)
+    .join("");
+  return `
+    ${ex.image ? `<img src="${ex.image}" alt="${ex.name} form example" loading="lazy" />` : ""}
+    <p class="gym-cue">${ex.cue}</p>
+    <div class="target-line ${tgt.status}">${tgt.note}</div>
+    <div class="sets-grid">
+      <span class="hd">Set</span><span class="hd">Weight (lb)</span><span class="hd">Reps</span>
+      ${rows}
+    </div>`;
 }
 
 function renderGymSplitSummary() {
@@ -890,12 +1094,38 @@ function renderGymDayPanel() {
     })
     .join("");
 
+  const extraHtml = gymDraft.extra
+    .map((item, i) => {
+      const ex = exerciseById.get(item.exerciseId);
+      if (!ex) return "";
+      const tgt = targetFor(historyForExercise(item.exerciseId, selectedDateKey), ex);
+      return `
+        <div class="gym-slot">
+          <div class="gym-slot-head">
+            <strong>${ex.name}</strong>
+            <button type="button" class="remove-btn" data-remove-extra="${i}" title="Remove">&times;</button>
+          </div>
+          ${exerciseSlotCardHtml(ex, tgt, item.sets, (j, field) => `data-extra="${i}" data-set="${j}" data-field="${field}"`)}
+          <button type="button" class="btn ghost small" data-add-extra-set="${i}">+ set</button>
+        </div>`;
+    })
+    .join("");
+
   el.innerHTML = `
     <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px;">
       <h2 style="margin:0;">${dateLabel}</h2>
       <select id="gym-daytype-select">${typeOptions}</select>
     </div>
     ${slotsHtml}
+
+    <div class="panel" style="padding:0;background:transparent;border:none;margin:0;">
+      <h3>Add any other exercise</h3>
+      <p class="subtle small">Not limited to today's suggestions — search the full catalog (${exerciseCatalog.length} exercises) and log anything.</p>
+      <input type="text" id="gym-exercise-search" placeholder="Search exercises (e.g. lat pulldown, hip thrust)..." autocomplete="off" />
+      <div id="gym-exercise-search-results"></div>
+    </div>
+    ${extraHtml}
+
     <button type="button" class="btn primary" id="gym-save-day">Save day</button>
     <p id="gym-saved" class="subtle small" hidden>Saved.</p>
   `;
@@ -931,13 +1161,62 @@ function renderGymDayPanel() {
     });
   });
 
+  // Extra (free-form) exercises: search the full catalog and log anything,
+  // not just today's suggested slots.
+  const searchInput = document.getElementById("gym-exercise-search");
+  const searchResultsEl = document.getElementById("gym-exercise-search-results");
+  searchInput.addEventListener("input", () => {
+    const q = searchInput.value.trim().toLowerCase();
+    if (q.length < 2) { searchResultsEl.innerHTML = ""; return; }
+    const matches = exerciseCatalog.filter((ex) => ex.name.toLowerCase().includes(q)).slice(0, 8);
+    searchResultsEl.innerHTML = matches.length
+      ? `<ul class="entry-list">${matches.map((ex) => `<li class="entry-row"><span>${ex.name} <span class="subtle small">(${ex.category})</span></span><button type="button" class="btn small" data-add-exercise="${ex.id}">Add</button></li>`).join("")}</ul>`
+      : `<p class="subtle small">No matches.</p>`;
+
+    searchResultsEl.querySelectorAll("[data-add-exercise]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const exId = Number(btn.dataset.addExercise);
+        const ex = exerciseById.get(exId);
+        const tgt = targetFor(historyForExercise(exId, selectedDateKey), ex);
+        gymDraft.extra.push({
+          exerciseId: exId,
+          sets: Array.from({ length: ex.sets }, () => ({ w: tgt.weight != null ? String(tgt.weight) : "", r: "" }))
+        });
+        searchInput.value = "";
+        renderGymDayPanel();
+      });
+    });
+  });
+
+  el.querySelectorAll("[data-remove-extra]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      gymDraft.extra.splice(Number(btn.dataset.removeExtra), 1);
+      renderGymDayPanel();
+    });
+  });
+
+  el.querySelectorAll("[data-add-extra-set]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const i = Number(btn.dataset.addExtraSet);
+      gymDraft.extra[i].sets.push({ w: "", r: "" });
+      renderGymDayPanel();
+    });
+  });
+
+  el.querySelectorAll("[data-extra][data-set][data-field]").forEach((input) => {
+    input.addEventListener("input", (e) => {
+      const { extra: i, set: j, field } = e.target.dataset;
+      gymDraft.extra[i].sets[j][field] = e.target.value;
+    });
+  });
+
   document.getElementById("gym-save-day").addEventListener("click", saveGymDay);
 }
 
 async function saveGymDay() {
   if (!currentUid || !gymDraft) return;
   const slots = slotsForDayType(gymDraft.dayType);
-  const entries = slots
+  const slotEntries = slots
     .map((slot, i) => {
       const exId = gymDraft.picks[i];
       const ex = exerciseById.get(exId);
@@ -947,6 +1226,18 @@ async function saveGymDay() {
       return sets.length ? { slotLabel: slot.label, exerciseId: exId, exerciseName: ex?.name || "", sets } : null;
     })
     .filter(Boolean);
+
+  const extraEntries = gymDraft.extra
+    .map((item) => {
+      const ex = exerciseById.get(item.exerciseId);
+      const sets = item.sets
+        .map((s) => ({ w: Number(s.w) || 0, r: Number(s.r) || 0 }))
+        .filter((s) => s.r > 0);
+      return sets.length ? { extra: true, exerciseId: item.exerciseId, exerciseName: ex?.name || "", sets } : null;
+    })
+    .filter(Boolean);
+
+  const entries = [...slotEntries, ...extraEntries];
 
   if (!entries.length) {
     alert("Log at least one set before saving.");

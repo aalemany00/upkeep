@@ -53,6 +53,32 @@ number of people can sign up, each sees only their own data.
   coach note, a banner says a fresh coach review is due — there's no backend
   to trigger `coach-note.js` automatically the instant you save, so this is
   a visible reminder, not a live regeneration.
+- Six goal types (`nutrition.js`'s `GOAL_LABELS`): build muscle, lose fat,
+  recomposition, maintain, endurance, general health.
+- Daily calorie/protein/water/steps goals are computed by `nutrition.js`
+  (BMR × activity-level factor × goal offset, plus a protein-per-lb target)
+  from profile + goal + activity level — plain code, not the model, same
+  boundary as the split/progression logic. They're defaults, not locked:
+  saving Goals only overwrites a field if something that feeds the formula
+  changed AND the field wasn't manually edited away from what was already
+  stored (tested both paths — a manual override survives an unrelated
+  save, and changing the goal type recomputes it).
+- Diet suggestions (`foods.json`, Food tab): a curated, varied static
+  catalog (15 each of breakfast/lunch/dinner/snack, real variety across
+  diets/cuisines, approximate macros like Lift Log's meal builder) — a
+  slot per meal with shuffle and a one-tap "Log this" that writes straight
+  into the same food entries the manual form uses. Per-device only
+  (localStorage, keyed by uid), not synced — it's just what you're
+  thinking of eating, not real data.
+- Gym day logging has two layers: the day's suggested slots (from the
+  split), and a free-form "Add any other exercise" search over the full
+  932-exercise catalog for logging anything else, with its own progression
+  target (same `targetFor` engine, keyed by exercise id regardless of
+  which layer logged it). Extra entries are tagged `extra: true` in
+  Firestore and matched back to the UI by that flag, not array position —
+  matching slot entries by `slotLabel` instead of index, specifically
+  because position-based matching breaks once entries can be skipped or
+  interleaved with extras.
 
 ## Where the AI is (the Artifact 3 requirement)
 
