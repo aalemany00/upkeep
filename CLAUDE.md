@@ -15,6 +15,29 @@ number of people can sign up, each sees only their own data.
 - Firebase (Auth + Firestore) for sign-in and multi-device sync. Free tier.
 - No paid AI API. Account creation for any third-party service (Firebase,
   etc.) is Adrian's own action, not something I do for him.
+- Exercise catalog (`exercises.json`) is a static, pre-built dataset seeded
+  once from wger.de's open exercise database (free, no key, CC-BY-SA 4.0) via
+  `scripts/seed-exercises.js` — not a live API call at runtime.
+- Local dev server: `node .claude/dev-server.js <dir> <port>` (see repo
+  root's `.claude/launch.json`), not Python's `http.server` — Python's
+  single-request-at-a-time handling caused real `net::ERR_CONNECTION_RESET`s
+  under this app's concurrent asset requests during testing.
+
+## Gym: split assignment and progression (plain code, not the model)
+
+- `gym.js` is pure functions, no DOM/Firebase: `assignSplit(daysPerWeek,
+  catalog)` deterministically maps availability to a standard split (1 day =
+  Full Body, 2 = Upper/Lower, 3 = Push/Pull/Legs, up to 6), filling each
+  slot from the catalog by target muscle group. `targetFor(history,
+  exerciseMeta)` is a double-progression engine (same shape as a standard
+  lifting program: hit the top of your rep range on every set → add weight
+  next time; flat for 3 sessions → suggests a swap).
+- Both run instantly in the browser, no AI call, every time: onboarding, and
+  again whenever availability changes in Goals (old logged history is never
+  touched, only the forward-looking split).
+- The weekly coach note's prompt explicitly says not to recompute per-set
+  targets itself — that's this module's job — and only comment on
+  cross-session patterns (stalling, skipped days, uneven effort).
 
 ## Where the AI is (the Artifact 3 requirement)
 
@@ -22,12 +45,13 @@ The model does real, deciding work every time the coaching script runs — it
 is not just the tool used to build this app.
 
 - **What the model owns:** `scripts/coach-note.js` gathers the last 7 days of
-  logged food/exercise/water/weight/vitamins + the user's goals into a single
-  prompt, then runs it through Claude Code **headless** (`claude -p`, no API
-  key, uses Adrian's course Claude Code access — same pattern the course
-  guide names as a free example). Claude reads the week's numbers, decides
-  what's worth saying, and writes a short structured note: what's on track,
-  what's not, and one or two concrete suggestions.
+  logged food/water/weight/vitamins + gym sessions (exercise names, sets,
+  weights) + the user's profile/goal/availability into a single prompt, then
+  runs it through Claude Code **headless** (`claude -p`, no API key, uses
+  Adrian's course Claude Code access — same pattern the course guide names
+  as a free example). Claude reads the week's numbers, decides what's worth
+  saying, and writes a short structured note: what's on track, what's not,
+  and one or two concrete suggestions.
 - **What plain code checks:** the script validates the note is non-empty
   JSON matching the expected shape before writing it to Firestore; if Claude's
   output doesn't parse, the script logs an error and writes nothing (no

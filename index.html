@@ -29,6 +29,46 @@
   </div>
 </section>
 
+<!-- One-time onboarding, shown after sign-up before the profile exists -->
+<section id="onboarding-screen" class="screen" hidden>
+  <div class="auth-card" style="max-width:480px;">
+    <h1>Let's set you up</h1>
+    <p class="subtle">A few things the coach needs to actually be useful. All of this can be changed later in Goals.</p>
+    <form id="onboarding-form">
+      <h3>About you</h3>
+      <div class="row">
+        <input type="number" name="age" placeholder="Age" min="13" max="100" required />
+        <select name="sex" required>
+          <option value="" disabled selected>Sex</option>
+          <option value="male">Male</option>
+          <option value="female">Female</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="row">
+        <input type="number" name="heightIn" placeholder="Height (in)" min="36" max="96" required />
+        <input type="number" name="startWeightLb" placeholder="Current weight (lb)" min="0" step="0.1" required />
+      </div>
+
+      <h3>Goal</h3>
+      <select name="goalType" required>
+        <option value="" disabled selected>What's the goal?</option>
+        <option value="gain">Build muscle</option>
+        <option value="lean">Lose fat</option>
+        <option value="both">Recomposition (both)</option>
+      </select>
+
+      <h3>Gym availability</h3>
+      <label class="small">Days per week you can get to the gym
+        <input type="number" name="daysPerWeek" min="1" max="6" value="3" required />
+      </label>
+      <div class="chip-row" id="onboarding-days"></div>
+
+      <button type="submit" class="btn primary">Build my plan</button>
+    </form>
+  </div>
+</section>
+
 <!-- App shell -->
 <div id="app" hidden>
   <header class="topbar">
@@ -38,6 +78,8 @@
 
   <nav class="tabs" id="tabs">
     <button class="tab active" data-view="dashboard">Dashboard</button>
+    <button class="tab" data-view="food">Food</button>
+    <button class="tab" data-view="gym">Gym</button>
     <button class="tab" data-view="log">Log</button>
     <button class="tab" data-view="goals">Goals</button>
     <button class="tab" data-view="coach">Coach</button>
@@ -65,31 +107,44 @@
       </div>
     </section>
 
-    <!-- Log -->
+    <!-- Food -->
+    <section id="view-food" class="view">
+      <form class="log-form" id="form-food" data-type="food" style="margin-bottom:16px;">
+        <h3>Add food</h3>
+        <input type="text" name="name" placeholder="What did you eat?" required />
+        <div class="row">
+          <input type="number" name="calories" placeholder="Calories (kcal)" min="0" required />
+          <input type="number" name="protein" placeholder="Protein (g)" min="0" step="0.1" />
+        </div>
+        <button type="submit" class="btn primary small">Add</button>
+      </form>
+
+      <div class="panel">
+        <h2>Today's food</h2>
+        <ul id="food-entries" class="entry-list"></ul>
+      </div>
+    </section>
+
+    <!-- Gym -->
+    <section id="view-gym" class="view">
+      <div class="panel" id="gym-split-summary"></div>
+
+      <div class="panel">
+        <div class="cal-head">
+          <button type="button" class="btn small" id="cal-prev">&lsaquo;</button>
+          <span id="cal-month-label"></span>
+          <button type="button" class="btn small" id="cal-next">&rsaquo;</button>
+        </div>
+        <div class="cal-grid" id="cal-weekdays"></div>
+        <div class="cal-grid" id="cal-days"></div>
+      </div>
+
+      <div class="panel" id="gym-day-panel"></div>
+    </section>
+
+    <!-- Log (water, weight, activity, vitamins) -->
     <section id="view-log" class="view">
       <div class="log-grid">
-
-        <form class="log-form" id="form-food" data-type="food">
-          <h3>Food</h3>
-          <input type="text" name="name" placeholder="What did you eat?" required />
-          <div class="row">
-            <input type="number" name="calories" placeholder="Calories (kcal)" min="0" required />
-            <input type="number" name="protein" placeholder="Protein (g)" min="0" step="0.1" />
-          </div>
-          <button type="submit" class="btn primary small">Add</button>
-        </form>
-
-        <form class="log-form" id="form-workout" data-type="workout">
-          <h3>Gym</h3>
-          <input type="text" name="name" placeholder="Exercise (e.g. Bench press)" required />
-          <div class="row">
-            <input type="number" name="sets" placeholder="Sets" min="0" />
-            <input type="number" name="reps" placeholder="Reps" min="0" />
-            <input type="number" name="weight" placeholder="Weight (lb)" min="0" step="0.5" />
-          </div>
-          <input type="text" name="notes" placeholder="Notes (optional)" />
-          <button type="submit" class="btn primary small">Add</button>
-        </form>
 
         <form class="log-form" id="form-water" data-type="water">
           <h3>Water</h3>
@@ -153,6 +208,21 @@
         <label>Vitamins / supplements to track
           <input type="text" name="vitaminsList" placeholder="Comma-separated, e.g. Vitamin D, Omega-3, Multivitamin" />
         </label>
+
+        <h2 style="margin-top:12px;">Goal &amp; gym availability</h2>
+        <label>Goal
+          <select name="goalType">
+            <option value="gain">Build muscle</option>
+            <option value="lean">Lose fat</option>
+            <option value="both">Recomposition (both)</option>
+          </select>
+        </label>
+        <label>Days per week you can get to the gym
+          <input type="number" name="daysPerWeek" min="1" max="6" />
+        </label>
+        <div class="chip-row" id="goals-days"></div>
+        <p class="subtle small">Changing days/availability rebuilds your split the moment you save — your logged history is never touched.</p>
+
         <button type="submit" class="btn primary">Save goals</button>
         <p id="goals-saved" class="subtle" hidden>Saved.</p>
       </form>

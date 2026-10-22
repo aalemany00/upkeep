@@ -105,6 +105,42 @@ own repo, as required.
   correctly said there wasn't enough data yet rather than inventing detail,
   which is exactly the boundary check working as intended.
 
+## 2026-10-22 — Gym expansion: split tabs, real exercise catalog, progression
+
+- Asked for a much bigger gym feature: Food and Gym as their own tabs (not
+  shared with the general Log), a gym section "as in-depth as Overload" —
+  every exercise, suggested progression, form images, a calendar — plus an
+  onboarding flow (bio, goal, availability) where the coach suggests a split
+  from my free time, adjustable anytime.
+- Scoped it down with Claude before building: confirmed calendar import
+  (Google Calendar, etc.) is a separate, much bigger piece (real OAuth setup)
+  and deferred it — this round ships Upkeep's own built-in calendar, no
+  external import yet.
+- Exercise data: seeded `exercises.json` (932 exercises) from wger.de's open
+  database — free, no API key, CC-BY-SA 4.0, not scraped from Overload.
+  About 30% have a real form photo; the rest fall back to text cues. Good
+  enough, not "every exercise has a photo."
+- Split assignment and the double-progression engine (`gym.js`) are plain
+  code, not an AI call — same design shape as the Lift Log spec I shared
+  earlier, built fresh for Upkeep's own exercise categories, not copied.
+  Recomputes instantly whenever availability changes in Goals.
+- Hit a real multi-hour debugging detour testing this: intermittent
+  `Failed to fetch` / `net::ERR_CONNECTION_RESET` loading the exercise
+  catalog. Chased two wrong leads first (a service-worker install race, then
+  Python's basic dev server choking on concurrent requests) before finding
+  the real, boring cause — a split document that had been saved earlier with
+  an empty catalog (from one of those broken test runs), so every exercise
+  slot pointed at nothing. Fixed by rebuilding the split, and hardened
+  `rebuildSplit` to refuse to save silently if the catalog isn't loaded.
+  Also replaced the local dev server with a tiny dependency-free Node
+  server (`.claude/dev-server.js`) since Python's really was flakier under
+  concurrent load, even though it wasn't this bug's actual cause.
+- Verified the whole loop for real: onboarding → split assigned → logged a
+  real set on the exercise catalog's "Barbell Clean and press" → came back
+  on the next scheduled day and got a correct "same weight, beat last time's
+  12/11/10 with 13/12/11" progression target → ran `coach-note.js` and got a
+  note that correctly named the actual exercise, weight, and reps logged.
+
 ## Open items
 
 - Delete the `test-coach@example.com` test account and its food entry from
@@ -117,7 +153,15 @@ own repo, as required.
 - Push to its own GitHub repo and enable Pages (not done yet — only a local
   repo so far).
 - Update the Artifact 3 card in Project World's `cards.js` once deployed.
+- Calendar import (real external calendar sync) — deferred, needs its own
+  OAuth setup scoping.
+- Exercise images are only ~30% covered by wger's data; could swap in a
+  better-covered source later if the gaps bother me in practice.
 
 ## Where Claude misread or I had to correct it
 
-- (fill in as it comes up)
+- When I said other people would use this, Claude's first instinct was a
+  "bring your own AI account/API key" design — the opposite of what I
+  wanted. I wanted pure convenience (tracking health stuff is already a
+  hassle); the fix was one shared, free mechanism (the coach script loops
+  over every signed-up user) instead of pushing setup or cost onto them.

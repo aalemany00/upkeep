@@ -1,15 +1,21 @@
 # Upkeep
 
-TCSS 490 Artifact 3. A personal health tracker — food/calories/protein, gym
-workouts, water, steps, weight, vitamins, and goals — synced between phone
-and PC, with a weekly AI-written coaching note.
+TCSS 490 Artifact 3. A health tracker — food/calories/protein, a full gym
+program (onboarding-assigned split, double progression, a real exercise
+catalog with form photos, a calendar) — plus water, steps, weight, vitamins,
+and goals, synced between phone and PC with a weekly AI-written coaching
+note.
 
 ## Run locally
 
-No build step. Serve the folder over HTTP:
+No build step. Serve the folder over HTTP — plain Python works, but its
+basic dev server can drop concurrent requests under this app's asset load
+(seen as `net::ERR_CONNECTION_RESET` loading `exercises.json` alongside
+everything else), so the included dependency-free Node server is more
+reliable:
 
 ```bash
-python3 -m http.server 8000
+node dev-server.js . 8000
 ```
 
 Then open `http://localhost:8000`.

@@ -1,4 +1,10 @@
-var CACHE_NAME = "upkeep-v1";
+var CACHE_NAME = "upkeep-v2";
+// Only the true app shell is precached at install time. exercises.json
+// (a large data file) and gym.js are deliberately left out of cache.addAll:
+// precaching them here competes with the page's own fetch for the same
+// URL on first load and can abort one of the two requests (confirmed via
+// net::ERR_ABORTED in testing). They still get cached lazily the first
+// time the fetch handler below sees them succeed over the network.
 var SHELL_FILES = [
   "./",
   "./index.html",
