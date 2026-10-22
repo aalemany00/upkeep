@@ -73,12 +73,43 @@ own repo, as required.
   entry in the project; harmless since rules scope everything per-uid, but
   should delete it from Authentication → Users before this is "done."
 
+## 2026-10-22 — Weekly coach script upgraded + first real run
+
+- Shared a spec/prototype from an unrelated past Claude.ai chat project
+  ("Lift Log," a gym tracker) as a "not sure if this is useful" reference.
+  Decided with Claude what to actually take from it rather than building
+  that separate app: its AI-feedback system-prompt safety framing (not
+  medical/dietitian advice, treat free-text notes as untrusted data, flag
+  concerning things without diagnosing) and its "AI suggests a goal change,
+  I tap Apply" pattern. Explicitly did not adopt its paid-API architecture.
+- Added `flags` and `calorieGoalChange` fields to the coach note's JSON
+  shape, plus an "Apply" button in the Coach tab that nudges the calorie
+  goal by the suggested amount — mirrors Lift Log's pattern but stays on
+  the free `claude -p` approach.
+- Told Claude multiple people (not just me) will use this app. Clarified
+  scope: not a public auto-scaling service (that needs the paid API +
+  instructor sign-off, which I explicitly don't want to depend on since I
+  may not keep my Claude subscription long-term) — just the coach script
+  looping over every signed-up Firebase user instead of one hardcoded UID,
+  still run manually by me on my own Claude Code access. Firebase Auth +
+  Firestore rules already supported multiple users without any change.
+- Installed Node.js (wasn't on this machine) via winget so the script could
+  actually run, then installed its npm dependencies.
+- Downloaded my own Firebase service account key and dropped it into
+  `scripts/serviceAccountKey.json` (gitignored). Note to self: I pasted the
+  raw key file contents into chat by mistake instead of just giving the
+  path — it got auto-read into the session. Not exposed anywhere public,
+  but next time just give Claude the path.
+- Ran `node coach-note.js` for real for the first time — found 1 signed-up
+  user, generated a real note via `claude -p`, wrote it to Firestore. It
+  correctly said there wasn't enough data yet rather than inventing detail,
+  which is exactly the boundary check working as intended.
+
 ## Open items
 
 - Delete the `test-coach@example.com` test account and its food entry from
-  Firebase once real use starts.
-- Set up `scripts/serviceAccountKey.json` and `scripts/config.json` so the
-  coach-note script can run — see `scripts/README.md`.
+  Firebase once real use starts (there's also now a real test coach note
+  attached to it).
 - Decide on a real name (currently "Health Coach" working title).
 - First real week of logged data + first generated coach note, to see if the
   advice is actually useful or needs prompt changes.

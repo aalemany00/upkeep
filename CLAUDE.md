@@ -1,8 +1,10 @@
 # Health Coach (working title)
 
-TCSS 490 Artifact 3 ("AI Inside It"). A personal health tracker — food/calories/
+TCSS 490 Artifact 3 ("AI Inside It"). A health tracker — food/calories/
 protein, gym workouts, water, steps, weight, vitamins/supplements, and goals —
-synced between phone and PC, with a weekly AI-written coaching note.
+synced between phone and PC, with a weekly AI-written coaching note. Built
+for Adrian but usable by other people (friends/family/classmates) too: any
+number of people can sign up, each sees only their own data.
 
 ## Stack
 
@@ -41,7 +43,12 @@ is not just the tool used to build this app.
   value for free.
 - **How to generate a note:** see `scripts/README.md`. It's a manual/
   scheduled step Adrian runs himself (there's no server to trigger it from
-  the static site), not a button in the web app.
+  the static site), not a button in the web app. It loops over every
+  signed-up user (via Admin Auth `listUsers`), not just Adrian — but it's
+  still one person (Adrian) manually running it on his own Claude Code
+  access for everyone, not a public auto-scaling service. That's a
+  deliberate limit, not a gap: scaling further needs the paid API, which
+  needs instructor sign-off first (see "Stack" above).
 
 ## Working with Adrian
 

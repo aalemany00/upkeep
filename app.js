@@ -214,10 +214,27 @@ function renderDashboard() {
   renderCoachPreview();
 }
 
+async function applyCalorieChange(delta) {
+  if (!currentUid) return;
+  const current = goals.calorieGoal || 0;
+  await setDoc(doc(db, "users", currentUid, "meta", "goals"), { calorieGoal: current + delta }, { merge: true });
+}
+
+function wireApplyButtons(container) {
+  container.querySelectorAll("[data-apply-calorie]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      applyCalorieChange(Number(btn.dataset.applyCalorie));
+      btn.textContent = "Applied";
+      btn.disabled = true;
+    });
+  });
+}
+
 function renderCoachPreview() {
   const el = document.getElementById("dashboard-coach-preview");
   if (!coachNotes.length) return;
   el.innerHTML = coachNoteHtml(coachNotes[0]);
+  wireApplyButtons(el);
 }
 
 // ---------------------------------------------------------------------
@@ -354,12 +371,19 @@ goalsForm.addEventListener("submit", async (e) => {
 function coachNoteHtml(note) {
   const range = note.weekStart && note.weekEnd ? `${note.weekStart} – ${note.weekEnd}` : "";
   const list = (items) => (items && items.length ? `<ul>${items.map((i) => `<li>${i}</li>`).join("")}</ul>` : "");
+  const change = note.calorieGoalChange;
   return `
     <div class="coach-note-meta">${range}</div>
     <p>${note.summary || ""}</p>
     ${note.wins?.length ? `<h4>Wins</h4>${list(note.wins)}` : ""}
     ${note.concerns?.length ? `<h4>Worth watching</h4>${list(note.concerns)}` : ""}
+    ${note.flags?.length ? `<h4>Flagged</h4>${list(note.flags)}` : ""}
     ${note.suggestions?.length ? `<h4>Try this week</h4>${list(note.suggestions)}` : ""}
+    ${change ? `
+      <p class="subtle small">Suggests ${change > 0 ? "adding" : "cutting"} ${Math.abs(change)} kcal/day.
+        <button class="link-btn" data-apply-calorie="${change}">Apply</button>
+      </p>` : ""}
+    <p class="subtle small" style="margin-top:10px;">Not medical or nutrition advice — a rule-of-thumb estimate from your own logged data. Check with a doctor or dietitian for anything health-related.</p>
   `;
 }
 
@@ -372,5 +396,6 @@ function renderCoachNotes() {
   el.innerHTML = coachNotes
     .map((n) => `<div class="coach-note" style="margin-bottom:20px;border-top:1px solid var(--panel-border);padding-top:12px;">${coachNoteHtml(n)}</div>`)
     .join("");
+  wireApplyButtons(el);
   renderCoachPreview();
 }
