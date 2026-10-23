@@ -111,6 +111,19 @@ input[type="number"] {
 
 .tab.active { background: var(--accent-dark); color: #fff; }
 
+.subtab {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--subtle);
+  border-radius: 8px;
+  font-size: 0.85em;
+  cursor: pointer;
+  margin-right: 8px;
+}
+.subtab.active { background: var(--accent-dark); color: #fff; border-color: var(--accent-dark); }
+
 .view { display: none; }
 .view.active { display: block; }
 

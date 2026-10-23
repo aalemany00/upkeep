@@ -113,6 +113,17 @@ external calendars pulled in too.
   see it reflected in the Gym tab" sync Adrian asked for — adding a
   Cardio-tagged event is what makes the rest of the app aware of it, not
   the event existing on the calendar alone.
+  - **Colors are per-category, not per-event**: `DEFAULT_CATEGORY_COLORS`
+    gives every built-in category a fixed color (Holiday reuses the same
+    amber the holiday sync writes); picking a category auto-sets the
+    event's color and hides the color picker — you only see a manual color
+    picker for "Other," where there's no sensible default to assume.
+  - **Custom categories**: "+ Add new category…" in the category dropdown
+    prompts for a name and a color *once*, at creation — same "set it when
+    you make it" rule as the built-ins, not re-picked per event. Stored in
+    `users/{uid}/meta/categories` (`{"Name": "#hex"}`), loaded into
+    `customCategories` on sign-in, merged into the category dropdown ahead
+    of "Other."
 - **Country holidays** (Goals → "Holidays"): pick a country, fetch that
   country's public holidays for this year and next from **date.nager.at**
   (free, no key, and — confirmed live — sets CORS headers for direct browser
@@ -132,6 +143,16 @@ external calendars pulled in too.
   picking an arbitrary date; clicking a date on the Dashboard calendar
   re-renders the Gym tab too (even if it's not the currently visible tab) so
   the two are always in sync.
+  - **Rest days no longer pretend to be workout days**: the day panel used
+    to fall back to `distinctDayTypes()[0]` (the split's first day type) for
+    any date that wasn't scheduled or already logged — so e.g. a 3-day
+    Push/Pull/Legs user hovering an off day (Thursday, say) saw real
+    suggested exercises for a day nothing was actually scheduled, which
+    looked like a recommendation rather than nothing. An unscheduled,
+    unlogged date now shows "Rest day — nothing scheduled" with a dropdown
+    to deliberately log a workout anyway if you want to (tracked in
+    `restDayOverride`, scoped to that one date — it doesn't carry over when
+    you move to another day).
 - **Gym overlay + logged-day detail link**: a scheduled or logged gym day
   shows up automatically as a read-only "Gym: {dayType}" entry (purple,
   `GYM_EVENT_COLOR` in `calendar.js`) in the Dashboard day panel — computed
@@ -195,7 +216,20 @@ goals) → continue into the app. None of this is an AI call — the review
 screen just makes the deterministic output visible instead of silently
 redirecting.
 
-### Account settings (Goals tab — doubles as "account settings")
+### Settings (gear icon, formerly a "Goals" main tab)
+What used to be its own top-level "Goals" tab is now behind a gear icon in
+the header (`settings-btn`), opened via `switchView("goals")` — same view id
+and content, just not a 6th slot in the main tab row. Inside, two sub-tabs
+(`.subtab`, a deliberately distinct class from the main `.tab` row so the
+generic tab-click wiring doesn't try to treat them as top-level views):
+"Account & Goals" (everything below — bio, goals, availability, equipment,
+holidays, delete account) and "Help," a new section with setup instructions
+end users might actually need (currently: the USDA API key steps for the
+diet auto-estimate, and a one-line "your coach note isn't instant" note) —
+Adrian-only instructions like running `coach-note.js` stay out of this,
+same reasoning as the Coach tab copy above.
+
+### Account settings (doubles as "Goals")
 - "Your info": age/sex/height/weight, editable anytime (not onboarding-only).
 - Goal (6 types) + activity level + gym availability, editable anytime.
 - Daily goals (calories/protein/water/steps): **coach-computed defaults,
@@ -248,7 +282,11 @@ go run a dev script themselves, which Adrian correctly flagged as confusing
 for a non-technical friend/family user. It now just says the coach reviews
 your week "from time to time," with the actual manual/non-automatic
 mechanism documented here and in `scripts/README.md` for Adrian (the one
-person who runs it), not surfaced to end users at all.
+person who runs it), not surfaced to end users at all. The "settings
+changed since the last coach note" banner (Settings → Account & Goals) had
+the same problem and was missed in the first pass — it told every user to
+go run `scripts/coach-note.js`; now it just says the coach will factor the
+change in next time.
 - Loops over **every signed-up user** (Admin Auth `listUsers`), not just
   Adrian — but it's still one person manually running it on his own Claude
   Code access, not a public service. Scaling further = paid API territory,

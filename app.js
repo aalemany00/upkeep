@@ -35,6 +35,7 @@ let unsubSplit = null;
 let unsubWorkouts = null;
 let unsubCalEvents = null;
 let unsubCalFeeds = null;
+let unsubCategories = null;
 
 let entries = [];      // last 200 log entries (food/water/weight/activity/vitamin), newest first
 let goals = {};        // daily goals + vitamin list + goal type + availability
@@ -443,6 +444,11 @@ function subscribeAll(uid) {
     calendarFeeds = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     renderCalendarFeeds();
   });
+
+  const categoriesRef = doc(db, "users", uid, "meta", "categories");
+  unsubCategories = onSnapshot(categoriesRef, (snap) => {
+    customCategories = snap.exists() ? snap.data() : {};
+  });
 }
 
 function teardownSubscriptions() {
@@ -454,6 +460,7 @@ function teardownSubscriptions() {
   if (unsubWorkouts) unsubWorkouts();
   if (unsubCalEvents) unsubCalEvents();
   if (unsubCalFeeds) unsubCalFeeds();
+  if (unsubCategories) unsubCategories();
   entries = [];
   goals = {};
   coachNotes = [];
@@ -464,6 +471,7 @@ function teardownSubscriptions() {
   gymDraft = null;
   calendarEvents = [];
   calendarFeeds = [];
+  customCategories = {};
 
   // Reset UI left over from a previous account in this same browser tab
   // (shared devices, multiple people signing in/out) so nothing stale
@@ -517,6 +525,21 @@ function switchView(view) {
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${view}`));
 }
+
+// Settings (gear icon) opens the former "Goals" tab, now with Account/Help
+// sub-tabs instead of its own top-level nav slot — consolidating goals,
+// account settings, and setup help in one place instead of a 6th main tab.
+document.getElementById("settings-btn")?.addEventListener("click", () => switchView("goals"));
+document.querySelectorAll("[data-settings-subview]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const target = btn.dataset.settingsSubview;
+    document.querySelectorAll("[data-settings-subview]").forEach((b) => b.classList.toggle("active", b === btn));
+    document.querySelectorAll(".settings-subview").forEach((v) => {
+      v.classList.toggle("active", v.id === `settings-subview-${target}`);
+      v.hidden = v.id !== `settings-subview-${target}`;
+    });
+  });
+});
 
 // Food/Log's "Logging for" date pickers — a shared selectedDateKey (also
 // used by the Dashboard/Gym calendar), so picking a past date here and
@@ -748,7 +771,29 @@ function renderDashCalendar() {
 // the one that currently does something beyond labeling — it surfaces an
 // upcoming-cardio reminder in the Gym tab (see upcomingCardioEvents), so
 // adding a run to the calendar makes the rest of the app aware of it.
-const EVENT_CATEGORIES = ["General", "Workout", "Cardio", "Appointment", "Work", "Holiday", "Birthday", "Other"];
+// Every built-in category already has a sensible color, so picking one sets
+// the event's color automatically — the manual color picker only shows up
+// for "Other," where there's no sensible default to assume.
+const DEFAULT_CATEGORY_COLORS = {
+  General: DEFAULT_EVENT_COLOR,
+  Workout: "#4f8ef7",
+  Cardio: "#00b8a9",
+  Appointment: "#f2994a",
+  Work: "#8d6e63",
+  Holiday: "#e0a030",
+  Birthday: "#ff5c9e"
+};
+const EVENT_CATEGORIES = [...Object.keys(DEFAULT_CATEGORY_COLORS), "Other"];
+const ADD_CATEGORY_VALUE = "__add_new__";
+
+// User-defined categories beyond the built-in list, each with its own
+// color chosen once at creation time (not re-picked per event, same as the
+// built-ins) — users/{uid}/meta/categories, {"Name": "#hex", ...}.
+let customCategories = {};
+
+function categoryColor(category) {
+  return DEFAULT_CATEGORY_COLORS[category] || customCategories[category] || DEFAULT_EVENT_COLOR;
+}
 
 function eventFormHtml(prefix, ev = {}) {
   const dateKey = ev.dateKey || selectedDateKey || todayKey();
@@ -773,14 +818,26 @@ function eventFormHtml(prefix, ev = {}) {
         </label>
       </div>
       <div class="row">
-        <label class="small">Color
-          <input type="color" name="color" value="${ev.color || DEFAULT_EVENT_COLOR}" />
-        </label>
         <label class="small grow">Category
           <select name="category">
-            ${EVENT_CATEGORIES.map((c) => `<option value="${c}" ${ev.category === c ? "selected" : ""}>${c}</option>`).join("")}
+            ${EVENT_CATEGORIES.filter((c) => c !== "Other")
+              .map((c) => `<option value="${c}" ${ev.category === c ? "selected" : ""}>${c}</option>`)
+              .join("")}
+            ${Object.keys(customCategories)
+              .map((c) => `<option value="${c}" ${ev.category === c ? "selected" : ""}>${c}</option>`)
+              .join("")}
+            <option value="Other" ${ev.category === "Other" ? "selected" : ""}>Other</option>
+            <option value="${ADD_CATEGORY_VALUE}">+ Add new category…</option>
           </select>
         </label>
+        <label class="small" data-event-color-row ${(ev.category || "General") !== "Other" ? "hidden" : ""}>Color
+          <input type="color" name="color" value="${ev.color || categoryColor(ev.category) || DEFAULT_EVENT_COLOR}" />
+        </label>
+      </div>
+      <div class="row" data-new-category-row hidden>
+        <input type="text" data-new-category-name placeholder="New category name" class="grow" />
+        <input type="color" data-new-category-color value="${DEFAULT_EVENT_COLOR}" />
+        <button type="button" class="btn ghost small" data-save-category>Save category</button>
       </div>
       <input type="text" name="notes" placeholder="Notes (optional)" value="${ev.notes ? ev.notes.replace(/"/g, "&quot;") : ""}" />
       ${ev.category === "Cardio" || !ev.id ? `<p class="subtle small">Tagging this "Cardio" makes it show up as an upcoming reminder in the Gym tab.</p>` : ""}
@@ -837,6 +894,37 @@ function wireEventForm(prefix, container) {
       untilDateRow.hidden = e.target.checked;
     });
   }
+
+  const categorySelect = form.querySelector('[name="category"]');
+  const colorRow = form.querySelector("[data-event-color-row]");
+  const newCategoryRow = form.querySelector("[data-new-category-row]");
+  categorySelect.addEventListener("change", (e) => {
+    if (e.target.value === ADD_CATEGORY_VALUE) {
+      newCategoryRow.hidden = false;
+      colorRow.hidden = true;
+      return;
+    }
+    newCategoryRow.hidden = true;
+    const isOther = e.target.value === "Other";
+    colorRow.hidden = !isOther;
+    if (!isOther) form.color.value = categoryColor(e.target.value);
+  });
+  newCategoryRow.querySelector("[data-save-category]").addEventListener("click", async () => {
+    if (!currentUid) return;
+    const name = newCategoryRow.querySelector("[data-new-category-name]").value.trim();
+    const color = newCategoryRow.querySelector("[data-new-category-color]").value;
+    if (!name) return;
+    await setDoc(doc(db, "users", currentUid, "meta", "categories"), { [name]: color }, { merge: true });
+    customCategories[name] = color;
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    categorySelect.insertBefore(opt, categorySelect.querySelector(`option[value="Other"]`));
+    categorySelect.value = name;
+    newCategoryRow.hidden = true;
+    colorRow.hidden = true;
+    form.color.value = color;
+  });
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -1095,7 +1183,6 @@ async function syncFeed(feedId, feedOverride) {
 // situation, so no relay needed here. Idempotent: externalUid is derived
 // from country+date, so re-running for the same country just updates
 // existing holiday events instead of duplicating them.
-const HOLIDAY_COLOR = "#e0a030";
 async function syncHolidays(countryCode) {
   const statusEl = document.getElementById("goals-holiday-status");
   if (!currentUid || !countryCode) return;
@@ -1120,7 +1207,7 @@ async function syncHolidays(countryCode) {
       const prior = existingByUid.get(externalUid);
       const fields = {
         title: h.localName, dateKey: h.date, endDateKey: h.date, allDay: true,
-        startTime: null, endTime: null, color: HOLIDAY_COLOR, category: "Holiday",
+        startTime: null, endTime: null, color: DEFAULT_CATEGORY_COLORS.Holiday, category: "Holiday",
         source: "holiday", holidayCountry: countryCode, externalUid
       };
       if (prior) {
@@ -1752,6 +1839,13 @@ function scheduledDayTypeFor(dateKey) {
 }
 
 let gymDraft = null; // { dateKey, dayType, picks: [exerciseId...], sets: [[{w,r}...]...], extra: [{exerciseId, sets}] }
+// A date that's neither scheduled nor already logged is a rest day — it
+// shouldn't silently show some split day's exercises (it used to fall back
+// to distinctDayTypes()[0], which made every "off" day look like it was
+// recommending a specific workout). Picking a type from the panel's
+// dropdown on a rest day opts into logging one anyway, tracked here so it
+// doesn't carry over to the next day you look at.
+let restDayOverride = null; // { dateKey, dayType }
 
 // Template-slot entries are matched by slotLabel (not array position) so a
 // day that skipped a slot, or has extras mixed in, doesn't misalign.
@@ -1827,6 +1921,21 @@ function renderGymSplitSummary() {
   el.innerHTML = `<h2>${split.name}</h2><p class="subtle small">${split.daysPerWeek} day${split.daysPerWeek === 1 ? "" : "s"}/week. Change this anytime in Goals.</p>`;
 }
 
+function gymJumpToDate(newDateKey) {
+  selectedDateKey = newDateKey;
+  syncLogDatePickers();
+  renderGymDayPanel();
+  renderDashCalendar();
+  renderDashDayPanel();
+  renderTodayEntries();
+  renderFoodEntries();
+}
+
+function gymJumpDay(delta) {
+  const d = dateFromKey(selectedDateKey);
+  gymJumpToDate(todayKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() + delta)));
+}
+
 function renderGymDayPanel() {
   const el = document.getElementById("gym-day-panel");
   if (catalogError) {
@@ -1846,13 +1955,42 @@ function renderGymDayPanel() {
 
   const scheduled = scheduledDayTypeFor(selectedDateKey);
   const existing = logForDate(selectedDateKey);
-  const dayType = existing?.dayType || scheduled?.dayType || distinctDayTypes()[0];
+  const override = restDayOverride?.dateKey === selectedDateKey ? restDayOverride.dayType : null;
+  const dayType = existing?.dayType || scheduled?.dayType || override;
+  const dateLabel = dateFromKey(selectedDateKey).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+
+  if (!dayType) {
+    el.innerHTML = `
+      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="row" style="align-items:center;gap:8px;">
+          <button type="button" class="btn small" id="gym-day-prev">&lsaquo;</button>
+          <h2 style="margin:0;">${dateLabel}</h2>
+          <button type="button" class="btn small" id="gym-day-next">&rsaquo;</button>
+        </div>
+      </div>
+      <p class="subtle small">${selectedDateKey === todayKey() ? "" : `<button type="button" class="link-btn" id="gym-day-today">Jump to today</button> — `}Pick any date on the <button type="button" class="link-btn" data-switch-view="dashboard">Dashboard calendar</button> to come straight here.</p>
+      <div class="panel">
+        <p class="subtle">Rest day — nothing scheduled. Want to log a workout anyway?</p>
+        <select id="gym-restday-type">
+          <option value="" disabled selected>Pick a workout type</option>
+          ${distinctDayTypes().map((t) => `<option value="${t}">${t}</option>`).join("")}
+        </select>
+      </div>`;
+    document.getElementById("gym-day-prev").addEventListener("click", () => gymJumpDay(-1));
+    document.getElementById("gym-day-next").addEventListener("click", () => gymJumpDay(1));
+    document.getElementById("gym-day-today")?.addEventListener("click", () => gymJumpToDate(todayKey()));
+    el.querySelector('[data-switch-view="dashboard"]')?.addEventListener("click", () => switchView("dashboard"));
+    document.getElementById("gym-restday-type").addEventListener("change", (e) => {
+      restDayOverride = { dateKey: selectedDateKey, dayType: e.target.value };
+      renderGymDayPanel();
+    });
+    return;
+  }
 
   if (!gymDraft || gymDraft.dateKey !== selectedDateKey || gymDraft.dayType !== dayType) {
     gymDraft = buildGymDraft(selectedDateKey, dayType);
   }
 
-  const dateLabel = dateFromKey(selectedDateKey).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
   const typeOptions = distinctDayTypes().map((t) => `<option value="${t}" ${t === dayType ? "selected" : ""}>${t}</option>`).join("");
 
   const slots = slotsForDayType(dayType);
@@ -1948,24 +2086,9 @@ function renderGymDayPanel() {
     renderGymDayPanel();
   });
 
-  function jumpToDate(newDateKey) {
-    selectedDateKey = newDateKey;
-    syncLogDatePickers();
-    renderGymDayPanel();
-    renderDashCalendar();
-    renderDashDayPanel();
-    renderTodayEntries();
-    renderFoodEntries();
-  }
-  document.getElementById("gym-day-prev").addEventListener("click", () => {
-    const d = dateFromKey(selectedDateKey);
-    jumpToDate(todayKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1)));
-  });
-  document.getElementById("gym-day-next").addEventListener("click", () => {
-    const d = dateFromKey(selectedDateKey);
-    jumpToDate(todayKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)));
-  });
-  document.getElementById("gym-day-today")?.addEventListener("click", () => jumpToDate(todayKey()));
+  document.getElementById("gym-day-prev").addEventListener("click", () => gymJumpDay(-1));
+  document.getElementById("gym-day-next").addEventListener("click", () => gymJumpDay(1));
+  document.getElementById("gym-day-today")?.addEventListener("click", () => gymJumpToDate(todayKey()));
   el.querySelector('[data-switch-view="dashboard"]')?.addEventListener("click", () => switchView("dashboard"));
 
   el.querySelectorAll("[data-slot-select]").forEach((sel) => {

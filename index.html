@@ -93,6 +93,7 @@
 <!-- App shell -->
 <div id="app" hidden>
   <header class="topbar">
+    <button id="settings-btn" class="btn small" title="Settings" aria-label="Settings">&#9881;</button>
     <h1>Upkeep</h1>
     <button id="signout-btn" class="btn small">Sign out</button>
   </header>
@@ -102,7 +103,6 @@
     <button class="tab" data-view="food">Food</button>
     <button class="tab" data-view="gym">Gym</button>
     <button class="tab" data-view="log">Log</button>
-    <button class="tab" data-view="goals">Goals</button>
     <button class="tab" data-view="coach">Coach</button>
   </nav>
 
@@ -279,11 +279,18 @@
       </div>
     </section>
 
-    <!-- Goals -->
+    <!-- Settings (Goals/account settings + Help) -->
     <section id="view-goals" class="view">
 
+      <nav class="tabs" id="settings-subtabs" style="margin-bottom:12px;">
+        <button class="subtab active" data-settings-subview="account">Account &amp; Goals</button>
+        <button class="subtab" data-settings-subview="help">Help</button>
+      </nav>
+
+      <div id="settings-subview-account" class="settings-subview active">
+
       <div class="panel" id="coach-review-banner" hidden>
-        <p class="subtle small">Your settings changed since the last coach note. Run <code>scripts/coach-note.js</code> again to get advice that reflects the update.</p>
+        <p class="subtle small">Your info changed since your last coach note — your coach will factor this in next time.</p>
       </div>
 
       <form id="goals-form" class="panel">
@@ -432,6 +439,26 @@
           <p id="delete-account-error" class="error" hidden></p>
           <p id="delete-account-progress" class="subtle small" hidden>Deleting your data...</p>
         </form>
+      </div>
+
+      </div>
+
+      <div id="settings-subview-help" class="settings-subview" hidden>
+        <div class="panel">
+          <h2>Diet auto-estimate setup (optional)</h2>
+          <p class="subtle small">The Food tab can suggest calories/protein when you type a food name, using the free USDA FoodData Central database. It needs a one-time, no-credit-card API key:</p>
+          <ol class="subtle small">
+            <li>Go to <a href="https://fdc.nal.usda.gov/api-key-signup/index.html" target="_blank" rel="noopener">fdc.nal.usda.gov/api-key-signup</a> and fill in the short form (just name/email, no card).</li>
+            <li>Check your email for the key — it looks like a long string of letters and numbers.</li>
+            <li>Open <code>usda-config.js</code> in the project and replace <code>YOUR_API_KEY_HERE</code> with your key.</li>
+            <li>Save, redeploy (or just reload if running locally) — the Food tab will start suggesting estimates as you type.</li>
+          </ol>
+          <p class="subtle small">Without this, manual food logging still works exactly the same — you just type calories/protein in yourself.</p>
+        </div>
+        <div class="panel">
+          <h2>About your weekly coach note</h2>
+          <p class="subtle small">Your coach note is generated periodically, not instantly — there's nothing you need to do to get one. If you haven't seen your first note yet, check back after you've logged a few days of activity.</p>
+        </div>
       </div>
     </section>
 
