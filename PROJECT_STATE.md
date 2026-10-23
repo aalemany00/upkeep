@@ -90,24 +90,27 @@ external calendars pulled in too.
   - **No backend, so no direct fetch**: calendar providers don't set CORS
     headers for arbitrary browser origins, so a feed URL is fetched through
     a public CORS relay instead of `fetch()`ing it directly. `app.js`'s
-    `CORS_RELAYS` tries a short list of public relays in order and accepts
-    the first response that actually contains `BEGIN:VCALENDAR` (content-
-    sniffed, not just HTTP-status-checked — tested live and found these
-    relays sometimes return a non-2xx status on a perfectly good body, or
-    vice versa). **This is a real, somewhat fragile third-party dependency**:
-    tested live from this dev sandbox and every relay in the list failed
-    (blocked by the relay's own missing CORS headers, or the relay itself
-    erroring) — plausibly because the sandbox's shared outbound IP is rate-
-    limited by these free/abused services, not necessarily a sign it's
-    broken for a real user's own browser/IP. **Not fully verified working
-    end-to-end with a live feed** — the ICS *parser* itself is unit-tested
-    and correct (multi-day events, all-day vs. timed, UTC vs. naive
-    timestamps, comma-escaping), but the actual fetch-through-a-relay path
-    needs confirming once this is deployed and tried from a normal
-    residential/office connection. If it's unreliable there too, the next
-    step would be a small self-hosted relay (e.g. a free Cloudflare Worker)
-    instead of depending on public ones — that's a new external service and
-    should be confirmed with Adrian first, same as any new external account.
+    `CORS_RELAYS` tries a short list of public relays in order (10s timeout
+    each) and accepts the first response that actually contains
+    `BEGIN:VCALENDAR` (content-sniffed, not just HTTP-status-checked —
+    testing found these relays sometimes return a non-2xx status on a
+    perfectly good body, or vice versa). **Confirmed working end-to-end**:
+    the first three relays tried (allorigins.win, cors.eu.org, codetabs)
+    all failed outright, live, against Adrian's real Canvas .ics feed — not
+    just a sandbox-IP fluke, they failed the same way from a real browser
+    session too. `proxy.corsfix.com` (added, now listed first) successfully
+    fetched and synced that same real feed (65 events) — it echoes
+    `Access-Control-Allow-Origin` back per-request and is rate-limited at
+    60 req/10min on its free tier, communicated via response headers rather
+    than failing silently. Note it wants the target URL appended **raw, not
+    percent-encoded**, unlike the other relays in the list — confirmed by
+    testing (an encoded URL gets a `corsfix_error: invalid_url` back). The
+    other three relays stay in the list purely as a fallback in case corsfix
+    is ever down. This is still a third-party dependency worth keeping an
+    eye on; if corsfix ever becomes unreliable too, the next step would be a
+    small self-hosted relay (e.g. a free Cloudflare Worker) instead of
+    depending on public ones — a new external service, confirm with Adrian
+    first.
   - A manual edit to an imported event sticks (`userEdited: true`) — the
     next sync won't overwrite it, and won't delete it even if the source
     feed removes that event.
@@ -386,14 +389,13 @@ README.md               # human-facing setup/run instructions
 
 ## 8. Known gaps / explicitly deferred (not forgotten, just not now)
 
-- **Calendar feed import via CORS relay, not confirmed working live** — see
-  section 2's "Imported calendar feeds". Chose a one-way iCal/webcal feed
-  URL over real OAuth (OAuth would need a Google Cloud project + an Azure
-  app registration, both real per-provider setup, plus Apple has no public
-  OAuth calendar API at all). The relay-fetch path itself couldn't be
-  confirmed end-to-end from this dev sandbox (every public relay tried
-  failed, plausibly due to the sandbox's shared/rate-limited IP) — needs a
-  real test once deployed, from an ordinary connection.
+- **Calendar feed import depends on a free third-party CORS relay**
+  (`proxy.corsfix.com`, see section 2) — confirmed working end-to-end
+  against Adrian's real Canvas feed, but it's still someone else's free
+  service with its own rate limit (60 req/10min) and no uptime guarantee.
+  Chose this one-way iCal/webcal approach over real OAuth (OAuth would need
+  a Google Cloud project + an Azure app registration, both real per-provider
+  setup, and Apple has no public OAuth calendar API at all).
 - **RRULE (recurring-event) expansion** — an imported recurring event shows
   only its first occurrence, flagged `(recurring)` rather than silently
   wrong. Expanding real recurrence rules is a meaningfully bigger parser.

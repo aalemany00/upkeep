@@ -575,9 +575,13 @@ function renderCoachPreview() {
 // Free public CORS relays are individually flaky (seen both real outages
 // and relays that return a non-2xx status code while still delivering a
 // perfectly good body) — tried in order, first one whose response actually
-// looks like an ICS file wins, rather than trusting any single relay or
-// its HTTP status code alone.
+// looks like an ICS file wins, rather than trusting any single relay or its
+// HTTP status code alone. corsfix.com confirmed working (tested live against
+// a real Canvas feed) and listed first; the rest are fallbacks in case it's
+// ever down or rate-limited (60 req/10min on its free tier) — note it wants
+// the target URL appended raw, not percent-encoded, unlike the others.
 const CORS_RELAYS = [
+  (url) => `https://proxy.corsfix.com/?${url}`,
   (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
   (url) => `https://cors.eu.org/${url}`,
   (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
@@ -586,13 +590,17 @@ const CORS_RELAYS = [
 async function fetchViaCorsRelay(url) {
   const errors = [];
   for (const buildRelayUrl of CORS_RELAYS) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
     try {
-      const res = await fetch(buildRelayUrl(url));
+      const res = await fetch(buildRelayUrl(url), { signal: controller.signal });
       const text = await res.text();
       if (text.includes("BEGIN:VCALENDAR")) return text;
       errors.push(`relay returned no calendar data (HTTP ${res.status})`);
     } catch (err) {
       errors.push(String(err.message || err));
+    } finally {
+      clearTimeout(timeout);
     }
   }
   throw new Error(`all calendar relays failed — ${errors.join("; ")}`);
