@@ -232,6 +232,17 @@ own repo, as required.
      one rebuild the first time that listener actually delivers data.
      Confirmed fixed by re-running the same test.
 
+## 2026-10-23 — PROJECT_STATE.md added
+
+- About to run out of usage and hit a context compaction, with no Remote
+  Control access to this account — asked for a persistent, topic-organized
+  project snapshot (not just this chronological log) so a future session on
+  any machine can pick this up cold from the repo alone.
+- Added `PROJECT_STATE.md`: current feature set, architecture, data model,
+  file map, dev environment setup, known gaps, and testing conventions.
+  `CLAUDE.md` now points to it first. Maintenance rule going forward: update
+  both this log and `PROJECT_STATE.md` whenever something substantial lands.
+
 ## Open items
 
 - Delete the `test-coach@example.com` test account and its food entry from

@@ -6,6 +6,15 @@ synced between phone and PC, with a weekly AI-written coaching note. Built
 for Adrian but usable by other people (friends/family/classmates) too: any
 number of people can sign up, each sees only their own data.
 
+**Read `PROJECT_STATE.md` first.** It's the living, topic-organized snapshot
+of the whole project — current features, architecture, data model, dev
+setup, known gaps, and testing conventions — meant to let a session with no
+memory of prior conversations pick this up cold (no Remote Control access
+on this account, so a new machine/session relies entirely on the repo + that
+file). `LOG.md` below is the course-required chronological record (what was
+asked/decided/abandoned, in order); update **both** whenever something
+substantial lands — a new feature, a real bug fix, an architecture decision.
+
 ## Stack
 
 - Plain HTML/CSS/JS, no build step, deployed as a static site to GitHub Pages
