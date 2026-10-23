@@ -201,6 +201,7 @@ input[type="number"] {
 }
 
 .row { display: flex; gap: 8px; }
+.row .grow { flex: 1; }
 .log-form .quick-row { display: flex; gap: 6px; }
 
 .btn {
@@ -300,11 +301,18 @@ input[type="number"] {
 .cal-day.scheduled { border-color: var(--accent-dark); }
 .cal-day.today { border-color: var(--accent); border-width: 2px; }
 .cal-day.selected { background: var(--accent-dark); }
+.cal-day.past { opacity: 0.45; }
 .cal-day .cal-dot {
   width: 5px; height: 5px; border-radius: 50%;
   background: var(--accent);
+  display: inline-block;
 }
 .cal-day.logged .cal-dot { background: #fff; }
+.cal-dots { display: flex; gap: 3px; position: absolute; bottom: 4px; }
+
+.entry-row.expired { opacity: 0.5; }
+.entry-row.expired strong { text-decoration: line-through; }
+.entry-row .cal-dot { width: 9px; height: 9px; margin-right: 4px; vertical-align: middle; }
 
 /* Gym day panel */
 .gym-slot {

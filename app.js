@@ -11,6 +11,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { assignSplit, targetFor, MUSCLE_LABEL_BY_SLOT, SPLIT_ALGO_VERSION, EQUIPMENT_OPTIONS } from "./gym.js";
 import { computeDailyGoals, GOAL_LABELS } from "./nutrition.js";
+import { parseICS, normalizeFeedUrl, occursOnDate, isEventExpired, DEFAULT_EVENT_COLOR, DEFAULT_FEED_COLOR, GYM_EVENT_COLOR } from "./calendar.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -30,6 +31,8 @@ let unsubCoach = null;
 let unsubProfile = null;
 let unsubSplit = null;
 let unsubWorkouts = null;
+let unsubCalEvents = null;
+let unsubCalFeeds = null;
 
 let entries = [];      // last 200 log entries (food/water/weight/activity/vitamin), newest first
 let goals = {};        // daily goals + vitamin list + goal type + availability
@@ -37,6 +40,8 @@ let coachNotes = [];   // generated weekly notes, newest first
 let profile = null;    // bio: age/sex/height/starting weight — null until onboarding finishes
 let split = null;      // the assigned workout split (gym.assignSplit output)
 let workoutLogs = [];  // one doc per logged gym day, newest first
+let calendarEvents = []; // everything-calendar events, manual + imported-from-feed
+let calendarFeeds = [];  // imported calendar subscriptions (label, url, color)
 
 // All targetFor() calls route through this so "smallest weight jump
 // available" (Goals) is applied consistently everywhere a progression
@@ -54,6 +59,8 @@ let dietPicks = {}; // { breakfast: id, lunch: id, dinner: id, snack1: id, snack
 
 let calViewDate = new Date();   // month currently shown in the Gym calendar
 let selectedDateKey = null;     // date the Gym day-panel is showing
+let dashCalViewDate = new Date();   // month currently shown in the Dashboard's everything-calendar
+let dashSelectedDateKey = null;     // date the Dashboard day-panel is showing
 let showingOnboardingReview = false; // gate: stay on onboarding screen to show the just-built plan
 
 async function fetchJsonWithRetry(url, attempts = 2) {
@@ -366,6 +373,7 @@ function subscribeAll(uid) {
   unsubSplit = onSnapshot(splitRef, (snap) => {
     split = snap.exists() ? snap.data() : null;
     renderGym();
+    renderDashCalendar(); // the dashboard calendar overlays scheduled gym days too
     maybeRebuildStaleSplit();
   });
 
@@ -381,6 +389,21 @@ function subscribeAll(uid) {
     // saved "extra" exercise silently vanished on reload).
     if (!workoutLogsReady) { workoutLogsReady = true; gymDraft = null; }
     renderGym();
+    renderDashCalendar();
+    renderDashDayPanel();
+  });
+
+  const eventsQuery = query(collection(db, "users", uid, "calendarEvents"), orderBy("dateKey", "desc"), limit(500));
+  unsubCalEvents = onSnapshot(eventsQuery, (snap) => {
+    calendarEvents = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderDashCalendar();
+    renderDashDayPanel();
+  });
+
+  const feedsQuery = query(collection(db, "users", uid, "calendarFeeds"), orderBy("createdAt", "asc"));
+  unsubCalFeeds = onSnapshot(feedsQuery, (snap) => {
+    calendarFeeds = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderCalendarFeeds();
   });
 }
 
@@ -391,6 +414,8 @@ function teardownSubscriptions() {
   if (unsubProfile) unsubProfile();
   if (unsubSplit) unsubSplit();
   if (unsubWorkouts) unsubWorkouts();
+  if (unsubCalEvents) unsubCalEvents();
+  if (unsubCalFeeds) unsubCalFeeds();
   entries = [];
   goals = {};
   coachNotes = [];
@@ -399,6 +424,8 @@ function teardownSubscriptions() {
   workoutLogs = [];
   workoutLogsReady = false;
   gymDraft = null;
+  calendarEvents = [];
+  calendarFeeds = [];
 
   // Reset UI left over from a previous account in this same browser tab
   // (shared devices, multiple people signing in/out) so nothing stale
@@ -417,6 +444,8 @@ function teardownSubscriptions() {
   fillGoalsForm();
   renderCoachNotes();
   renderCoachReviewBanner();
+  renderDashCalendar();
+  renderCalendarFeeds();
 }
 
 async function addEntry(type, fields) {
@@ -524,6 +553,371 @@ function renderCoachPreview() {
   }
   el.innerHTML = coachNoteHtml(coachNotes[0]);
   wireApplyButtons(el);
+}
+
+// ---------------------------------------------------------------------
+// Everything calendar (Dashboard) — manual events the user adds directly,
+// plus events pulled in from imported iCal/webcal feeds (Google/Outlook/
+// Apple all export one from their sharing settings). The gym tab keeps its
+// own calendar for logging sets (unchanged); this one additionally overlays
+// scheduled/logged gym days as a read-only entry so it's the one place to
+// see everything going on, per Adrian's ask.
+//
+// No backend: an imported feed is fetched through a public CORS relay
+// (api.allorigins.win) since calendar providers don't set CORS headers for
+// arbitrary browser fetches — this is a real third-party dependency (could
+// go down or rate-limit) and the feed URL is sent to it on every sync, not
+// just to Firestore. One-way (reads events in, never writes back to the
+// source calendar). RRULE (recurring events) isn't expanded — a recurring
+// event shows only its first occurrence, flagged "(recurring)" in the UI
+// rather than silently wrong. See calendar.js for the actual parsing.
+// ---------------------------------------------------------------------
+// Free public CORS relays are individually flaky (seen both real outages
+// and relays that return a non-2xx status code while still delivering a
+// perfectly good body) — tried in order, first one whose response actually
+// looks like an ICS file wins, rather than trusting any single relay or
+// its HTTP status code alone.
+const CORS_RELAYS = [
+  (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  (url) => `https://cors.eu.org/${url}`,
+  (url) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+];
+
+async function fetchViaCorsRelay(url) {
+  const errors = [];
+  for (const buildRelayUrl of CORS_RELAYS) {
+    try {
+      const res = await fetch(buildRelayUrl(url));
+      const text = await res.text();
+      if (text.includes("BEGIN:VCALENDAR")) return text;
+      errors.push(`relay returned no calendar data (HTTP ${res.status})`);
+    } catch (err) {
+      errors.push(String(err.message || err));
+    }
+  }
+  throw new Error(`all calendar relays failed — ${errors.join("; ")}`);
+}
+
+function gymEventForDate(dateKey) {
+  const existing = logForDate(dateKey);
+  const scheduled = scheduledDayTypeFor(dateKey);
+  const dayType = existing?.dayType || scheduled?.dayType;
+  if (!dayType) return null;
+  return {
+    id: `gym-${dateKey}`,
+    title: `Gym: ${dayType}`,
+    color: GYM_EVENT_COLOR,
+    allDay: true,
+    dateKey,
+    endDateKey: dateKey,
+    gym: true,
+    logged: !!existing
+  };
+}
+
+function manualEventsForDate(dateKey) {
+  return calendarEvents.filter((e) => occursOnDate(e, dateKey));
+}
+
+function allEventsForDate(dateKey) {
+  const gymEvent = gymEventForDate(dateKey);
+  const manual = manualEventsForDate(dateKey)
+    .slice()
+    .sort((a, b) => (a.allDay === b.allDay ? (a.startTime || "").localeCompare(b.startTime || "") : a.allDay ? -1 : 1));
+  return gymEvent ? [gymEvent, ...manual] : manual;
+}
+
+function renderDashCalendar() {
+  const weekdaysEl = document.getElementById("ecal-weekdays");
+  const daysEl = document.getElementById("ecal-days");
+  const label = document.getElementById("ecal-month-label");
+  if (!weekdaysEl) return;
+
+  weekdaysEl.innerHTML = WEEKDAY_LABELS.map((l) => `<div class="cal-weekday">${l}</div>`).join("");
+  label.textContent = dashCalViewDate.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+
+  const year = dashCalViewDate.getFullYear();
+  const month = dashCalViewDate.getMonth();
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = todayKey();
+
+  let html = "";
+  for (let i = 0; i < firstWeekday; i++) html += `<div class="cal-day empty"></div>`;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateKey = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const dayEvents = allEventsForDate(dateKey);
+    const classes = ["cal-day"];
+    if (dateKey < today) classes.push("past");
+    if (dateKey === today) classes.push("today");
+    if (dateKey === dashSelectedDateKey) classes.push("selected");
+    const dots = [...new Set(dayEvents.map((e) => e.color || DEFAULT_EVENT_COLOR))]
+      .slice(0, 4)
+      .map((c) => `<span class="cal-dot" style="background:${c}"></span>`)
+      .join("");
+    html += `<button type="button" class="${classes.join(" ")}" data-date="${dateKey}">${day}<span class="cal-dots">${dots}</span></button>`;
+  }
+  daysEl.innerHTML = html;
+
+  daysEl.querySelectorAll("[data-date]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      dashSelectedDateKey = btn.dataset.date;
+      renderDashCalendar();
+      renderDashDayPanel();
+    });
+  });
+}
+
+function eventFormHtml(prefix, ev = {}) {
+  const dateKey = ev.dateKey || dashSelectedDateKey || todayKey();
+  return `
+    <form class="log-form" id="${prefix}-form" data-id="${ev.id || ""}">
+      <input type="text" name="title" placeholder="Event title" value="${ev.title ? ev.title.replace(/"/g, "&quot;") : ""}" required />
+      <div class="row">
+        <label class="small grow">Starts
+          <input type="date" name="dateKey" value="${dateKey}" required />
+        </label>
+        <label class="small grow">Ends
+          <input type="date" name="endDateKey" value="${ev.endDateKey || dateKey}" required />
+        </label>
+      </div>
+      <label class="small"><input type="checkbox" name="allDay" ${ev.allDay !== false && !ev.startTime ? "checked" : ""} /> All day</label>
+      <div class="row" data-time-row ${ev.allDay !== false && !ev.startTime ? "hidden" : ""}>
+        <label class="small grow">Start time
+          <input type="time" name="startTime" value="${ev.startTime || ""}" />
+        </label>
+        <label class="small grow">End time
+          <input type="time" name="endTime" value="${ev.endTime || ""}" />
+        </label>
+      </div>
+      <div class="row">
+        <label class="small">Color
+          <input type="color" name="color" value="${ev.color || DEFAULT_EVENT_COLOR}" />
+        </label>
+        <input type="text" name="notes" placeholder="Notes (optional)" value="${ev.notes ? ev.notes.replace(/"/g, "&quot;") : ""}" class="grow" />
+      </div>
+      <div class="row">
+        <button type="submit" class="btn primary small">${ev.id ? "Save" : "Add event"}</button>
+        ${ev.id ? `<button type="button" class="btn ghost small" data-cancel-edit>Cancel</button>` : ""}
+      </div>
+    </form>`;
+}
+
+function wireEventForm(prefix, container) {
+  const form = container.querySelector(`#${prefix}-form`);
+  if (!form) return;
+  form.querySelector('[name="allDay"]').addEventListener("change", (e) => {
+    form.querySelector("[data-time-row]").hidden = e.target.checked;
+  });
+  const cancelBtn = form.querySelector("[data-cancel-edit]");
+  if (cancelBtn) cancelBtn.addEventListener("click", () => { editingEventId = null; renderDashDayPanel(); });
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!currentUid) return;
+    const data = new FormData(form);
+    const allDay = data.get("allDay") === "on";
+    const fields = {
+      title: data.get("title").trim(),
+      dateKey: data.get("dateKey"),
+      endDateKey: data.get("endDateKey") < data.get("dateKey") ? data.get("dateKey") : data.get("endDateKey"),
+      allDay,
+      startTime: allDay ? null : (data.get("startTime") || null),
+      endTime: allDay ? null : (data.get("endTime") || null),
+      color: data.get("color") || DEFAULT_EVENT_COLOR,
+      notes: data.get("notes")?.trim() || null
+    };
+    const id = form.dataset.id;
+    if (id) {
+      // Edits to a feed-imported event stick — the next sync won't clobber
+      // a manual correction (see syncFeed's userEdited check below).
+      await setDoc(doc(db, "users", currentUid, "calendarEvents", id), { ...fields, userEdited: true }, { merge: true });
+    } else {
+      await addDoc(collection(db, "users", currentUid, "calendarEvents"), {
+        ...fields, source: "manual", createdAt: Timestamp.now()
+      });
+    }
+    editingEventId = null;
+    renderDashDayPanel();
+  });
+}
+
+let editingEventId = null;
+
+function renderDashDayPanel() {
+  const el = document.getElementById("ecal-day-panel");
+  if (!el) return;
+  if (!dashSelectedDateKey) dashSelectedDateKey = todayKey();
+  const dateKey = dashSelectedDateKey;
+  const dateLabel = dateFromKey(dateKey).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+  const now = new Date();
+  const events = allEventsForDate(dateKey);
+
+  const editing = events.find((e) => e.id === editingEventId && !e.gym);
+
+  const listHtml = events.length
+    ? `<ul class="entry-list">${events.map((e) => {
+        const expired = !e.gym && isEventExpired(e, now);
+        const timeLabel = e.allDay ? "All day" : [e.startTime, e.endTime].filter(Boolean).join(" – ") || "";
+        return `
+          <li class="entry-row ${expired ? "expired" : ""}">
+            <span>
+              <span class="cal-dot" style="background:${e.color || DEFAULT_EVENT_COLOR}"></span>
+              <strong>${e.title}</strong>
+              ${e.recurring ? `<span class="subtle small">(recurring)</span>` : ""}
+              ${timeLabel ? `<span class="subtle small"> — ${timeLabel}</span>` : ""}
+              ${e.notes ? `<br/><span class="subtle small">${e.notes}</span>` : ""}
+              ${e.gym ? `<br/><span class="subtle small">${e.logged ? "Logged" : "Scheduled"} — see Gym tab to log it.</span>` : ""}
+            </span>
+            ${e.gym ? "" : `
+              <span class="row" style="gap:6px;">
+                <button type="button" class="btn ghost small" data-edit-event="${e.id}">Edit</button>
+                <button type="button" class="btn ghost small" data-delete-event="${e.id}">Delete</button>
+              </span>`}
+          </li>`;
+      }).join("")}</ul>`
+    : `<p class="subtle small">Nothing on this day.</p>`;
+
+  el.innerHTML = `
+    <h2>${dateLabel}</h2>
+    ${listHtml}
+    ${editing ? eventFormHtml("ecal-event", editing) : eventFormHtml("ecal-event")}
+  `;
+
+  wireEventForm("ecal-event", el);
+
+  el.querySelectorAll("[data-edit-event]").forEach((btn) => {
+    btn.addEventListener("click", () => { editingEventId = btn.dataset.editEvent; renderDashDayPanel(); });
+  });
+  el.querySelectorAll("[data-delete-event]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!currentUid) return;
+      await deleteDoc(doc(db, "users", currentUid, "calendarEvents", btn.dataset.deleteEvent));
+      if (editingEventId === btn.dataset.deleteEvent) editingEventId = null;
+    });
+  });
+}
+
+document.getElementById("ecal-toggle-feeds-btn")?.addEventListener("click", () => {
+  const panel = document.getElementById("ecal-feeds-panel");
+  panel.hidden = !panel.hidden;
+});
+
+document.getElementById("ecal-prev")?.addEventListener("click", () => {
+  dashCalViewDate = new Date(dashCalViewDate.getFullYear(), dashCalViewDate.getMonth() - 1, 1);
+  renderDashCalendar();
+});
+document.getElementById("ecal-next")?.addEventListener("click", () => {
+  dashCalViewDate = new Date(dashCalViewDate.getFullYear(), dashCalViewDate.getMonth() + 1, 1);
+  renderDashCalendar();
+});
+
+// Re-render once a minute so "expired" status (timed events crossing their
+// end time) updates live without needing a reload.
+setInterval(() => { renderDashCalendar(); renderDashDayPanel(); }, 60000);
+
+// ---------------------------------------------------------------------
+// Imported calendar feeds
+// ---------------------------------------------------------------------
+function renderCalendarFeeds() {
+  const el = document.getElementById("ecal-feeds-list");
+  if (!el) return;
+  el.innerHTML = calendarFeeds.length
+    ? calendarFeeds.map((f) => {
+        const status = f.lastSyncError
+          ? `<span class="error small">Sync failed: ${f.lastSyncError}</span>`
+          : f.lastSyncedAt
+            ? `<span class="subtle small">Last synced ${f.lastSyncedAt.toDate().toLocaleString()}</span>`
+            : `<span class="subtle small">Never synced</span>`;
+        return `
+          <li class="entry-row">
+            <span>
+              <span class="cal-dot" style="background:${f.color || DEFAULT_FEED_COLOR}"></span>
+              <strong>${f.label}</strong><br/>${status}
+            </span>
+            <span class="row" style="gap:6px;">
+              <button type="button" class="btn ghost small" data-sync-feed="${f.id}">Sync</button>
+              <button type="button" class="btn ghost small" data-remove-feed="${f.id}">Remove</button>
+            </span>
+          </li>`;
+      }).join("")
+    : `<p class="subtle small">No calendars imported yet.</p>`;
+
+  el.querySelectorAll("[data-sync-feed]").forEach((btn) => {
+    btn.addEventListener("click", () => syncFeed(btn.dataset.syncFeed));
+  });
+  el.querySelectorAll("[data-remove-feed]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!currentUid) return;
+      const feedId = btn.dataset.removeFeed;
+      const batch = writeBatch(db);
+      calendarEvents.filter((e) => e.feedId === feedId).forEach((e) => batch.delete(doc(db, "users", currentUid, "calendarEvents", e.id)));
+      batch.delete(doc(db, "users", currentUid, "calendarFeeds", feedId));
+      await batch.commit();
+    });
+  });
+}
+
+document.getElementById("ecal-feed-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!currentUid) return;
+  const data = new FormData(e.target);
+  const newFeed = {
+    label: data.get("label").trim(),
+    url: normalizeFeedUrl(data.get("url")),
+    color: data.get("color") || DEFAULT_FEED_COLOR,
+    createdAt: Timestamp.now(),
+    lastSyncedAt: null,
+    lastSyncError: null
+  };
+  const docRef = await addDoc(collection(db, "users", currentUid, "calendarFeeds"), newFeed);
+  e.target.reset();
+  // Sync immediately using what we just wrote, rather than looking it up in
+  // calendarFeeds — the live listener that populates that array hasn't
+  // necessarily delivered this new doc yet (confirmed by testing: the
+  // lookup silently missed and no sync ever ran).
+  syncFeed(docRef.id, newFeed);
+});
+
+async function syncFeed(feedId, feedOverride) {
+  if (!currentUid) return;
+  const feed = feedOverride || calendarFeeds.find((f) => f.id === feedId);
+  if (!feed) return;
+  const feedRef = doc(db, "users", currentUid, "calendarFeeds", feedId);
+  try {
+    const text = await fetchViaCorsRelay(feed.url);
+    const parsed = parseICS(text);
+
+    const existing = calendarEvents.filter((e) => e.feedId === feedId);
+    const existingByUid = new Map(existing.map((e) => [e.externalUid, e]));
+    const parsedUids = new Set(parsed.map((p) => p.externalUid));
+
+    const batch = writeBatch(db);
+    for (const p of parsed) {
+      const prior = existingByUid.get(p.externalUid);
+      if (prior) {
+        // A manual edit after import sticks — don't clobber it on resync.
+        if (prior.userEdited) continue;
+        batch.set(doc(db, "users", currentUid, "calendarEvents", prior.id), {
+          ...p, feedId, source: "feed", color: feed.color
+        }, { merge: true });
+      } else {
+        batch.set(doc(collection(db, "users", currentUid, "calendarEvents")), {
+          ...p, feedId, source: "feed", color: feed.color, createdAt: Timestamp.now()
+        });
+      }
+    }
+    // Drop events this feed no longer has, unless the user edited them.
+    for (const e of existing) {
+      if (!parsedUids.has(e.externalUid) && !e.userEdited) {
+        batch.delete(doc(db, "users", currentUid, "calendarEvents", e.id));
+      }
+    }
+    batch.set(feedRef, { lastSyncedAt: Timestamp.now(), lastSyncError: null }, { merge: true });
+    await batch.commit();
+  } catch (err) {
+    await setDoc(feedRef, { lastSyncError: String(err.message || err) }, { merge: true });
+  }
 }
 
 // ---------------------------------------------------------------------

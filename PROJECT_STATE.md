@@ -61,7 +61,65 @@ flag to re-confirm scope before building, not assume it's fine.
 - **Water, weight, steps/calories-burned, vitamins**: quick-add forms in the
   "Log" tab. Vitamins list is user-defined (comma-separated) in Goals.
 - **Dashboard**: today's totals vs. goals (progress bars), vitamins
-  checklist, latest coach note preview.
+  checklist, latest coach note preview, and the everything-calendar (below).
+
+### Everything calendar (Dashboard) — `calendar.js` + the "Calendar" panel in `app.js`
+A general-purpose, fully editable calendar on the Dashboard — not just gym
+days. Built because Adrian wanted one place to see everything going on, with
+external calendars pulled in too.
+- **Manual events**: title, start/end date (multi-day supported), all-day or
+  timed (start/end time), a user-picked color (plain `<input type="color">`
+  — deliberately not a preset palette, since the ask was "make it up to the
+  user"), optional notes. Add/edit/delete straight from the day panel below
+  the month grid. Stored in `calendarEvents/{id}`.
+- **Gym overlay**: a scheduled or logged gym day shows up automatically as a
+  read-only "Gym: {dayType}" entry (purple, `GYM_EVENT_COLOR` in
+  `calendar.js`) alongside real events — computed on the fly from `split`/
+  `workoutLogs` (via `gymEventForDate`), not a stored event. The Gym tab
+  keeps its own separate calendar for actually logging sets (unchanged);
+  this is a read-only "something's scheduled" view with a pointer back to
+  the Gym tab, not a second way to log.
+- **Imported calendar feeds**: paste a Google/Outlook/Apple Calendar iCal or
+  webcal feed URL ("Imported calendars" panel) → `calendar.js`'s `parseICS`
+  parses VEVENT blocks (title, start/end, all-day vs. timed, UID; RRULE
+  recurring events are flagged `recurring: true` but **not expanded** — only
+  their one DTSTART/DTEND occurrence shows, a documented limitation, not a
+  silent gap) → upserted into `calendarEvents` with `source: "feed"` and
+  `feedId`. One-way (reads in, never writes back). A per-feed "Sync" button
+  plus auto-sync right after adding a feed; no background/scheduled sync.
+  - **No backend, so no direct fetch**: calendar providers don't set CORS
+    headers for arbitrary browser origins, so a feed URL is fetched through
+    a public CORS relay instead of `fetch()`ing it directly. `app.js`'s
+    `CORS_RELAYS` tries a short list of public relays in order and accepts
+    the first response that actually contains `BEGIN:VCALENDAR` (content-
+    sniffed, not just HTTP-status-checked — tested live and found these
+    relays sometimes return a non-2xx status on a perfectly good body, or
+    vice versa). **This is a real, somewhat fragile third-party dependency**:
+    tested live from this dev sandbox and every relay in the list failed
+    (blocked by the relay's own missing CORS headers, or the relay itself
+    erroring) — plausibly because the sandbox's shared outbound IP is rate-
+    limited by these free/abused services, not necessarily a sign it's
+    broken for a real user's own browser/IP. **Not fully verified working
+    end-to-end with a live feed** — the ICS *parser* itself is unit-tested
+    and correct (multi-day events, all-day vs. timed, UTC vs. naive
+    timestamps, comma-escaping), but the actual fetch-through-a-relay path
+    needs confirming once this is deployed and tried from a normal
+    residential/office connection. If it's unreliable there too, the next
+    step would be a small self-hosted relay (e.g. a free Cloudflare Worker)
+    instead of depending on public ones — that's a new external service and
+    should be confirmed with Adrian first, same as any new external account.
+  - A manual edit to an imported event sticks (`userEdited: true`) — the
+    next sync won't overwrite it, and won't delete it even if the source
+    feed removes that event.
+- **Expired marking**: a day earlier than today is visually dimmed
+  (`.cal-day.past`); within the day panel, an event is dimmed +
+  struck-through once its range is entirely in the past, or (for a timed
+  event ending today) once its end time has passed — `calendar.js`'s
+  `isEventExpired`. Re-rendered every 60s so "expired" catches up without a
+  reload.
+- Firestore security rules need no changes — the existing
+  `users/{userId}/{document=**}` wildcard already covers the two new
+  subcollections.
 
 ### Onboarding (first sign-up only)
 Bio (age/sex/height/weight) → goal (6 types, see below) → daily activity
@@ -203,10 +261,12 @@ coach-note.js`) by Adrian on his own machine:
     `app.js` routes every `targetFor` call through a `targetForUser` wrapper
     so this applies everywhere a progression target is computed, not just
     one call site.
-- **Calendar** (built-in, no external import): a month grid showing which
+- **Calendar** (Gym tab, logging-focused): a month grid showing which
   weekdays are scheduled (from availability + split) and which are logged.
-  Click a day to open its panel. Google Calendar/external import was asked
-  about and explicitly **deferred** — real OAuth scoping, bigger lift.
+  Click a day to open its panel. Separate from, and unchanged by, the
+  general-purpose everything-calendar on the Dashboard (section 2) — that
+  one overlays these same scheduled/logged days read-only alongside real
+  events and imported feeds; this one is still where you actually log sets.
 - **Day panel, two logging layers**:
   1. **Suggested slots** — the day's assigned exercises, each with a
      dropdown (swap within the same muscle-group options), form image/cue,
@@ -258,6 +318,8 @@ coach-note.js`) by Adrian on his own machine:
 | `entries/{id}` | `{type: food\|water\|weight\|activity\|vitamin, ...fields, dateKey, createdAt}` | the general log; gym does NOT live here |
 | `workoutLogs/{dateKey}` | `{dateKey, dayType, entries[], updatedAt}` | one doc per logged gym day; entries are slot-based (`slotLabel`) or free-form (`extra:true`) |
 | `coachNotes/{id}` | `{summary, wins[], concerns[], suggestions[], flags[], calorieGoalChange, weekStart, weekEnd, createdAt}` | written only by `coach-note.js`, via the Admin SDK (bypasses security rules) |
+| `calendarEvents/{id}` | `{title, dateKey, endDateKey, allDay, startTime, endTime, color, notes, source: manual\|feed, feedId?, externalUid?, userEdited?, recurring?, createdAt}` | manual + feed-imported events; `endDateKey >= dateKey` for multi-day spans |
+| `calendarFeeds/{id}` | `{label, url, color, lastSyncedAt, lastSyncError, createdAt}` | one doc per imported iCal/webcal feed subscription |
 
 Security rules (`firestore.rules`): a single wildcard match,
 `users/{userId}/{document=**}`, `allow read, write: if request.auth.uid ==
@@ -274,6 +336,7 @@ style.css               # all styling, dark theme
 app.js                  # all client logic: auth, Firestore subscriptions, every view's render + handlers
 gym.js                  # pure functions: assignSplit, targetFor (no DOM/Firebase)
 nutrition.js            # pure functions: computeDailyGoals, GOAL_LABELS, ACTIVITY_LEVELS (no DOM/Firebase)
+calendar.js             # pure functions: parseICS, occursOnDate, isEventExpired (no DOM/Firebase/network)
 exercises.json           # 932-exercise static catalog (seeded, not hand-written)
 foods.json              # 60-item static diet-suggestion catalog (hand-written)
 firebase-config.js      # real Firebase project config (public-safe, committed)
@@ -323,10 +386,17 @@ README.md               # human-facing setup/run instructions
 
 ## 8. Known gaps / explicitly deferred (not forgotten, just not now)
 
-- **Calendar import** (Google Calendar, etc.) — real external sync. Needs
-  its own OAuth project setup; deliberately scoped out when the gym
-  calendar was built. The built-in calendar (availability-derived schedule)
-  stands in for it.
+- **Calendar feed import via CORS relay, not confirmed working live** — see
+  section 2's "Imported calendar feeds". Chose a one-way iCal/webcal feed
+  URL over real OAuth (OAuth would need a Google Cloud project + an Azure
+  app registration, both real per-provider setup, plus Apple has no public
+  OAuth calendar API at all). The relay-fetch path itself couldn't be
+  confirmed end-to-end from this dev sandbox (every public relay tried
+  failed, plausibly due to the sandbox's shared/rate-limited IP) — needs a
+  real test once deployed, from an ordinary connection.
+- **RRULE (recurring-event) expansion** — an imported recurring event shows
+  only its first occurrence, flagged `(recurring)` rather than silently
+  wrong. Expanding real recurrence rules is a meaningfully bigger parser.
 - **Exercise image coverage** — only ~30% of the 932-exercise catalog has a
   real form photo from wger.de; the rest fall back to text cues only. Could
   swap in a better-covered source later if this bothers Adrian in practice.
@@ -346,7 +416,9 @@ These came up in conversation but were explicitly deferred or only
 half-explored — don't assume they're wanted as described; re-confirm scope
 the way every other feature in this log was confirmed before building:
 
-- Real external calendar sync (see above).
+- A self-hosted relay (e.g. a free Cloudflare Worker) in place of public
+  CORS relays, if those turn out unreliable for real users too — a new
+  external service, confirm first.
 - A richer/better-covered exercise-image source.
 - Whatever Adrian raises next — this project has consistently needed a
   scope-check before building anything that sounds like it wants a live AI

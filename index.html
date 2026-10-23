@@ -126,6 +126,36 @@
           <p class="subtle">No coach note yet. See <code>scripts/README.md</code> to generate your first weekly note.</p>
         </div>
       </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Calendar</h2>
+          <button type="button" class="link-btn" id="ecal-toggle-feeds-btn">Imported calendars</button>
+        </div>
+        <div class="cal-head">
+          <button type="button" class="btn small" id="ecal-prev">&lsaquo;</button>
+          <span id="ecal-month-label"></span>
+          <button type="button" class="btn small" id="ecal-next">&rsaquo;</button>
+        </div>
+        <div class="cal-grid" id="ecal-weekdays"></div>
+        <div class="cal-grid" id="ecal-days"></div>
+      </div>
+
+      <div class="panel" id="ecal-feeds-panel" hidden>
+        <h2>Imported calendars</h2>
+        <p class="subtle small">Paste a calendar's iCal/webcal feed URL — Google Calendar, Outlook, and Apple Calendar all have one under their sharing/export settings. Fetched through a public CORS relay since calendar providers don't allow direct browser fetches, so your feed URL is sent to one of a few third-party relay services on every sync — avoid pasting a feed URL you consider sensitive. One-way: reads events in, never writes back to the source calendar. Recurring events currently show only their first occurrence.</p>
+        <form id="ecal-feed-form" class="log-form">
+          <input type="text" name="label" placeholder="Label (e.g. Work Outlook)" required />
+          <input type="url" name="url" placeholder="https://.../basic.ics or webcal://..." required />
+          <label class="small">Color
+            <input type="color" name="color" value="#4f8ef7" />
+          </label>
+          <button type="submit" class="btn primary small">Add calendar</button>
+        </form>
+        <ul id="ecal-feeds-list" class="entry-list"></ul>
+      </div>
+
+      <div class="panel" id="ecal-day-panel"></div>
     </section>
 
     <!-- Food -->
