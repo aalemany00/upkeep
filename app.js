@@ -9,7 +9,7 @@ import {
   getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc,
   query, orderBy, limit, onSnapshot, writeBatch, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { assignSplit, targetFor } from "./gym.js";
+import { assignSplit, targetFor, MUSCLE_LABEL_BY_SLOT } from "./gym.js";
 import { computeDailyGoals, GOAL_LABELS } from "./nutrition.js";
 
 const app = initializeApp(firebaseConfig);
@@ -217,7 +217,12 @@ function renderOnboardingReview(newSplit, goalType, dailyGoals) {
   const el = document.getElementById("onboarding-review-content");
   const dayList = newSplit.days
     .map((day) => {
-      const names = day.slots.map((s) => exerciseById.get(s.defaultId)?.name || "—").join(", ");
+      const names = day.slots
+        .map((s) => {
+          const muscleLabel = s.muscleLabel || MUSCLE_LABEL_BY_SLOT[s.label] || s.label;
+          return `${muscleLabel}: ${exerciseById.get(s.defaultId)?.name || "—"}`;
+        })
+        .join(", ");
       return `<li><strong>${day.dayType}:</strong> ${names}</li>`;
     })
     .join("");
@@ -1075,10 +1080,14 @@ function renderGymDayPanel() {
         `)
         .join("");
 
+      const muscleLabel = slot.muscleLabel || MUSCLE_LABEL_BY_SLOT[slot.label] || "";
       return `
         <div class="gym-slot">
           <div class="gym-slot-head">
-            <strong>${slot.label}</strong>
+            <div>
+              <strong>${muscleLabel || slot.label}</strong>
+              ${muscleLabel ? `<span class="subtle small" style="display:block;">${slot.label}</span>` : ""}
+            </div>
             <span class="subtle small">${ex.sets} x ${ex.lo}-${ex.hi}</span>
           </div>
           <select data-slot-select="${i}">${options}</select>

@@ -21,53 +21,111 @@ function musclesFor(...groups) {
   return groups.flatMap((g) => MUSCLE_GROUPS[g]);
 }
 
+// Human-readable muscle target shown in the UI alongside each slot's
+// movement-pattern label (e.g. "Squat pattern — Quads"), so the muscle being
+// trained is visible, not just the pattern name. Keyed by label text because
+// the same label always targets the same muscle(s) across every day type
+// that uses it (see SLOT_TEMPLATES below).
+export const MUSCLE_LABEL_BY_SLOT = {
+  "Squat pattern": "Quads",
+  "Horizontal press": "Chest",
+  "Horizontal pull": "Back",
+  "Hip hinge": "Hamstrings & Glutes",
+  "Shoulder press": "Shoulders",
+  Core: "Abs",
+  "Vertical pull": "Lats",
+  Biceps: "Biceps",
+  Triceps: "Triceps",
+  "Leg press / lunge": "Quads & Glutes",
+  Calves: "Calves",
+  "Incline / fly": "Chest",
+  "Lateral raise": "Shoulders",
+  "Rear delt / upper back": "Upper Back"
+};
+
+// Movement-pattern keywords, matched against exercise names, so a slot
+// prefers exercises that actually perform its pattern instead of just any
+// exercise that happens to touch the right muscle. Without this, e.g. a
+// squat (quads + glutes) satisfies the "Hip hinge" slot's muscle filter
+// (hamstrings + glutes) too, so the same squat gets suggested for both a
+// squat slot and a hinge slot on the same day. candidatesForSlot() falls
+// back to the plain muscle filter if a pattern matches nothing, so this
+// only narrows the pool, never empties it.
+const PATTERNS = {
+  squat: /squat/i,
+  legPressLunge: /press|lunge|split squat|bulgarian|step[- ]?up/i,
+  hipHinge: /deadlift|rdl|romanian|good morning|hip thrust|glute bridge|hyperextension|swing|hinge/i,
+  horizontalPress: /bench press|chest press|push[- ]?up/i,
+  inclineFly: /incline|fly|pec deck|decline/i,
+  shoulderPress: /overhead press|shoulder press|military press|arnold press/i,
+  lateralRaise: /lateral raise/i,
+  verticalPull: /pull[- ]?up|pulldown|chin[- ]?up/i,
+  horizontalPull: /row/i,
+  rearDelt: /rear delt|face pull|reverse fly|shrug/i,
+  curl: /curl/i,
+  triceps: /tricep|pushdown|skull ?crusher|dip|extension/i,
+  core: /plank|crunch|sit[- ]?up|leg raise|russian twist|ab wheel|mountain climber|dead bug|bicycle/i,
+  calves: /calf/i
+};
+
 // One slot = one "kind" of movement for the day, with a muscle target the
-// exercise catalog is filtered against. The user can swap within the
-// matching options; the first option is just a reasonable default.
+// exercise catalog is filtered against (and, where it matters for avoiding
+// overlap between slots, a movement-pattern keyword preference). The user
+// can swap within the matching options; the first option is just a
+// reasonable default.
 const SLOT_TEMPLATES = {
+  // Every day type's slots, combined across a full week of that split, must
+  // cover every entry in MUSCLE_GROUPS at least once — this isn't goal-
+  // specific (assignSplit doesn't look at goal type at all), so "don't skip
+  // a body part" holds for every goal, not just recomposition. Full Body
+  // used to stop at 6 slots and skip biceps/triceps/calves entirely for a
+  // 1-day/week split; it now covers all 11 groups in one day.
   "Full Body": [
-    { label: "Squat pattern", muscles: musclesFor("quads") },
-    { label: "Horizontal press", muscles: musclesFor("chest") },
-    { label: "Horizontal pull", muscles: musclesFor("lats", "upperBack") },
-    { label: "Hip hinge", muscles: musclesFor("hamstrings", "glutes") },
-    { label: "Shoulder press", muscles: musclesFor("shoulders") },
-    { label: "Core", muscles: musclesFor("abs") }
+    { label: "Squat pattern", muscles: musclesFor("quads"), pattern: PATTERNS.squat },
+    { label: "Horizontal press", muscles: musclesFor("chest"), pattern: PATTERNS.horizontalPress },
+    { label: "Horizontal pull", muscles: musclesFor("lats", "upperBack"), pattern: PATTERNS.horizontalPull },
+    { label: "Hip hinge", muscles: musclesFor("hamstrings", "glutes"), pattern: PATTERNS.hipHinge },
+    { label: "Shoulder press", muscles: musclesFor("shoulders"), pattern: PATTERNS.shoulderPress },
+    { label: "Biceps", muscles: musclesFor("biceps"), pattern: PATTERNS.curl },
+    { label: "Triceps", muscles: musclesFor("triceps"), pattern: PATTERNS.triceps },
+    { label: "Calves", muscles: musclesFor("calves"), pattern: PATTERNS.calves },
+    { label: "Core", muscles: musclesFor("abs"), pattern: PATTERNS.core }
   ],
   Upper: [
-    { label: "Horizontal press", muscles: musclesFor("chest") },
-    { label: "Vertical pull", muscles: musclesFor("lats") },
-    { label: "Shoulder press", muscles: musclesFor("shoulders") },
-    { label: "Horizontal pull", muscles: musclesFor("upperBack", "lats") },
-    { label: "Biceps", muscles: musclesFor("biceps") },
-    { label: "Triceps", muscles: musclesFor("triceps") }
+    { label: "Horizontal press", muscles: musclesFor("chest"), pattern: PATTERNS.horizontalPress },
+    { label: "Vertical pull", muscles: musclesFor("lats"), pattern: PATTERNS.verticalPull },
+    { label: "Shoulder press", muscles: musclesFor("shoulders"), pattern: PATTERNS.shoulderPress },
+    { label: "Horizontal pull", muscles: musclesFor("upperBack", "lats"), pattern: PATTERNS.horizontalPull },
+    { label: "Biceps", muscles: musclesFor("biceps"), pattern: PATTERNS.curl },
+    { label: "Triceps", muscles: musclesFor("triceps"), pattern: PATTERNS.triceps }
   ],
   Lower: [
-    { label: "Squat pattern", muscles: musclesFor("quads") },
-    { label: "Hip hinge", muscles: musclesFor("hamstrings", "glutes") },
-    { label: "Leg press / lunge", muscles: musclesFor("quads", "glutes") },
-    { label: "Calves", muscles: musclesFor("calves") },
-    { label: "Core", muscles: musclesFor("abs") }
+    { label: "Squat pattern", muscles: musclesFor("quads"), pattern: PATTERNS.squat },
+    { label: "Hip hinge", muscles: musclesFor("hamstrings", "glutes"), pattern: PATTERNS.hipHinge },
+    { label: "Leg press / lunge", muscles: musclesFor("quads", "glutes"), pattern: PATTERNS.legPressLunge },
+    { label: "Calves", muscles: musclesFor("calves"), pattern: PATTERNS.calves },
+    { label: "Core", muscles: musclesFor("abs"), pattern: PATTERNS.core }
   ],
   Push: [
-    { label: "Horizontal press", muscles: musclesFor("chest") },
-    { label: "Shoulder press", muscles: musclesFor("shoulders") },
-    { label: "Incline / fly", muscles: musclesFor("chest") },
-    { label: "Lateral raise", muscles: musclesFor("shoulders") },
-    { label: "Triceps", muscles: musclesFor("triceps") }
+    { label: "Horizontal press", muscles: musclesFor("chest"), pattern: PATTERNS.horizontalPress },
+    { label: "Shoulder press", muscles: musclesFor("shoulders"), pattern: PATTERNS.shoulderPress },
+    { label: "Incline / fly", muscles: musclesFor("chest"), pattern: PATTERNS.inclineFly },
+    { label: "Lateral raise", muscles: musclesFor("shoulders"), pattern: PATTERNS.lateralRaise },
+    { label: "Triceps", muscles: musclesFor("triceps"), pattern: PATTERNS.triceps }
   ],
   Pull: [
-    { label: "Vertical pull", muscles: musclesFor("lats") },
-    { label: "Horizontal pull", muscles: musclesFor("upperBack", "lats") },
-    { label: "Rear delt / upper back", muscles: musclesFor("upperBack") },
-    { label: "Biceps", muscles: musclesFor("biceps") },
-    { label: "Core", muscles: musclesFor("abs") }
+    { label: "Vertical pull", muscles: musclesFor("lats"), pattern: PATTERNS.verticalPull },
+    { label: "Horizontal pull", muscles: musclesFor("upperBack", "lats"), pattern: PATTERNS.horizontalPull },
+    { label: "Rear delt / upper back", muscles: musclesFor("upperBack"), pattern: PATTERNS.rearDelt },
+    { label: "Biceps", muscles: musclesFor("biceps"), pattern: PATTERNS.curl },
+    { label: "Core", muscles: musclesFor("abs"), pattern: PATTERNS.core }
   ],
   Legs: [
-    { label: "Squat pattern", muscles: musclesFor("quads") },
-    { label: "Hip hinge", muscles: musclesFor("hamstrings", "glutes") },
-    { label: "Leg press / lunge", muscles: musclesFor("quads", "glutes") },
-    { label: "Calves", muscles: musclesFor("calves") },
-    { label: "Core", muscles: musclesFor("abs") }
+    { label: "Squat pattern", muscles: musclesFor("quads"), pattern: PATTERNS.squat },
+    { label: "Hip hinge", muscles: musclesFor("hamstrings", "glutes"), pattern: PATTERNS.hipHinge },
+    { label: "Leg press / lunge", muscles: musclesFor("quads", "glutes"), pattern: PATTERNS.legPressLunge },
+    { label: "Calves", muscles: musclesFor("calves"), pattern: PATTERNS.calves },
+    { label: "Core", muscles: musclesFor("abs"), pattern: PATTERNS.core }
   ]
 };
 
@@ -86,9 +144,18 @@ function clampDays(daysPerWeek) {
   return Math.min(6, Math.max(1, Math.round(daysPerWeek) || 1));
 }
 
-function candidatesForSlot(catalog, muscles, excludeIds) {
-  return catalog
-    .filter((ex) => !excludeIds.has(ex.id) && ex.muscles.some((m) => muscles.includes(m)))
+function candidatesForSlot(catalog, muscles, excludeIds, pattern) {
+  const byMuscle = catalog.filter(
+    (ex) => !excludeIds.has(ex.id) && ex.muscles.some((m) => muscles.includes(m))
+  );
+  // Prefer exercises that actually match this slot's movement pattern (e.g.
+  // a real hinge for "Hip hinge", not just anything that happens to touch
+  // hamstrings/glutes). Fall back to the plain muscle match if the pattern
+  // filter would leave nothing — a pattern should narrow the pool, never
+  // empty it.
+  const preferred = pattern ? byMuscle.filter((ex) => pattern.test(ex.name)) : [];
+  const pool = preferred.length ? preferred : byMuscle;
+  return pool
     .sort((a, b) => (b.image ? 1 : 0) - (a.image ? 1 : 0) || a.name.localeCompare(b.name))
     .slice(0, 6);
 }
@@ -109,10 +176,11 @@ export function assignSplit(daysPerWeek, catalog) {
         key: `${dayType.replace(/\s+/g, "")}${i}`,
         dayType,
         slots: SLOT_TEMPLATES[dayType].map((slot) => {
-          const options = candidatesForSlot(catalog, slot.muscles, usedToday);
+          const options = candidatesForSlot(catalog, slot.muscles, usedToday, slot.pattern);
           if (options[0]) usedToday.add(options[0].id);
           return {
             label: slot.label,
+            muscleLabel: MUSCLE_LABEL_BY_SLOT[slot.label] ?? "",
             options: options.map((o) => o.id),
             defaultId: options[0]?.id ?? null
           };

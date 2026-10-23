@@ -125,6 +125,33 @@ coach-note.js`) by Adrian on his own machine:
   filled from the catalog by target muscle group, excluding exercises
   already used earlier that same day. Recomputes instantly whenever
   availability changes in Goals — never touches logged history.
+  - Each slot also has a movement-pattern keyword regex (`PATTERNS` in
+    `gym.js`), matched against exercise names, tried before the plain muscle
+    filter. Without it, muscle-only filtering let the same catalog item
+    satisfy two different slots on the same day — e.g. "Barbell Full Squat"
+    is tagged with quads *and* hamstrings *and* glutes, so it qualified for
+    both "Squat pattern" (quads) and "Hip hinge" (hamstrings/glutes), and
+    with `usedToday` eliminating only the exact id already picked, a near-
+    duplicate squat variant could still end up as the "hinge" for the day.
+    Now "Hip hinge" only prefers real hinge movements (deadlift/RDL/hip
+    thrust/swing/etc.); it falls back to the old muscle-only match if the
+    pattern ever matches nothing, so a pattern can narrow the pool but never
+    empty it.
+  - Every slot has a human-readable `muscleLabel` (`MUSCLE_LABEL_BY_SLOT`,
+    e.g. "Squat pattern" → "Quads", "Hip hinge" → "Hamstrings & Glutes"),
+    shown in the UI as the slot's headline with the movement-pattern label
+    underneath — previously only the pattern label ("Squat pattern") showed,
+    not the muscle actually being trained. Keyed by label text since the
+    same label always targets the same muscle(s) everywhere it's used, so
+    old stored splits (written before this field existed) still resolve a
+    muscle label via that lookup instead of needing a data migration.
+  - Full Body (the 1-day/week template) used to stop at 6 slots and never
+    include biceps, triceps, or calves — a 1-day/week user's split skipped
+    those muscle groups entirely, regardless of goal type (goal doesn't
+    affect `assignSplit` at all, so this applied to every goal, not just
+    recomposition). It now has 9 slots and covers every `MUSCLE_GROUPS`
+    entry. Verified by generating a split for every day count (1–6) and
+    checking the full week's slot muscle labels cover all 11 groups.
 - **Progression engine** (`gym.js`, `targetFor`): double progression, same
   shape as a standard lifting program — hit the top of the rep range on
   every set → add weight next time; flat for 3 sessions → suggests a swap;
