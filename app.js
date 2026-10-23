@@ -126,6 +126,15 @@ function latestWeightLb() {
   return weightEntries.length ? weightEntries[0].lb : null;
 }
 
+// Weight is intentionally "sticky" (it shows your last recorded weight
+// indefinitely, not reset to empty every day like calories/water/steps —
+// nobody weighs in daily). Without a date label that reads as a bug
+// ("it's stuck on 157"), so the Dashboard shows when it was actually logged.
+function latestWeightDateKey() {
+  const weightEntries = entries.filter((e) => e.type === "weight");
+  return weightEntries.length ? weightEntries[0].dateKey : null;
+}
+
 // ---------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------
@@ -507,7 +516,10 @@ function renderDashboard() {
       goal: goals.weightGoal,
       raw: latestWeight,
       unit: "lb",
-      isWeight: true
+      isWeight: true,
+      subtitle: latestWeight !== null
+        ? `last logged ${dateFromKey(latestWeightDateKey()).toLocaleDateString(undefined, { month: "short", day: "numeric" })}${latestWeightDateKey() === todayKey() ? " (today)" : ""}`
+        : null
     }
   ];
 
@@ -521,6 +533,7 @@ function renderDashboard() {
         <div class="stat-card">
           <div class="stat-label">${s.label}</div>
           <div class="stat-value">${s.value}</div>
+          ${s.subtitle ? `<div class="subtle small">${s.subtitle}</div>` : ""}
           ${hasGoal ? `
             <div class="bar-track"><div class="bar-fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>
             <div class="stat-label">goal: ${s.goal}${s.unit === "kcal" || s.unit === "g" || s.unit === "ml" || s.unit === "lb" ? " " + s.unit : ""}</div>
@@ -1075,8 +1088,15 @@ function debounce(fn, ms) {
   };
 }
 
-async function searchUsdaFoods(query) {
-  const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(USDA_API_KEY)}&query=${encodeURIComponent(query)}&pageSize=6&dataType=Foundation,SR%20Legacy`;
+// People type things like "2 servings of tyson chicken tenders," not just
+// a bare food name — strip the leading quantity/filler so the search term
+// that actually reaches USDA is just "tyson chicken tenders".
+function stripQuantityPrefix(q) {
+  return q.replace(/^\s*\d+(\.\d+)?\s*(servings?|cups?|oz|ounces?|grams?|g|lbs?|pounds?|pieces?|slices?|tbsp|tablespoons?|tsp|teaspoons?)?\s*(of\s+)?/i, "").trim() || q;
+}
+
+async function searchUsdaFoodsWithDataType(query, dataType) {
+  const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(USDA_API_KEY)}&query=${encodeURIComponent(query)}&pageSize=6${dataType ? `&dataType=${dataType}` : ""}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
@@ -1089,19 +1109,34 @@ async function searchUsdaFoods(query) {
     .filter((f) => f.kcalPer100g != null);
 }
 
+// Foundation/SR Legacy are generic foods (less noisy, more reliable macros)
+// — tried first. A brand name like "Tyson" only exists in Branded data, so
+// that's the fallback, not the default (it's noisier: packaging variants,
+// odd serving sizes, prepared-meal combos).
+async function searchUsdaFoods(rawQuery) {
+  const query = stripQuantityPrefix(rawQuery);
+  const generic = await searchUsdaFoodsWithDataType(query, "Foundation,SR%20Legacy");
+  if (generic.length) return generic;
+  return searchUsdaFoodsWithDataType(query, "Branded");
+}
+
 const foodNameInput = document.getElementById("food-name-input");
 const foodUsdaResultsEl = document.getElementById("food-usda-results");
 if (foodNameInput && foodUsdaResultsEl) {
   const runSearch = debounce(async (q) => {
-    if (q.trim().length < 3 || USDA_API_KEY === "YOUR_API_KEY_HERE") {
+    if (q.trim().length < 3) {
       foodUsdaResultsEl.innerHTML = "";
+      return;
+    }
+    if (USDA_API_KEY === "YOUR_API_KEY_HERE") {
+      foodUsdaResultsEl.innerHTML = `<p class="subtle small">Auto-estimate isn't set up yet — add a free USDA API key to <code>usda-config.js</code> (see README) to enable it. You can still type calories/protein yourself.</p>`;
       return;
     }
     let results;
     try {
       results = await searchUsdaFoods(q.trim());
-    } catch {
-      foodUsdaResultsEl.innerHTML = "";
+    } catch (err) {
+      foodUsdaResultsEl.innerHTML = `<p class="subtle small">Couldn't reach the food database right now — type calories/protein yourself for now.</p>`;
       return;
     }
     if (foodNameInput.value.trim() !== q.trim()) return; // stale response, input moved on
@@ -1115,7 +1150,7 @@ if (foodNameInput && foodUsdaResultsEl) {
           </li>`
           )
           .join("")}</ul>`
-      : "";
+      : `<p class="subtle small">No match in the food database — type calories/protein yourself.</p>`;
     foodUsdaResultsEl.querySelectorAll("[data-pick-usda]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const r = results[Number(btn.dataset.pickUsda)];
