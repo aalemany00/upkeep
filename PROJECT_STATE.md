@@ -145,6 +145,28 @@ coach-note.js`) by Adrian on his own machine:
     same label always targets the same muscle(s) everywhere it's used, so
     old stored splits (written before this field existed) still resolve a
     muscle label via that lookup instead of needing a data migration.
+  - `usedToday` now accumulates every option shown for a slot (all 6), not
+    just the chosen default, before moving to the next slot. The pattern fix
+    above stops the *same* exercise from being suggested for two slots; this
+    separately stops two slots' entire dropdown pools from overlapping — e.g.
+    "Squat pattern" and "Leg press / lunge" both match quads+glutes, and a
+    lunge/split-squat variant's name matches both the squat and the
+    leg-press/lunge pattern regex, so without this it could appear as an
+    *option* (not just a default) in both slots' dropdowns at once. The squat
+    pattern regex also now explicitly excludes split/bulgarian/lunge/step-up
+    names so it doesn't compete with "Leg press / lunge" for the same pool.
+    Verified: for every day count 1–6, no exercise id appears in more than
+    one slot's `options` array on the same day, and every slot still gets a
+    full 6 options.
+  - Slot templates/patterns are versioned (`SPLIT_ALGO_VERSION` in `gym.js`,
+    stored on the split doc as `algoVersion`). On load, `app.js` compares a
+    user's stored split against the current version and silently rebuilds it
+    (same `daysPerWeek`, no AI call, logged history untouched) if it's stale
+    — otherwise a fix to the slot-assignment logic would only reach new
+    signups or someone who happens to re-save availability, not anyone with
+    an existing split already in Firestore. Bump `SPLIT_ALGO_VERSION`
+    whenever `SLOT_TEMPLATES`/`candidatesForSlot`/`PATTERNS` changes in a way
+    that should reach existing users.
   - Full Body (the 1-day/week template) used to stop at 6 slots and never
     include biceps, triceps, or calves — a 1-day/week user's split skipped
     those muscle groups entirely, regardless of goal type (goal doesn't

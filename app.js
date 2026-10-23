@@ -9,7 +9,7 @@ import {
   getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc,
   query, orderBy, limit, onSnapshot, writeBatch, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { assignSplit, targetFor, MUSCLE_LABEL_BY_SLOT } from "./gym.js";
+import { assignSplit, targetFor, MUSCLE_LABEL_BY_SLOT, SPLIT_ALGO_VERSION } from "./gym.js";
 import { computeDailyGoals, GOAL_LABELS } from "./nutrition.js";
 
 const app = initializeApp(firebaseConfig);
@@ -327,6 +327,13 @@ function subscribeAll(uid) {
   unsubSplit = onSnapshot(splitRef, (snap) => {
     split = snap.exists() ? snap.data() : null;
     renderGym();
+    // A split built under an older slot-assignment algorithm (e.g. before a
+    // bug fix to which exercises get suggested) otherwise never refreshes
+    // until the user happens to change availability — silently rebuild it
+    // here instead, same daysPerWeek, no AI call, logged history untouched.
+    if (split && split.algoVersion !== SPLIT_ALGO_VERSION) {
+      rebuildSplit(split.daysPerWeek);
+    }
   });
 
   const workoutsQuery = query(collection(db, "users", uid, "workoutLogs"), orderBy("dateKey", "desc"), limit(200));

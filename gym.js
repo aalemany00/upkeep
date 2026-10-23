@@ -21,6 +21,15 @@ function musclesFor(...groups) {
   return groups.flatMap((g) => MUSCLE_GROUPS[g]);
 }
 
+// Bump this whenever SLOT_TEMPLATES/candidatesForSlot/PATTERNS changes in a
+// way that should reach already-onboarded users, not just new signups.
+// Stored on every split doc; app.js compares it on load and silently
+// rebuilds (same daysPerWeek, no AI call, logged history untouched) if a
+// user's stored split predates the current logic — otherwise a fix here
+// would only apply to the next person who re-onboards or changes
+// availability, not to anyone with an existing split already in Firestore.
+export const SPLIT_ALGO_VERSION = 2;
+
 // Human-readable muscle target shown in the UI alongside each slot's
 // movement-pattern label (e.g. "Squat pattern — Quads"), so the muscle being
 // trained is visible, not just the pattern name. Keyed by label text because
@@ -51,8 +60,11 @@ export const MUSCLE_LABEL_BY_SLOT = {
 // squat slot and a hinge slot on the same day. candidatesForSlot() falls
 // back to the plain muscle filter if a pattern matches nothing, so this
 // only narrows the pool, never empties it.
+const LUNGE_VARIANT = /split|bulgarian|lunge|step[- ]?up/i;
 const PATTERNS = {
-  squat: /squat/i,
+  // Excludes lunge/split-squat variants so a "squat"-named lunge doesn't
+  // compete with Leg press/lunge's own pool for the same slot-option set.
+  squat: (name) => /squat/i.test(name) && !LUNGE_VARIANT.test(name),
   legPressLunge: /press|lunge|split squat|bulgarian|step[- ]?up/i,
   hipHinge: /deadlift|rdl|romanian|good morning|hip thrust|glute bridge|hyperextension|swing|hinge/i,
   horizontalPress: /bench press|chest press|push[- ]?up/i,
@@ -144,6 +156,10 @@ function clampDays(daysPerWeek) {
   return Math.min(6, Math.max(1, Math.round(daysPerWeek) || 1));
 }
 
+function matchesPattern(pattern, name) {
+  return typeof pattern === "function" ? pattern(name) : pattern.test(name);
+}
+
 function candidatesForSlot(catalog, muscles, excludeIds, pattern) {
   const byMuscle = catalog.filter(
     (ex) => !excludeIds.has(ex.id) && ex.muscles.some((m) => muscles.includes(m))
@@ -153,7 +169,7 @@ function candidatesForSlot(catalog, muscles, excludeIds, pattern) {
   // hamstrings/glutes). Fall back to the plain muscle match if the pattern
   // filter would leave nothing — a pattern should narrow the pool, never
   // empty it.
-  const preferred = pattern ? byMuscle.filter((ex) => pattern.test(ex.name)) : [];
+  const preferred = pattern ? byMuscle.filter((ex) => matchesPattern(pattern, ex.name)) : [];
   const pool = preferred.length ? preferred : byMuscle;
   return pool
     .sort((a, b) => (b.image ? 1 : 0) - (a.image ? 1 : 0) || a.name.localeCompare(b.name))
@@ -170,6 +186,7 @@ export function assignSplit(daysPerWeek, catalog) {
   return {
     name: template.name,
     daysPerWeek: days,
+    algoVersion: SPLIT_ALGO_VERSION,
     days: template.dayTypes.map((dayType, i) => {
       const usedToday = new Set();
       return {
@@ -177,7 +194,12 @@ export function assignSplit(daysPerWeek, catalog) {
         dayType,
         slots: SLOT_TEMPLATES[dayType].map((slot) => {
           const options = candidatesForSlot(catalog, slot.muscles, usedToday, slot.pattern);
-          if (options[0]) usedToday.add(options[0].id);
+          // Exclude every option shown for this slot, not just the default,
+          // from every later slot today — otherwise the same exercise can
+          // sit in two slots' dropdowns at once (not literally recommended
+          // twice, but the pools overlap, which is the same practical
+          // problem: picking it for one slot quietly narrows another).
+          options.forEach((o) => usedToday.add(o.id));
           return {
             label: slot.label,
             muscleLabel: MUSCLE_LABEL_BY_SLOT[slot.label] ?? "",
