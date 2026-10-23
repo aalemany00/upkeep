@@ -11,7 +11,8 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { assignSplit, targetFor, MUSCLE_LABEL_BY_SLOT, SPLIT_ALGO_VERSION, EQUIPMENT_OPTIONS } from "./gym.js";
 import { computeDailyGoals, GOAL_LABELS } from "./nutrition.js";
-import { parseICS, normalizeFeedUrl, occursOnDate, isEventExpired, DEFAULT_EVENT_COLOR, DEFAULT_FEED_COLOR, GYM_EVENT_COLOR } from "./calendar.js";
+import { parseICS, normalizeFeedUrl, occursOnDate, isEventExpired, generateRecurrenceDates, DEFAULT_EVENT_COLOR, DEFAULT_FEED_COLOR, GYM_EVENT_COLOR } from "./calendar.js";
+import { USDA_API_KEY } from "./usda-config.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -57,10 +58,11 @@ let foodCatalog = [];
 let foodById = new Map();
 let dietPicks = {}; // { breakfast: id, lunch: id, dinner: id, snack1: id, snack2: id } — per-device, not synced
 
-let calViewDate = new Date();   // month currently shown in the Gym calendar
-let selectedDateKey = null;     // date the Gym day-panel is showing
-let dashCalViewDate = new Date();   // month currently shown in the Dashboard's everything-calendar
-let dashSelectedDateKey = null;     // date the Dashboard day-panel is showing
+// One shared calendar/selected-date pair for both the Dashboard's
+// everything-calendar and the Gym tab's day panel — the Gym tab no longer
+// has its own calendar grid, it just follows whatever day is selected here.
+let calViewDate = new Date();   // month currently shown on the Dashboard
+let selectedDateKey = null;     // date both the Dashboard and Gym day panels show
 let showingOnboardingReview = false; // gate: stay on onboarding screen to show the just-built plan
 
 async function fetchJsonWithRetry(url, attempts = 2) {
@@ -343,6 +345,7 @@ function subscribeAll(uid) {
     renderTodayEntries();
     renderFoodEntries();
     renderVitaminChips();
+    renderGymCardioEntries();
   });
 
   const goalsRef = doc(db, "users", uid, "meta", "goals");
@@ -488,7 +491,7 @@ function renderDashboard() {
   const protein = sumByType(today, "food", "protein");
   const water = sumByType(today, "water", "ml");
   const steps = sumByType(today, "activity", "steps");
-  const burned = sumByType(today, "activity", "caloriesBurned");
+  const burned = sumByType(today, "activity", "caloriesBurned") + sumByType(today, "cardio", "caloriesBurned");
 
   const latestWeight = latestWeightLb();
 
@@ -548,7 +551,7 @@ function wireApplyButtons(container) {
 function renderCoachPreview() {
   const el = document.getElementById("dashboard-coach-preview");
   if (!coachNotes.length) {
-    el.innerHTML = `<p class="subtle">No coach note yet. See <code>scripts/README.md</code> to generate your first weekly note.</p>`;
+    el.innerHTML = `<p class="subtle">No coach note yet — your first one shows up here once your coach has reviewed a week of activity.</p>`;
     return;
   }
   el.innerHTML = coachNoteHtml(coachNotes[0]);
@@ -642,10 +645,10 @@ function renderDashCalendar() {
   if (!weekdaysEl) return;
 
   weekdaysEl.innerHTML = WEEKDAY_LABELS.map((l) => `<div class="cal-weekday">${l}</div>`).join("");
-  label.textContent = dashCalViewDate.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  label.textContent = calViewDate.toLocaleDateString(undefined, { month: "long", year: "numeric" });
 
-  const year = dashCalViewDate.getFullYear();
-  const month = dashCalViewDate.getMonth();
+  const year = calViewDate.getFullYear();
+  const month = calViewDate.getMonth();
   const firstWeekday = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = todayKey();
@@ -658,7 +661,7 @@ function renderDashCalendar() {
     const classes = ["cal-day"];
     if (dateKey < today) classes.push("past");
     if (dateKey === today) classes.push("today");
-    if (dateKey === dashSelectedDateKey) classes.push("selected");
+    if (dateKey === selectedDateKey) classes.push("selected");
     const dots = [...new Set(dayEvents.map((e) => e.color || DEFAULT_EVENT_COLOR))]
       .slice(0, 4)
       .map((c) => `<span class="cal-dot" style="background:${c}"></span>`)
@@ -669,15 +672,16 @@ function renderDashCalendar() {
 
   daysEl.querySelectorAll("[data-date]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      dashSelectedDateKey = btn.dataset.date;
+      selectedDateKey = btn.dataset.date;
       renderDashCalendar();
       renderDashDayPanel();
+      renderGym(); // Gym tab follows the same selected date — keep it in sync even if not visible
     });
   });
 }
 
 function eventFormHtml(prefix, ev = {}) {
-  const dateKey = ev.dateKey || dashSelectedDateKey || todayKey();
+  const dateKey = ev.dateKey || selectedDateKey || todayKey();
   return `
     <form class="log-form" id="${prefix}-form" data-id="${ev.id || ""}">
       <input type="text" name="title" placeholder="Event title" value="${ev.title ? ev.title.replace(/"/g, "&quot;") : ""}" required />
@@ -704,6 +708,20 @@ function eventFormHtml(prefix, ev = {}) {
         </label>
         <input type="text" name="notes" placeholder="Notes (optional)" value="${ev.notes ? ev.notes.replace(/"/g, "&quot;") : ""}" class="grow" />
       </div>
+      ${ev.id ? "" : `
+        <label class="small">Repeats
+          <select name="repeat">
+            <option value="none">Does not repeat</option>
+            <option value="daily">Every day</option>
+            <option value="weekday">Every weekday (Mon–Fri)</option>
+            <option value="weekend">Every weekend (Sat–Sun)</option>
+            <option value="weekly">Weekly, same day</option>
+            <option value="monthly">Monthly, same date</option>
+          </select>
+        </label>
+        <label class="small" data-repeat-until-row hidden>Repeat until
+          <input type="date" name="repeatUntil" />
+        </label>`}
       <div class="row">
         <button type="submit" class="btn primary small">${ev.id ? "Save" : "Add event"}</button>
         ${ev.id ? `<button type="button" class="btn ghost small" data-cancel-edit>Cancel</button>` : ""}
@@ -720,15 +738,29 @@ function wireEventForm(prefix, container) {
   const cancelBtn = form.querySelector("[data-cancel-edit]");
   if (cancelBtn) cancelBtn.addEventListener("click", () => { editingEventId = null; renderDashDayPanel(); });
 
+  const repeatSelect = form.querySelector('[name="repeat"]');
+  if (repeatSelect) {
+    repeatSelect.addEventListener("change", (e) => {
+      const untilRow = form.querySelector("[data-repeat-until-row]");
+      untilRow.hidden = e.target.value === "none";
+      if (e.target.value !== "none" && !form.repeatUntil.value) {
+        // Default "until" to 3 months out so a weekly work shift doesn't
+        // need the end date typed by hand every time.
+        const start = new Date(form.dateKey.value);
+        form.repeatUntil.value = todayKey(new Date(start.getFullYear(), start.getMonth() + 3, start.getDate()));
+      }
+    });
+  }
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!currentUid) return;
     const data = new FormData(form);
     const allDay = data.get("allDay") === "on";
+    const startKey = data.get("dateKey");
+    const endKey = data.get("endDateKey") < startKey ? startKey : data.get("endDateKey");
     const fields = {
       title: data.get("title").trim(),
-      dateKey: data.get("dateKey"),
-      endDateKey: data.get("endDateKey") < data.get("dateKey") ? data.get("dateKey") : data.get("endDateKey"),
       allDay,
       startTime: allDay ? null : (data.get("startTime") || null),
       endTime: allDay ? null : (data.get("endTime") || null),
@@ -739,24 +771,56 @@ function wireEventForm(prefix, container) {
     if (id) {
       // Edits to a feed-imported event stick — the next sync won't clobber
       // a manual correction (see syncFeed's userEdited check below).
-      await setDoc(doc(db, "users", currentUid, "calendarEvents", id), { ...fields, userEdited: true }, { merge: true });
+      await setDoc(doc(db, "users", currentUid, "calendarEvents", id), {
+        ...fields, dateKey: startKey, endDateKey: endKey, userEdited: true
+      }, { merge: true });
     } else {
-      await addDoc(collection(db, "users", currentUid, "calendarEvents"), {
-        ...fields, source: "manual", createdAt: Timestamp.now()
-      });
+      const repeat = data.get("repeat") || "none";
+      const spanDays = Math.round((dateFromKey(endKey) - dateFromKey(startKey)) / 86400000);
+      const occurrenceStarts = repeat === "none"
+        ? [startKey]
+        : generateRecurrenceDates(startKey, repeat, data.get("repeatUntil") || startKey);
+      const recurrenceGroupId = repeat !== "none" && occurrenceStarts.length > 1 ? `rec-${Date.now()}` : null;
+      const batch = writeBatch(db);
+      for (const occStart of occurrenceStarts) {
+        const occEnd = todayKey(new Date(dateFromKey(occStart).getTime() + spanDays * 86400000));
+        batch.set(doc(collection(db, "users", currentUid, "calendarEvents")), {
+          ...fields, dateKey: occStart, endDateKey: occEnd, source: "manual", createdAt: Timestamp.now(),
+          ...(recurrenceGroupId ? { recurrenceGroupId } : {})
+        });
+      }
+      await batch.commit();
     }
     editingEventId = null;
     renderDashDayPanel();
+    renderDashCalendar();
   });
 }
 
 let editingEventId = null;
 
+// A small "mini-link" (native <details>, no extra JS state needed) that
+// expands the day panel's gym entry into the exercises actually logged —
+// so you can see what you did right from the calendar, without switching
+// to the Gym tab.
+function gymLogDetailsHtml(dateKey) {
+  const log = logForDate(dateKey);
+  if (!log) return "";
+  const rows = (log.entries || [])
+    .map((e) => {
+      const name = e.exerciseName || exerciseById.get(e.exerciseId)?.name || "Exercise";
+      const setsLabel = (e.sets || []).map((s) => `${s.w || 0}x${s.r || 0}`).join(", ") || "no sets logged";
+      return `<li>${name} — ${setsLabel}</li>`;
+    })
+    .join("");
+  return `<details><summary class="link-btn" style="display:inline;">View details</summary><ul class="subtle small">${rows}</ul></details>`;
+}
+
 function renderDashDayPanel() {
   const el = document.getElementById("ecal-day-panel");
   if (!el) return;
-  if (!dashSelectedDateKey) dashSelectedDateKey = todayKey();
-  const dateKey = dashSelectedDateKey;
+  if (!selectedDateKey) selectedDateKey = todayKey();
+  const dateKey = selectedDateKey;
   const dateLabel = dateFromKey(dateKey).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
   const now = new Date();
   const events = allEventsForDate(dateKey);
@@ -775,7 +839,11 @@ function renderDashDayPanel() {
               ${e.recurring ? `<span class="subtle small">(recurring)</span>` : ""}
               ${timeLabel ? `<span class="subtle small"> — ${timeLabel}</span>` : ""}
               ${e.notes ? `<br/><span class="subtle small">${e.notes}</span>` : ""}
-              ${e.gym ? `<br/><span class="subtle small">${e.logged ? "Logged" : "Scheduled"} — see Gym tab to log it.</span>` : ""}
+              ${e.gym
+                ? e.logged
+                  ? `<br/>${gymLogDetailsHtml(dateKey)}`
+                  : `<br/><span class="subtle small">Scheduled — go log it in the Gym tab.</span>`
+                : ""}
             </span>
             ${e.gym ? "" : `
               <span class="row" style="gap:6px;">
@@ -812,11 +880,11 @@ document.getElementById("ecal-toggle-feeds-btn")?.addEventListener("click", () =
 });
 
 document.getElementById("ecal-prev")?.addEventListener("click", () => {
-  dashCalViewDate = new Date(dashCalViewDate.getFullYear(), dashCalViewDate.getMonth() - 1, 1);
+  calViewDate = new Date(calViewDate.getFullYear(), calViewDate.getMonth() - 1, 1);
   renderDashCalendar();
 });
 document.getElementById("ecal-next")?.addEventListener("click", () => {
-  dashCalViewDate = new Date(dashCalViewDate.getFullYear(), dashCalViewDate.getMonth() + 1, 1);
+  calViewDate = new Date(calViewDate.getFullYear(), calViewDate.getMonth() + 1, 1);
   renderDashCalendar();
 });
 
@@ -991,6 +1059,81 @@ function renderFoodEntries() {
 }
 
 // ---------------------------------------------------------------------
+// Manual food entry's auto-estimate — looks up whatever name you typed
+// against the USDA FoodData Central database (free, no key-management
+// server needed: it sets CORS headers for direct browser fetches, unlike
+// the calendar-feed situation) and pre-fills calories/protein from the
+// closest match's per-100g values. Still fully editable — this is a
+// convenience estimate, not an exact measurement, since portion size is
+// never known from a name alone.
+// ---------------------------------------------------------------------
+function debounce(fn, ms) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+}
+
+async function searchUsdaFoods(query) {
+  const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${encodeURIComponent(USDA_API_KEY)}&query=${encodeURIComponent(query)}&pageSize=6&dataType=Foundation,SR%20Legacy`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return (data.foods || [])
+    .map((f) => {
+      const kcal = f.foodNutrients.find((n) => n.nutrientId === 1008)?.value;
+      const protein = f.foodNutrients.find((n) => n.nutrientId === 1003)?.value;
+      return { description: f.description, kcalPer100g: kcal, proteinPer100g: protein };
+    })
+    .filter((f) => f.kcalPer100g != null);
+}
+
+const foodNameInput = document.getElementById("food-name-input");
+const foodUsdaResultsEl = document.getElementById("food-usda-results");
+if (foodNameInput && foodUsdaResultsEl) {
+  const runSearch = debounce(async (q) => {
+    if (q.trim().length < 3 || USDA_API_KEY === "YOUR_API_KEY_HERE") {
+      foodUsdaResultsEl.innerHTML = "";
+      return;
+    }
+    let results;
+    try {
+      results = await searchUsdaFoods(q.trim());
+    } catch {
+      foodUsdaResultsEl.innerHTML = "";
+      return;
+    }
+    if (foodNameInput.value.trim() !== q.trim()) return; // stale response, input moved on
+    foodUsdaResultsEl.innerHTML = results.length
+      ? `<ul class="entry-list">${results
+          .map(
+            (r, i) => `
+          <li class="entry-row">
+            <span>${r.description} <span class="subtle small">(~100g: ${Math.round(r.kcalPer100g)} kcal, ${(r.proteinPer100g ?? 0).toFixed(1)}g protein)</span></span>
+            <button type="button" class="btn ghost small" data-pick-usda="${i}">Use this</button>
+          </li>`
+          )
+          .join("")}</ul>`
+      : "";
+    foodUsdaResultsEl.querySelectorAll("[data-pick-usda]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const r = results[Number(btn.dataset.pickUsda)];
+        const form = document.getElementById("form-food");
+        form.calories.value = Math.round(r.kcalPer100g);
+        form.protein.value = (r.proteinPer100g ?? 0).toFixed(1);
+        document.getElementById("food-estimate-note").hidden = false;
+        foodUsdaResultsEl.innerHTML = "";
+      });
+    });
+  }, 450);
+  foodNameInput.addEventListener("input", (e) => {
+    document.getElementById("food-estimate-note").hidden = true;
+    runSearch(e.target.value);
+  });
+}
+
+// ---------------------------------------------------------------------
 // Diet suggestions — a curated, varied food catalog (foods.json), picked
 // per slot and shuffleable, logged with one tap. Per-device only (like
 // Lift Log's meal builder) — not synced, since it's just "what am I
@@ -1104,6 +1247,7 @@ function describeEntry(e) {
     case "water": return `💧 ${e.ml}ml water`;
     case "weight": return `⚖ ${e.lb} lb`;
     case "activity": return `🚶 ${e.steps ? `${e.steps} steps` : ""}${e.steps && e.caloriesBurned ? ", " : ""}${e.caloriesBurned ? `${e.caloriesBurned} kcal burned` : ""}`;
+    case "cardio": return `🏃 ${e.cardioType || "Cardio"} — ${e.durationMin || 0} min${e.distanceMi ? `, ${e.distanceMi} mi` : ""}${e.caloriesBurned ? `, ${e.caloriesBurned} kcal burned` : ""}`;
     case "vitamin": return `💊 ${e.name}`;
     default: return e.type;
   }
@@ -1459,43 +1603,6 @@ function renderGymSplitSummary() {
   el.innerHTML = `<h2>${split.name}</h2><p class="subtle small">${split.daysPerWeek} day${split.daysPerWeek === 1 ? "" : "s"}/week. Change this anytime in Goals.</p>`;
 }
 
-function renderGymCalendar() {
-  const weekdaysEl = document.getElementById("cal-weekdays");
-  const daysEl = document.getElementById("cal-days");
-  const label = document.getElementById("cal-month-label");
-
-  weekdaysEl.innerHTML = WEEKDAY_LABELS.map((l) => `<div class="cal-weekday">${l}</div>`).join("");
-  label.textContent = calViewDate.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-
-  const year = calViewDate.getFullYear();
-  const month = calViewDate.getMonth();
-  const firstWeekday = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const today = todayKey();
-
-  let html = "";
-  for (let i = 0; i < firstWeekday; i++) html += `<div class="cal-day empty"></div>`;
-  for (let day = 1; day <= daysInMonth; day++) {
-    const dateKey = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    const scheduled = scheduledDayTypeFor(dateKey);
-    const logged = !!logForDate(dateKey);
-    const classes = ["cal-day"];
-    if (scheduled) classes.push("scheduled");
-    if (logged) classes.push("logged");
-    if (dateKey === today) classes.push("today");
-    if (dateKey === selectedDateKey) classes.push("selected");
-    html += `<button type="button" class="${classes.join(" ")}" data-date="${dateKey}">${day}${scheduled || logged ? '<span class="cal-dot"></span>' : ""}</button>`;
-  }
-  daysEl.innerHTML = html;
-
-  daysEl.querySelectorAll("[data-date]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      selectedDateKey = btn.dataset.date;
-      renderGym();
-    });
-  });
-}
-
 function renderGymDayPanel() {
   const el = document.getElementById("gym-day-panel");
   if (catalogError) {
@@ -1583,10 +1690,15 @@ function renderGymDayPanel() {
     .join("");
 
   el.innerHTML = `
-    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px;">
-      <h2 style="margin:0;">${dateLabel}</h2>
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <div class="row" style="align-items:center;gap:8px;">
+        <button type="button" class="btn small" id="gym-day-prev">&lsaquo;</button>
+        <h2 style="margin:0;">${dateLabel}</h2>
+        <button type="button" class="btn small" id="gym-day-next">&rsaquo;</button>
+      </div>
       <select id="gym-daytype-select">${typeOptions}</select>
     </div>
+    <p class="subtle small" style="margin-top:0;">${selectedDateKey === todayKey() ? "" : `<button type="button" class="link-btn" id="gym-day-today">Jump to today</button> — `}Pick any date on the <button type="button" class="link-btn" data-switch-view="dashboard">Dashboard calendar</button> to come straight here.</p>
     ${slotsHtml}
 
     <div class="panel" style="padding:0;background:transparent;border:none;margin:0;">
@@ -1605,6 +1717,23 @@ function renderGymDayPanel() {
     gymDraft = buildGymDraft(selectedDateKey, e.target.value);
     renderGymDayPanel();
   });
+
+  function jumpToDate(newDateKey) {
+    selectedDateKey = newDateKey;
+    renderGymDayPanel();
+    renderDashCalendar();
+    renderDashDayPanel();
+  }
+  document.getElementById("gym-day-prev").addEventListener("click", () => {
+    const d = dateFromKey(selectedDateKey);
+    jumpToDate(todayKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1)));
+  });
+  document.getElementById("gym-day-next").addEventListener("click", () => {
+    const d = dateFromKey(selectedDateKey);
+    jumpToDate(todayKey(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)));
+  });
+  document.getElementById("gym-day-today")?.addEventListener("click", () => jumpToDate(todayKey()));
+  el.querySelector('[data-switch-view="dashboard"]')?.addEventListener("click", () => switchView("dashboard"));
 
   el.querySelectorAll("[data-slot-select]").forEach((sel) => {
     sel.addEventListener("change", (e) => {
@@ -1729,19 +1858,30 @@ async function saveGymDay() {
   }
 }
 
-document.getElementById("cal-prev").addEventListener("click", () => {
-  calViewDate = new Date(calViewDate.getFullYear(), calViewDate.getMonth() - 1, 1);
-  renderGymCalendar();
-});
-document.getElementById("cal-next").addEventListener("click", () => {
-  calViewDate = new Date(calViewDate.getFullYear(), calViewDate.getMonth() + 1, 1);
-  renderGymCalendar();
-});
+function renderGymCardioEntries() {
+  const list = document.getElementById("gym-cardio-entries");
+  if (!list) return;
+  const today = todaysEntries().filter((e) => e.type === "cardio");
+  if (!today.length) {
+    list.innerHTML = `<li class="entry-row subtle">Nothing logged yet today.</li>`;
+    return;
+  }
+  list.innerHTML = today
+    .map((e) => `
+      <li class="entry-row">
+        <span>${describeEntry(e)}</span>
+        <button class="remove-btn" data-remove-id="${e.id}" title="Delete">&times;</button>
+      </li>`)
+    .join("");
+  list.querySelectorAll("[data-remove-id]").forEach((btn) => {
+    btn.addEventListener("click", () => removeEntry(btn.dataset.removeId));
+  });
+}
 
 function renderGym() {
   if (!document.getElementById("view-gym")) return;
   renderGymSplitSummary();
-  renderGymCalendar();
+  renderGymCardioEntries();
   renderGymDayPanel();
 }
 
@@ -1770,7 +1910,7 @@ function coachNoteHtml(note) {
 function renderCoachNotes() {
   const el = document.getElementById("coach-notes-list");
   if (!coachNotes.length) {
-    el.innerHTML = `<p class="subtle">No notes yet.</p>`;
+    el.innerHTML = `<p class="subtle">No notes yet — check back after your coach has had a week of activity to look at.</p>`;
     return;
   }
   el.innerHTML = coachNotes

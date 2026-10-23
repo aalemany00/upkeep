@@ -72,13 +72,34 @@ external calendars pulled in too.
   — deliberately not a preset palette, since the ask was "make it up to the
   user"), optional notes. Add/edit/delete straight from the day panel below
   the month grid. Stored in `calendarEvents/{id}`.
-- **Gym overlay**: a scheduled or logged gym day shows up automatically as a
-  read-only "Gym: {dayType}" entry (purple, `GYM_EVENT_COLOR` in
-  `calendar.js`) alongside real events — computed on the fly from `split`/
-  `workoutLogs` (via `gymEventForDate`), not a stored event. The Gym tab
-  keeps its own separate calendar for actually logging sets (unchanged);
-  this is a read-only "something's scheduled" view with a pointer back to
-  the Gym tab, not a second way to log.
+- **Recurring events**: a "Repeats" selector on the *new*-event form only
+  (not shown when editing — see below) — Does not repeat / Every day / Every
+  weekday (Mon–Fri) / Every weekend (Sat–Sun) / Weekly, same day / Monthly,
+  same date — plus an "until" date (defaults to 3 months out). Submitting
+  writes one `calendarEvents` doc per occurrence in a single batch
+  (`calendar.js`'s `generateRecurrenceDates`, capped at 366 occurrences),
+  tagged with a shared `recurrenceGroupId`. Editing or deleting an individual
+  occurrence only touches that one doc — there's no "edit the whole series"
+  yet; `recurrenceGroupId` is stored so that could be added later without a
+  data migration, but isn't used for anything yet.
+- **Gym tab has no calendar of its own anymore** — it was redundant with the
+  Dashboard's, per Adrian's ask ("the gym section should automatically sync
+  with the one on the dashboard"). `selectedDateKey`/`calViewDate` are now
+  one shared pair of module-level variables in `app.js`, not separate Gym vs.
+  Dashboard copies. The Gym tab's day panel instead has a simple ‹ date ›
+  stepper (prev/next day) plus a link back to the Dashboard calendar for
+  picking an arbitrary date; clicking a date on the Dashboard calendar
+  re-renders the Gym tab too (even if it's not the currently visible tab) so
+  the two are always in sync.
+- **Gym overlay + logged-day detail link**: a scheduled or logged gym day
+  shows up automatically as a read-only "Gym: {dayType}" entry (purple,
+  `GYM_EVENT_COLOR` in `calendar.js`) in the Dashboard day panel — computed
+  on the fly from `split`/`workoutLogs` (via `gymEventForDate`), not a stored
+  event. If that day has actually been logged, the entry includes a "View
+  details" `<details>` disclosure (`gymLogDetailsHtml`) that expands inline
+  to the exercises and sets logged that day — so you can see what you did
+  right from the calendar without switching tabs. If it's only scheduled
+  (not yet logged), it says to go log it in the Gym tab instead.
 - **Imported calendar feeds**: paste a Google/Outlook/Apple Calendar iCal or
   webcal feed URL ("Imported calendars" panel) → `calendar.js`'s `parseICS`
   parses VEVENT blocks (title, start/end, all-day vs. timed, UID; RRULE
@@ -148,9 +169,45 @@ redirecting.
   the Firebase Auth user. Tested both the wrong-password and real-delete
   paths.
 
+### Cardio tracking (Gym tab)
+A dedicated section in the Gym tab, separate from strength logging:
+type (Running/Walking/Cycling/Swimming/Rowing/Elliptical/Other), duration,
+optional distance, optional manual calories burned, optional notes. Stored
+as an ordinary `entries` doc (`type: "cardio"`), same collection as
+food/water/weight/activity/vitamin — so it already shows up in the Log tab's
+general "today's entries" list for free, no special-casing needed there. The
+Dashboard's "Calories burned" stat sums both `activity` and `cardio` entries'
+`caloriesBurned` fields. No MET-based calorie estimate from duration — manual
+entry only, consistent with the project's plain-code-over-cleverness bias;
+could layer an estimate on later without a data model change.
+
+### Diet auto-estimate (Food tab, `usda-config.js`)
+Typing a food name into the manual "Add anything else" form (debounced,
+3+ characters) searches the free **USDA FoodData Central** API
+(`Foundation`/`SR Legacy` data types only — generic foods, not noisy branded
+products) and shows up to 6 matches with their per-100g calories/protein.
+Picking one pre-fills the calorie/protein fields (still fully editable) and
+shows a "~100g, adjust for your portion" disclaimer, since portion size is
+never knowable from a name alone. Chosen over a bundled static food table
+after checking live: USDA's API sets `Access-Control-Allow-Origin: *` on
+every response, so unlike the calendar-feed situation this needs no CORS
+relay — a direct `fetch()` from the browser works. Needs a free, no-
+credit-card API key (`usda-config.js`, same "public-safe to embed, not a
+real secret" reasoning as `firebase-config.js` — if it's ever abused,
+regenerate it at the signup page, no billing involved). Ships with a
+placeholder; the auto-estimate silently does nothing (manual entry still
+works) until a real key is pasted in. Stale-response race handled (an older
+in-flight search can't clobber results for whatever's currently typed).
+
 ### Weekly AI coach (`scripts/coach-note.js`)
 The one actual "AI does real work every run" piece, run manually (`node
-coach-note.js`) by Adrian on his own machine:
+coach-note.js`) by Adrian on his own machine. **The in-app Coach tab copy
+does not mention any of this** — it originally told every signed-up user to
+go run a dev script themselves, which Adrian correctly flagged as confusing
+for a non-technical friend/family user. It now just says the coach reviews
+your week "from time to time," with the actual manual/non-automatic
+mechanism documented here and in `scripts/README.md` for Adrian (the one
+person who runs it), not surfaced to end users at all.
 - Loops over **every signed-up user** (Admin Auth `listUsers`), not just
   Adrian — but it's still one person manually running it on his own Claude
   Code access, not a public service. Scaling further = paid API territory,
@@ -318,10 +375,10 @@ coach-note.js`) by Adrian on his own machine:
 | `profile/me` | `{age, sex, heightIn, startWeightLb, createdAt, updatedAt}` | `updatedAt` drives the coach-review banner |
 | `meta/goals` | `{goalType, activityLevel, daysPerWeek, preferredDays[], calorieGoal, proteinGoal, waterGoal, stepsGoal, weightGoal, vitaminsList[], equipment[], minIncrementLb}` | daily goals + goal/availability/equipment all in one doc. `equipment`/`minIncrementLb` are Goals-only (not onboarding) — missing/empty means "no restriction" |
 | `split/current` | `gym.assignSplit()` output (`{name, daysPerWeek, days[]}`) | rebuilt on availability change, never touches history |
-| `entries/{id}` | `{type: food\|water\|weight\|activity\|vitamin, ...fields, dateKey, createdAt}` | the general log; gym does NOT live here |
+| `entries/{id}` | `{type: food\|water\|weight\|activity\|vitamin\|cardio, ...fields, dateKey, createdAt}` | the general log; gym does NOT live here |
 | `workoutLogs/{dateKey}` | `{dateKey, dayType, entries[], updatedAt}` | one doc per logged gym day; entries are slot-based (`slotLabel`) or free-form (`extra:true`) |
 | `coachNotes/{id}` | `{summary, wins[], concerns[], suggestions[], flags[], calorieGoalChange, weekStart, weekEnd, createdAt}` | written only by `coach-note.js`, via the Admin SDK (bypasses security rules) |
-| `calendarEvents/{id}` | `{title, dateKey, endDateKey, allDay, startTime, endTime, color, notes, source: manual\|feed, feedId?, externalUid?, userEdited?, recurring?, createdAt}` | manual + feed-imported events; `endDateKey >= dateKey` for multi-day spans |
+| `calendarEvents/{id}` | `{title, dateKey, endDateKey, allDay, startTime, endTime, color, notes, source: manual\|feed, feedId?, externalUid?, userEdited?, recurring?, recurrenceGroupId?, createdAt}` | manual + feed-imported events; `endDateKey >= dateKey` for multi-day spans; `recurrenceGroupId` shared by every occurrence of one recurring-event submission |
 | `calendarFeeds/{id}` | `{label, url, color, lastSyncedAt, lastSyncError, createdAt}` | one doc per imported iCal/webcal feed subscription |
 
 Security rules (`firestore.rules`): a single wildcard match,
@@ -343,6 +400,7 @@ calendar.js             # pure functions: parseICS, occursOnDate, isEventExpired
 exercises.json           # 932-exercise static catalog (seeded, not hand-written)
 foods.json              # 60-item static diet-suggestion catalog (hand-written)
 firebase-config.js      # real Firebase project config (public-safe, committed)
+usda-config.js          # USDA FoodData Central API key for the diet auto-estimate (placeholder until filled in)
 firestore.rules         # security rules (deployed via Firebase console)
 manifest.json, sw.js, icon.svg   # PWA shell
 dev-server.js           # local static server (see Dev environment below)

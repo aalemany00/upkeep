@@ -20,6 +20,37 @@ export function normalizeFeedUrl(url) {
   return url.trim().replace(/^webcal:\/\//i, "https://");
 }
 
+function parseDateKey(key) {
+  const [y, m, d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// Expands a repeat pattern into the list of dateKeys it covers (inclusive),
+// for building one event doc per occurrence rather than making a user add
+// a recurring work shift or class one day at a time. "weekly"/"monthly"
+// recur on the same weekday / day-of-month as startDateKey. Capped at
+// maxOccurrences so a mistaken multi-year range can't create thousands of
+// documents.
+export function generateRecurrenceDates(startDateKey, pattern, untilDateKey, maxOccurrences = 366) {
+  if (!pattern || pattern === "none") return [startDateKey];
+  const start = parseDateKey(startDateKey);
+  const until = parseDateKey(untilDateKey);
+  const dates = [];
+  const cur = new Date(start);
+  while (cur <= until && dates.length < maxOccurrences) {
+    const dow = cur.getDay();
+    const include =
+      pattern === "daily" ||
+      (pattern === "weekday" && dow >= 1 && dow <= 5) ||
+      (pattern === "weekend" && (dow === 0 || dow === 6)) ||
+      (pattern === "weekly" && dow === start.getDay()) ||
+      (pattern === "monthly" && cur.getDate() === start.getDate());
+    if (include) dates.push(dateKeyFor(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return dates;
+}
+
 // Does this event occupy the given day? Multi-day events (start/end keys
 // differing) span every date in between, inclusive.
 export function occursOnDate(event, dateKey) {

@@ -30,6 +30,12 @@ Then open `http://localhost:8000`.
 4. Deploy the security rules in `firestore.rules` (Firebase console →
    Firestore → Rules, or `firebase deploy --only firestore:rules` with the
    Firebase CLI).
+5. (Optional, for the Food tab's calorie/protein auto-estimate) Get a free,
+   no-credit-card API key from the
+   [USDA FoodData Central signup page](https://fdc.nal.usda.gov/api-key-signup/index.html)
+   and paste it into `usda-config.js` in place of the placeholder. Without
+   this, manual food entry still works — you just type calories/protein
+   yourself instead of getting a suggested starting point.
 
 ## Weekly coach note
 
