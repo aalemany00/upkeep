@@ -44,7 +44,8 @@ export function generateRecurrenceDates(startDateKey, pattern, untilDateKey, max
       (pattern === "weekday" && dow >= 1 && dow <= 5) ||
       (pattern === "weekend" && (dow === 0 || dow === 6)) ||
       (pattern === "weekly" && dow === start.getDay()) ||
-      (pattern === "monthly" && cur.getDate() === start.getDate());
+      (pattern === "monthly" && cur.getDate() === start.getDate()) ||
+      (pattern === "yearly" && cur.getDate() === start.getDate() && cur.getMonth() === start.getMonth());
     if (include) dates.push(dateKeyFor(cur));
     cur.setDate(cur.getDate() + 1);
   }

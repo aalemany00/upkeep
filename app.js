@@ -13,6 +13,7 @@ import { assignSplit, targetFor, MUSCLE_LABEL_BY_SLOT, SPLIT_ALGO_VERSION, EQUIP
 import { computeDailyGoals, GOAL_LABELS } from "./nutrition.js";
 import { parseICS, normalizeFeedUrl, occursOnDate, isEventExpired, generateRecurrenceDates, DEFAULT_EVENT_COLOR, DEFAULT_FEED_COLOR, GYM_EVENT_COLOR } from "./calendar.js";
 import { USDA_API_KEY } from "./usda-config.js";
+import { WARMUPS_BY_DAYTYPE, COOLDOWNS_BY_DAYTYPE, CARDIO_WARMUP, CARDIO_COOLDOWN } from "./warmups.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -110,6 +111,21 @@ function todayKey(date = new Date()) {
 function todaysEntries() {
   const key = todayKey();
   return entries.filter((e) => e.dateKey === key);
+}
+
+// Food/Log/Cardio entries are logged against whatever date is currently
+// selected (shared with the Dashboard/Gym calendar — see selectedDateKey),
+// not always literally today, so you can back-log a day you forgot. The
+// Dashboard's own stat tiles stay on todaysEntries() above — those always
+// mean "today," regardless of what date you're backdating elsewhere.
+function entriesForSelectedDate() {
+  const key = selectedDateKey || todayKey();
+  return entries.filter((e) => e.dateKey === key);
+}
+
+function selectedDateLabel() {
+  const key = selectedDateKey || todayKey();
+  return key === todayKey() ? "Today" : dateFromKey(key).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
 }
 
 function sumByType(list, type, field) {
@@ -225,6 +241,14 @@ function renderEquipmentChips(container, selectedEquipment, onToggle) {
   });
 }
 
+// Maps each scheduled weekday (goals.preferredDays, in split-day order) to
+// its own equipment list — equipmentByDay[weekday] if that day's been
+// customized, else the global default — so assignSplit can suggest
+// differently per day (home dumbbells Monday, full gym Wednesday, etc).
+function equipmentForScheduledDays(preferredDays, defaultEquipment, equipmentByDay) {
+  return preferredDays.map((weekday) => equipmentByDay?.[weekday] || defaultEquipment);
+}
+
 async function rebuildSplit(daysPerWeek, equipmentList) {
   if (!currentUid) return;
   await catalogReady;
@@ -249,7 +273,8 @@ let staleSplitRebuildInFlight = false;
 function maybeRebuildStaleSplit() {
   if (!split || split.algoVersion === SPLIT_ALGO_VERSION || staleSplitRebuildInFlight) return;
   staleSplitRebuildInFlight = true;
-  rebuildSplit(split.daysPerWeek, goals.equipment).finally(() => {
+  const perDay = equipmentForScheduledDays(goals.preferredDays || [], goals.equipment, goals.equipmentByDay);
+  rebuildSplit(split.daysPerWeek, perDay).finally(() => {
     staleSplitRebuildInFlight = false;
   });
 }
@@ -410,6 +435,7 @@ function subscribeAll(uid) {
     calendarEvents = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     renderDashCalendar();
     renderDashDayPanel();
+    renderGymCardioEntries();
   });
 
   const feedsQuery = query(collection(db, "users", uid, "calendarFeeds"), orderBy("createdAt", "asc"));
@@ -458,14 +484,15 @@ function teardownSubscriptions() {
   renderCoachReviewBanner();
   renderDashCalendar();
   renderCalendarFeeds();
+  syncLogDatePickers();
 }
 
-async function addEntry(type, fields) {
+async function addEntry(type, fields, dateKeyOverride) {
   if (!currentUid) return;
   await addDoc(collection(db, "users", currentUid, "entries"), {
     type,
     ...fields,
-    dateKey: todayKey(),
+    dateKey: dateKeyOverride || selectedDateKey || todayKey(),
     createdAt: Timestamp.now()
   });
 }
@@ -490,6 +517,35 @@ function switchView(view) {
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${view}`));
 }
+
+// Food/Log's "Logging for" date pickers — a shared selectedDateKey (also
+// used by the Dashboard/Gym calendar), so picking a past date here and
+// logging something actually backdates it, instead of every entry always
+// landing on today. Changing either picker, or the Dashboard calendar, or
+// the Gym tab's stepper, moves all of them together.
+function syncLogDatePickers() {
+  const key = selectedDateKey || todayKey();
+  const foodInput = document.getElementById("food-log-date");
+  const logInput = document.getElementById("log-log-date");
+  if (foodInput) foodInput.value = key;
+  if (logInput) logInput.value = key;
+}
+
+function setSelectedDate(dateKey) {
+  selectedDateKey = dateKey;
+  syncLogDatePickers();
+  renderDashCalendar();
+  renderDashDayPanel();
+  renderGym();
+  renderTodayEntries();
+  renderFoodEntries();
+  renderDietSuggestions();
+}
+
+document.getElementById("food-log-date")?.addEventListener("change", (e) => setSelectedDate(e.target.value));
+document.getElementById("food-log-date-today")?.addEventListener("click", () => setSelectedDate(todayKey()));
+document.getElementById("log-log-date")?.addEventListener("change", (e) => setSelectedDate(e.target.value));
+document.getElementById("log-log-date-today")?.addEventListener("click", () => setSelectedDate(todayKey()));
 
 // ---------------------------------------------------------------------
 // Dashboard
@@ -684,14 +740,15 @@ function renderDashCalendar() {
   daysEl.innerHTML = html;
 
   daysEl.querySelectorAll("[data-date]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      selectedDateKey = btn.dataset.date;
-      renderDashCalendar();
-      renderDashDayPanel();
-      renderGym(); // Gym tab follows the same selected date — keep it in sync even if not visible
-    });
+    btn.addEventListener("click", () => setSelectedDate(btn.dataset.date));
   });
 }
+
+// A category tags what an event *is*, not just how it looks. "Cardio" is
+// the one that currently does something beyond labeling — it surfaces an
+// upcoming-cardio reminder in the Gym tab (see upcomingCardioEvents), so
+// adding a run to the calendar makes the rest of the app aware of it.
+const EVENT_CATEGORIES = ["General", "Workout", "Cardio", "Appointment", "Work", "Holiday", "Birthday", "Other"];
 
 function eventFormHtml(prefix, ev = {}) {
   const dateKey = ev.dateKey || selectedDateKey || todayKey();
@@ -719,8 +776,14 @@ function eventFormHtml(prefix, ev = {}) {
         <label class="small">Color
           <input type="color" name="color" value="${ev.color || DEFAULT_EVENT_COLOR}" />
         </label>
-        <input type="text" name="notes" placeholder="Notes (optional)" value="${ev.notes ? ev.notes.replace(/"/g, "&quot;") : ""}" class="grow" />
+        <label class="small grow">Category
+          <select name="category">
+            ${EVENT_CATEGORIES.map((c) => `<option value="${c}" ${ev.category === c ? "selected" : ""}>${c}</option>`).join("")}
+          </select>
+        </label>
       </div>
+      <input type="text" name="notes" placeholder="Notes (optional)" value="${ev.notes ? ev.notes.replace(/"/g, "&quot;") : ""}" />
+      ${ev.category === "Cardio" || !ev.id ? `<p class="subtle small">Tagging this "Cardio" makes it show up as an upcoming reminder in the Gym tab.</p>` : ""}
       ${ev.id ? "" : `
         <label class="small">Repeats
           <select name="repeat">
@@ -730,9 +793,13 @@ function eventFormHtml(prefix, ev = {}) {
             <option value="weekend">Every weekend (Sat–Sun)</option>
             <option value="weekly">Weekly, same day</option>
             <option value="monthly">Monthly, same date</option>
+            <option value="yearly">Yearly, same date (birthdays, holidays)</option>
           </select>
         </label>
-        <label class="small" data-repeat-until-row hidden>Repeat until
+        <label class="small" data-repeat-until-row hidden>
+          <input type="checkbox" name="repeatForever" /> Repeat forever (no end date)
+        </label>
+        <label class="small" data-repeat-until-date-row hidden>Repeat until
           <input type="date" name="repeatUntil" />
         </label>`}
       <div class="row">
@@ -753,15 +820,21 @@ function wireEventForm(prefix, container) {
 
   const repeatSelect = form.querySelector('[name="repeat"]');
   if (repeatSelect) {
+    const foreverRow = form.querySelector("[data-repeat-until-row]");
+    const untilDateRow = form.querySelector("[data-repeat-until-date-row]");
     repeatSelect.addEventListener("change", (e) => {
-      const untilRow = form.querySelector("[data-repeat-until-row]");
-      untilRow.hidden = e.target.value === "none";
-      if (e.target.value !== "none" && !form.repeatUntil.value) {
+      const repeating = e.target.value !== "none";
+      foreverRow.hidden = !repeating;
+      untilDateRow.hidden = !repeating || form.repeatForever.checked;
+      if (repeating && !form.repeatUntil.value) {
         // Default "until" to 3 months out so a weekly work shift doesn't
         // need the end date typed by hand every time.
         const start = new Date(form.dateKey.value);
         form.repeatUntil.value = todayKey(new Date(start.getFullYear(), start.getMonth() + 3, start.getDate()));
       }
+    });
+    form.repeatForever.addEventListener("change", (e) => {
+      untilDateRow.hidden = e.target.checked;
     });
   }
 
@@ -778,6 +851,7 @@ function wireEventForm(prefix, container) {
       startTime: allDay ? null : (data.get("startTime") || null),
       endTime: allDay ? null : (data.get("endTime") || null),
       color: data.get("color") || DEFAULT_EVENT_COLOR,
+      category: data.get("category") || "General",
       notes: data.get("notes")?.trim() || null
     };
     const id = form.dataset.id;
@@ -790,9 +864,16 @@ function wireEventForm(prefix, container) {
     } else {
       const repeat = data.get("repeat") || "none";
       const spanDays = Math.round((dateFromKey(endKey) - dateFromKey(startKey)) / 86400000);
+      // "Forever" isn't literal — nothing is — it's capped at 10 years out,
+      // same safety net as generateRecurrenceDates' own 366-occurrence cap
+      // (which also still applies: a "forever" daily event still stops at
+      // 366 days, not 10 years of daily docs).
+      const untilKey = data.get("repeatForever") === "on"
+        ? todayKey(new Date(dateFromKey(startKey).getFullYear() + 10, dateFromKey(startKey).getMonth(), dateFromKey(startKey).getDate()))
+        : (data.get("repeatUntil") || startKey);
       const occurrenceStarts = repeat === "none"
         ? [startKey]
-        : generateRecurrenceDates(startKey, repeat, data.get("repeatUntil") || startKey);
+        : generateRecurrenceDates(startKey, repeat, untilKey);
       const recurrenceGroupId = repeat !== "none" && occurrenceStarts.length > 1 ? `rec-${Date.now()}` : null;
       const batch = writeBatch(db);
       for (const occStart of occurrenceStarts) {
@@ -826,7 +907,7 @@ function gymLogDetailsHtml(dateKey) {
       return `<li>${name} — ${setsLabel}</li>`;
     })
     .join("");
-  return `<details><summary class="link-btn" style="display:inline;">View details</summary><ul class="subtle small">${rows}</ul></details>`;
+  return `<details><summary class="link-btn" style="display:inline;">View details</summary><ul class="subtle small">${rows}</ul>${log.notes ? `<p class="subtle small">Notes: ${log.notes}</p>` : ""}</details>`;
 }
 
 function renderDashDayPanel() {
@@ -1009,6 +1090,56 @@ async function syncFeed(feedId, feedOverride) {
   }
 }
 
+// Public holidays via date.nager.at — free, no key, and (confirmed live)
+// sets CORS headers for direct browser fetches, unlike the calendar-feed
+// situation, so no relay needed here. Idempotent: externalUid is derived
+// from country+date, so re-running for the same country just updates
+// existing holiday events instead of duplicating them.
+const HOLIDAY_COLOR = "#e0a030";
+async function syncHolidays(countryCode) {
+  const statusEl = document.getElementById("goals-holiday-status");
+  if (!currentUid || !countryCode) return;
+  statusEl.textContent = "Adding holidays…";
+  try {
+    const thisYear = new Date().getFullYear();
+    const [yearNow, yearNext] = await Promise.all(
+      [thisYear, thisYear + 1].map((y) =>
+        fetch(`https://date.nager.at/api/v3/PublicHolidays/${y}/${countryCode}`).then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        })
+      )
+    );
+    const holidays = [...yearNow, ...yearNext];
+    const existing = calendarEvents.filter((e) => e.source === "holiday" && e.holidayCountry === countryCode);
+    const existingByUid = new Map(existing.map((e) => [e.externalUid, e]));
+
+    const batch = writeBatch(db);
+    for (const h of holidays) {
+      const externalUid = `holiday-${countryCode}-${h.date}`;
+      const prior = existingByUid.get(externalUid);
+      const fields = {
+        title: h.localName, dateKey: h.date, endDateKey: h.date, allDay: true,
+        startTime: null, endTime: null, color: HOLIDAY_COLOR, category: "Holiday",
+        source: "holiday", holidayCountry: countryCode, externalUid
+      };
+      if (prior) {
+        if (!prior.userEdited) batch.set(doc(db, "users", currentUid, "calendarEvents", prior.id), fields, { merge: true });
+      } else {
+        batch.set(doc(collection(db, "users", currentUid, "calendarEvents")), { ...fields, createdAt: Timestamp.now() });
+      }
+    }
+    await batch.commit();
+    statusEl.textContent = `Added ${holidays.length} holidays for ${countryCode} (this year and next).`;
+  } catch (err) {
+    statusEl.textContent = `Couldn't add holidays: ${err.message || err}`;
+  }
+}
+
+document.getElementById("goals-holiday-sync-btn")?.addEventListener("click", () => {
+  syncHolidays(document.getElementById("goals-holiday-country").value);
+});
+
 // ---------------------------------------------------------------------
 // Log view
 // ---------------------------------------------------------------------
@@ -1033,9 +1164,11 @@ document.querySelectorAll("[data-quick-ml]").forEach((btn) => {
 
 function renderTodayEntries() {
   const list = document.getElementById("today-entries");
-  const today = todaysEntries().filter((e) => e.type !== "food");
+  const heading = document.getElementById("today-entries-heading");
+  if (heading) heading.textContent = `${selectedDateLabel()}'s entries`;
+  const today = entriesForSelectedDate().filter((e) => e.type !== "food");
   if (!today.length) {
-    list.innerHTML = `<li class="entry-row subtle">Nothing logged yet today.</li>`;
+    list.innerHTML = `<li class="entry-row subtle">Nothing logged yet${selectedDateKey && selectedDateKey !== todayKey() ? "" : " today"}.</li>`;
     return;
   }
   list.innerHTML = today
@@ -1053,9 +1186,11 @@ function renderTodayEntries() {
 
 function renderFoodEntries() {
   const list = document.getElementById("food-entries");
-  const today = todaysEntries().filter((e) => e.type === "food");
+  const heading = document.getElementById("food-entries-heading");
+  if (heading) heading.textContent = `${selectedDateLabel()}'s food`;
+  const today = entriesForSelectedDate().filter((e) => e.type === "food");
   if (!today.length) {
-    list.innerHTML = `<li class="entry-row subtle">Nothing logged yet today.</li>`;
+    list.innerHTML = `<li class="entry-row subtle">Nothing logged yet${selectedDateKey && selectedDateKey !== todayKey() ? "" : " today"}.</li>`;
     return;
   }
   list.innerHTML = today
@@ -1290,7 +1425,11 @@ function describeEntry(e) {
 
 function renderVitaminChips() {
   const list = (goals.vitaminsList || []);
-  const today = todaysEntries().filter((e) => e.type === "vitamin");
+  // The Dashboard chip always means "today" (it's your at-a-glance status);
+  // the Log tab chip follows whatever date you're logging for, so marking a
+  // vitamin taken on a backdated day doesn't silently mark it for today.
+  const todayTaken = todaysEntries().filter((e) => e.type === "vitamin");
+  const selectedTaken = entriesForSelectedDate().filter((e) => e.type === "vitamin");
 
   const dashEl = document.getElementById("dashboard-vitamins");
   const logEl = document.getElementById("vitamin-quick-list");
@@ -1302,25 +1441,28 @@ function renderVitaminChips() {
     return;
   }
 
-  const chipsHtml = list
-    .map((name) => {
-      const takenEntry = today.find((e) => e.name === name);
-      return `<button class="chip-btn ${takenEntry ? "taken" : ""}" data-vitamin="${name}" data-entry-id="${takenEntry ? takenEntry.id : ""}">${takenEntry ? "✓ " : ""}${name}</button>`;
-    })
-    .join("");
+  function chipsHtmlFor(taken) {
+    return list
+      .map((name) => {
+        const takenEntry = taken.find((e) => e.name === name);
+        return `<button class="chip-btn ${takenEntry ? "taken" : ""}" data-vitamin="${name}" data-entry-id="${takenEntry ? takenEntry.id : ""}">${takenEntry ? "✓ " : ""}${name}</button>`;
+      })
+      .join("");
+  }
 
-  dashEl.innerHTML = chipsHtml;
-  logEl.innerHTML = chipsHtml;
+  dashEl.innerHTML = chipsHtmlFor(todayTaken);
+  logEl.innerHTML = chipsHtmlFor(selectedTaken);
 
-  [dashEl, logEl].forEach((container) => {
-    container.querySelectorAll("[data-vitamin]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        if (btn.dataset.entryId) {
-          await removeEntry(btn.dataset.entryId);
-        } else {
-          await addEntry("vitamin", { name: btn.dataset.vitamin });
-        }
-      });
+  dashEl.querySelectorAll("[data-vitamin]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (btn.dataset.entryId) await removeEntry(btn.dataset.entryId);
+      else await addEntry("vitamin", { name: btn.dataset.vitamin }, todayKey());
+    });
+  });
+  logEl.querySelectorAll("[data-vitamin]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (btn.dataset.entryId) await removeEntry(btn.dataset.entryId);
+      else await addEntry("vitamin", { name: btn.dataset.vitamin });
     });
   });
 }
@@ -1340,16 +1482,40 @@ function renderCoachReviewBanner() {
 const goalsForm = document.getElementById("goals-form");
 const goalsDaysEl = document.getElementById("goals-days");
 const goalsEquipmentEl = document.getElementById("goals-equipment");
+const goalsEquipmentDaySelect = document.getElementById("goals-equipment-day-select");
+const goalsEquipmentResetDayBtn = document.getElementById("goals-equipment-reset-day");
 let goalsDays = [1, 3, 5];
-let goalsEquipment = EQUIPMENT_OPTIONS.slice();
+let goalsEquipment = EQUIPMENT_OPTIONS.slice();      // the "every day" default
+let goalsEquipmentByDay = {};                        // sparse: {"1": [...], ...} — only customized weekdays
+let goalsEquipmentEditingDay = "default";            // which one the chip row below currently edits
 
 function drawGoalsDays() {
   renderDayChips(goalsDaysEl, goalsDays, (next) => { goalsDays = next; drawGoalsDays(); });
 }
 
-function drawGoalsEquipment() {
-  renderEquipmentChips(goalsEquipmentEl, goalsEquipment, (next) => { goalsEquipment = next; drawGoalsEquipment(); });
+function currentlyEditedEquipmentList() {
+  if (goalsEquipmentEditingDay === "default") return goalsEquipment;
+  return goalsEquipmentByDay[goalsEquipmentEditingDay] || goalsEquipment.slice();
 }
+
+function drawGoalsEquipment() {
+  const list = currentlyEditedEquipmentList();
+  goalsEquipmentResetDayBtn.hidden = goalsEquipmentEditingDay === "default" || !goalsEquipmentByDay[goalsEquipmentEditingDay];
+  renderEquipmentChips(goalsEquipmentEl, list, (next) => {
+    if (goalsEquipmentEditingDay === "default") goalsEquipment = next;
+    else goalsEquipmentByDay[goalsEquipmentEditingDay] = next;
+    drawGoalsEquipment();
+  });
+}
+
+goalsEquipmentDaySelect.addEventListener("change", (e) => {
+  goalsEquipmentEditingDay = e.target.value;
+  drawGoalsEquipment();
+});
+goalsEquipmentResetDayBtn.addEventListener("click", () => {
+  delete goalsEquipmentByDay[goalsEquipmentEditingDay];
+  drawGoalsEquipment();
+});
 
 function fillGoalsForm() {
   goalsForm.age.value = profile?.age ?? "";
@@ -1371,6 +1537,9 @@ function fillGoalsForm() {
 
   goalsForm.minIncrementLb.value = goals.minIncrementLb ?? "";
   goalsEquipment = goals.equipment && goals.equipment.length ? goals.equipment : EQUIPMENT_OPTIONS.slice();
+  goalsEquipmentByDay = { ...(goals.equipmentByDay || {}) };
+  goalsEquipmentEditingDay = "default";
+  goalsEquipmentDaySelect.value = "default";
   drawGoalsEquipment();
 }
 
@@ -1390,12 +1559,14 @@ goalsForm.addEventListener("submit", async (e) => {
   // testing — would do the same to equipment).
   const selectedDays = goalsDays.slice();
   const selectedEquipment = goalsEquipment.slice();
+  const selectedEquipmentByDay = { ...goalsEquipmentByDay };
 
   const availabilityChanged = selectedDays.length !== (goals.daysPerWeek || 0)
     || JSON.stringify(selectedDays) !== JSON.stringify(goals.preferredDays || []);
   const priorEquipment = goals.equipment && goals.equipment.length ? goals.equipment : EQUIPMENT_OPTIONS;
   const equipmentChanged = JSON.stringify(selectedEquipment.slice().sort())
-    !== JSON.stringify(priorEquipment.slice().sort());
+    !== JSON.stringify(priorEquipment.slice().sort())
+    || JSON.stringify(selectedEquipmentByDay) !== JSON.stringify(goals.equipmentByDay || {});
   const minIncrementLb = Number(data.get("minIncrementLb")) || null;
   const minIncrementChanged = minIncrementLb !== (goals.minIncrementLb ?? null);
   const goalType = data.get("goalType");
@@ -1451,11 +1622,12 @@ goalsForm.addEventListener("submit", async (e) => {
     daysPerWeek: selectedDays.length,
     preferredDays: selectedDays,
     equipment: selectedEquipment,
+    equipmentByDay: selectedEquipmentByDay,
     minIncrementLb
   }, { merge: true });
 
   if ((availabilityChanged || equipmentChanged) && selectedDays.length) {
-    await rebuildSplit(selectedDays.length, selectedEquipment);
+    await rebuildSplit(selectedDays.length, equipmentForScheduledDays(selectedDays, selectedEquipment, selectedEquipmentByDay));
   }
 
   const saved = document.getElementById("goals-saved");
@@ -1608,7 +1780,23 @@ function buildGymDraft(dateKey, dayType) {
       sets: (e.sets || []).map((s) => ({ w: String(s.w ?? ""), r: String(s.r ?? "") }))
     }));
 
-  return { dateKey, dayType, picks, sets, extra };
+  return { dateKey, dayType, picks, sets, extra, notes: existing?.notes || "" };
+}
+
+// No licensed exercise-video source in the catalog (wger has stills only) —
+// this links out to a YouTube search for the exercise name instead of
+// embedding or hosting any video ourselves.
+function youtubeSearchLinkHtml(exerciseName) {
+  const q = encodeURIComponent(`${exerciseName} exercise form`);
+  return `<a class="link-btn" href="https://www.youtube.com/results?search_query=${q}" target="_blank" rel="noopener">Watch form video &#8599;</a>`;
+}
+
+function warmupCooldownHtml(steps, label) {
+  if (!steps || !steps.length) return "";
+  return `<details class="panel" style="margin-bottom:10px;">
+    <summary class="link-btn" style="display:inline;">${label}</summary>
+    <ul class="subtle small">${steps.map((s) => `<li>${s}</li>`).join("")}</ul>
+  </details>`;
 }
 
 function exerciseSlotCardHtml(ex, tgt, sets, rowAttrs) {
@@ -1621,6 +1809,7 @@ function exerciseSlotCardHtml(ex, tgt, sets, rowAttrs) {
     .join("");
   return `
     ${ex.image ? `<img src="${ex.image}" alt="${ex.name} form example" loading="lazy" />` : ""}
+    ${youtubeSearchLinkHtml(ex.name)}
     <p class="gym-cue">${ex.cue}</p>
     <div class="target-line ${tgt.status}">${tgt.note}</div>
     <div class="sets-grid">
@@ -1696,6 +1885,7 @@ function renderGymDayPanel() {
           </div>
           <select data-slot-select="${i}">${options}</select>
           ${ex.image ? `<img src="${ex.image}" alt="${ex.name} form example" loading="lazy" />` : ""}
+    ${youtubeSearchLinkHtml(ex.name)}
           <p class="gym-cue">${ex.cue}</p>
           <div class="target-line ${tgt.status}">${tgt.note}</div>
           <div class="sets-grid">
@@ -1734,7 +1924,9 @@ function renderGymDayPanel() {
       <select id="gym-daytype-select">${typeOptions}</select>
     </div>
     <p class="subtle small" style="margin-top:0;">${selectedDateKey === todayKey() ? "" : `<button type="button" class="link-btn" id="gym-day-today">Jump to today</button> — `}Pick any date on the <button type="button" class="link-btn" data-switch-view="dashboard">Dashboard calendar</button> to come straight here.</p>
+    ${warmupCooldownHtml(WARMUPS_BY_DAYTYPE[dayType], "Warm-up")}
     ${slotsHtml}
+    ${warmupCooldownHtml(COOLDOWNS_BY_DAYTYPE[dayType], "Cool-down")}
 
     <div class="panel" style="padding:0;background:transparent;border:none;margin:0;">
       <h3>Add any other exercise</h3>
@@ -1744,6 +1936,9 @@ function renderGymDayPanel() {
     </div>
     ${extraHtml}
 
+    <label class="small">Notes for today's session (how it felt, anything off — the coach reads these)
+      <textarea id="gym-day-notes" rows="2" placeholder="Optional">${gymDraft.notes || ""}</textarea>
+    </label>
     <button type="button" class="btn primary" id="gym-save-day">Save day</button>
     <p id="gym-saved" class="subtle small" hidden>Saved.</p>
   `;
@@ -1755,9 +1950,12 @@ function renderGymDayPanel() {
 
   function jumpToDate(newDateKey) {
     selectedDateKey = newDateKey;
+    syncLogDatePickers();
     renderGymDayPanel();
     renderDashCalendar();
     renderDashDayPanel();
+    renderTodayEntries();
+    renderFoodEntries();
   }
   document.getElementById("gym-day-prev").addEventListener("click", () => {
     const d = dateFromKey(selectedDateKey);
@@ -1879,10 +2077,13 @@ async function saveGymDay() {
     return;
   }
 
+  const notes = document.getElementById("gym-day-notes")?.value.trim() || null;
+
   await setDoc(doc(db, "users", currentUid, "workoutLogs", gymDraft.dateKey), {
     dateKey: gymDraft.dateKey,
     dayType: gymDraft.dayType,
     entries,
+    notes,
     updatedAt: Timestamp.now()
   });
 
@@ -1893,12 +2094,39 @@ async function saveGymDay() {
   }
 }
 
+// Tagging a calendar event "Cardio" (see EVENT_CATEGORIES) makes the Gym
+// tab aware of it — this is the "add a run to the calendar, see it reflected
+// in the Gym tab" sync Adrian asked for.
+function upcomingCardioEvents() {
+  const today = todayKey();
+  const horizon = todayKey(new Date(new Date().getTime() + 7 * 86400000));
+  return calendarEvents
+    .filter((e) => e.category === "Cardio" && e.dateKey >= today && e.dateKey <= horizon)
+    .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+}
+
 function renderGymCardioEntries() {
   const list = document.getElementById("gym-cardio-entries");
   if (!list) return;
-  const today = todaysEntries().filter((e) => e.type === "cardio");
+  const warmupEl = document.getElementById("gym-cardio-warmup");
+  if (warmupEl && !warmupEl.dataset.rendered) {
+    warmupEl.innerHTML = warmupCooldownHtml(CARDIO_WARMUP, "Warm-up") + warmupCooldownHtml(CARDIO_COOLDOWN, "Cool-down");
+    warmupEl.dataset.rendered = "1";
+  }
+  const upcomingEl = document.getElementById("gym-cardio-upcoming");
+  if (upcomingEl) {
+    const upcoming = upcomingCardioEvents();
+    upcomingEl.innerHTML = upcoming.length
+      ? `<p class="subtle small">Coming up: ${upcoming
+          .map((e) => `${e.title} (${e.dateKey === todayKey() ? "today" : dateFromKey(e.dateKey).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })})`)
+          .join(", ")}</p>`
+      : "";
+  }
+  const heading = document.getElementById("gym-cardio-heading");
+  if (heading) heading.textContent = `${selectedDateLabel()}'s cardio`;
+  const today = entriesForSelectedDate().filter((e) => e.type === "cardio");
   if (!today.length) {
-    list.innerHTML = `<li class="entry-row subtle">Nothing logged yet today.</li>`;
+    list.innerHTML = `<li class="entry-row subtle">Nothing logged yet${selectedDateKey && selectedDateKey !== todayKey() ? "" : " today"}.</li>`;
     return;
   }
   list.innerHTML = today

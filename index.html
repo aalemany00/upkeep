@@ -161,6 +161,13 @@
     <!-- Food -->
     <section id="view-food" class="view">
 
+      <div class="panel" style="padding:10px 16px;">
+        <label class="small">Logging for
+          <input type="date" id="food-log-date" />
+        </label>
+        <button type="button" class="link-btn" id="food-log-date-today" style="margin-left:8px;">Today</button>
+      </div>
+
       <div class="panel">
         <div class="panel-head">
           <h2>Diet suggestions</h2>
@@ -183,7 +190,7 @@
       </form>
 
       <div class="panel">
-        <h2>Today's food</h2>
+        <h2 id="food-entries-heading">Today's food</h2>
         <ul id="food-entries" class="entry-list"></ul>
       </div>
     </section>
@@ -194,6 +201,7 @@
 
       <div class="panel">
         <h2>Cardio</h2>
+        <div id="gym-cardio-upcoming"></div>
         <form class="log-form" id="form-cardio" data-type="cardio">
           <select name="cardioType" required>
             <option value="" disabled selected>Type</option>
@@ -213,7 +221,8 @@
           <input type="text" name="notes" placeholder="Notes (optional)" />
           <button type="submit" class="btn primary small">Log cardio</button>
         </form>
-        <h3 style="margin-top:14px;">Today's cardio</h3>
+        <div id="gym-cardio-warmup"></div>
+        <h3 id="gym-cardio-heading" style="margin-top:14px;">Today's cardio</h3>
         <ul id="gym-cardio-entries" class="entry-list"></ul>
       </div>
 
@@ -222,6 +231,12 @@
 
     <!-- Log (water, weight, activity, vitamins) -->
     <section id="view-log" class="view">
+      <div class="panel" style="padding:10px 16px;">
+        <label class="small">Logging for
+          <input type="date" id="log-log-date" />
+        </label>
+        <button type="button" class="link-btn" id="log-log-date-today" style="margin-left:8px;">Today</button>
+      </div>
       <div class="log-grid">
 
         <form class="log-form" id="form-water" data-type="water">
@@ -259,7 +274,7 @@
       </div>
 
       <div class="panel">
-        <h2>Today's entries</h2>
+        <h2 id="today-entries-heading">Today's entries</h2>
         <ul id="today-entries" class="entry-list"></ul>
       </div>
     </section>
@@ -345,12 +360,58 @@
 
         <h2 style="margin-top:12px;">Equipment</h2>
         <p class="subtle small">Suggested exercises are limited to what you select here. Bodyweight exercises are always included. Leave everything selected if you have full gym access.</p>
+        <label class="small">Editing equipment for
+          <select id="goals-equipment-day-select">
+            <option value="default">Every day (default)</option>
+            <option value="0">Sunday</option>
+            <option value="1">Monday</option>
+            <option value="2">Tuesday</option>
+            <option value="3">Wednesday</option>
+            <option value="4">Thursday</option>
+            <option value="5">Friday</option>
+            <option value="6">Saturday</option>
+          </select>
+        </label>
         <div class="chip-row" id="goals-equipment"></div>
+        <p class="subtle small">A day you haven't customized here uses "Every day." Change this any time — it takes effect the moment you save, even on a day you're already scheduled to train.</p>
+        <button type="button" class="link-btn" id="goals-equipment-reset-day" hidden>Reset this day to "Every day"</button>
 
         <label>Smallest weight jump your gym actually has (lb)
           <input type="number" name="minIncrementLb" min="0" step="0.5" placeholder="e.g. 5" />
         </label>
         <p class="subtle small">If your gym's dumbbells or machines only go up in bigger jumps than an exercise's usual increment, progression targets round up to this instead — so you're never told to add a weight you can't actually load. Leave blank to use each exercise's own increment.</p>
+
+        <h2 style="margin-top:12px;">Holidays</h2>
+        <p class="subtle small">Add your country's public holidays to the calendar automatically (this year and next). Re-run any time — it won't duplicate what's already there.</p>
+        <div class="row">
+          <select id="goals-holiday-country">
+            <option value="">Pick a country…</option>
+            <option value="US">United States</option>
+            <option value="CA">Canada</option>
+            <option value="GB">United Kingdom</option>
+            <option value="AU">Australia</option>
+            <option value="NZ">New Zealand</option>
+            <option value="IE">Ireland</option>
+            <option value="DE">Germany</option>
+            <option value="FR">France</option>
+            <option value="ES">Spain</option>
+            <option value="IT">Italy</option>
+            <option value="NL">Netherlands</option>
+            <option value="MX">Mexico</option>
+            <option value="BR">Brazil</option>
+            <option value="IN">India</option>
+            <option value="JP">Japan</option>
+            <option value="KR">South Korea</option>
+            <option value="CN">China</option>
+            <option value="PH">Philippines</option>
+            <option value="ZA">South Africa</option>
+            <option value="SE">Sweden</option>
+            <option value="NO">Norway</option>
+            <option value="PL">Poland</option>
+          </select>
+          <button type="button" class="btn small" id="goals-holiday-sync-btn">Add holidays</button>
+        </div>
+        <p id="goals-holiday-status" class="subtle small"></p>
 
         <button type="submit" class="btn primary">Save goals</button>
         <p id="goals-saved" class="subtle" hidden>Saved.</p>

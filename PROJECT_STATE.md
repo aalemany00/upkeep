@@ -62,6 +62,23 @@ flag to re-confirm scope before building, not assume it's fine.
   "Log" tab. Vitamins list is user-defined (comma-separated) in Goals.
 - **Dashboard**: today's totals vs. goals (progress bars), vitamins
   checklist, latest coach note preview, and the everything-calendar (below).
+  The Weight tile shows a "last logged {date}" subtitle — it's intentionally
+  sticky (your latest weigh-in persists until you log a new one, it's not
+  meant to reset daily like calories/water/steps), and without that
+  subtitle that read as a bug ("stuck on 157 forever") rather than the
+  intended "this is your current weight."
+- **Backdating**: Food and Log both have a "Logging for" date picker (shares
+  `selectedDateKey` with the Dashboard/Gym calendar — see below), so
+  forgetting to log a day isn't a dead end; you pick that date and log it
+  whenever you remember. Food/Log/Cardio's "today's ___" lists actually
+  follow whichever date is selected (`entriesForSelectedDate()`), while the
+  Dashboard's own stat tiles stay pinned to literal today
+  (`todaysEntries()`) regardless — picking a past date to backdate an entry
+  must never make the Dashboard *look* like it's showing a past day's
+  totals. Vitamin chips exist in both places and had to split the same way:
+  the Dashboard's vitamin chip always marks today; the Log tab's follows the
+  selected date. `addEntry` takes an optional explicit date override for
+  exactly that dashboard-always-means-today case.
 
 ### Everything calendar (Dashboard) — `calendar.js` + the "Calendar" panel in `app.js`
 A general-purpose, fully editable calendar on the Dashboard — not just gym
@@ -75,13 +92,37 @@ external calendars pulled in too.
 - **Recurring events**: a "Repeats" selector on the *new*-event form only
   (not shown when editing — see below) — Does not repeat / Every day / Every
   weekday (Mon–Fri) / Every weekend (Sat–Sun) / Weekly, same day / Monthly,
-  same date — plus an "until" date (defaults to 3 months out). Submitting
-  writes one `calendarEvents` doc per occurrence in a single batch
-  (`calendar.js`'s `generateRecurrenceDates`, capped at 366 occurrences),
-  tagged with a shared `recurrenceGroupId`. Editing or deleting an individual
-  occurrence only touches that one doc — there's no "edit the whole series"
-  yet; `recurrenceGroupId` is stored so that could be added later without a
-  data migration, but isn't used for anything yet.
+  same date / **Yearly, same date** (birthdays, holidays) — plus either an
+  "until" date (defaults to 3 months out) or a **"Repeat forever"** checkbox.
+  "Forever" isn't literal — nothing generates infinite docs — it's capped at
+  10 years out, and `generateRecurrenceDates`'s own 366-occurrence cap still
+  applies on top of that (so "repeat forever, daily" still stops at 366
+  days, not 10 years of daily docs; "forever, yearly" gets a clean 10
+  occurrences, which is the realistic use case — birthdays/anniversaries).
+  Submitting writes one `calendarEvents` doc per occurrence in a single
+  batch (`calendar.js`'s `generateRecurrenceDates`), tagged with a shared
+  `recurrenceGroupId`. Editing or deleting an individual occurrence only
+  touches that one doc — there's no "edit the whole series" yet;
+  `recurrenceGroupId` is stored so that could be added later without a data
+  migration, but isn't used for anything yet.
+- **Event categories** (`EVENT_CATEGORIES` in `app.js`: General, Workout,
+  Cardio, Appointment, Work, Holiday, Birthday, Other) — mostly a label, but
+  "Cardio" does something: `upcomingCardioEvents()` surfaces any Cardio-
+  tagged event in the next 7 days as a "Coming up: {title} ({date})" banner
+  in the Gym tab's Cardio section. This is the "add a run to the calendar,
+  see it reflected in the Gym tab" sync Adrian asked for — adding a
+  Cardio-tagged event is what makes the rest of the app aware of it, not
+  the event existing on the calendar alone.
+- **Country holidays** (Goals → "Holidays"): pick a country, fetch that
+  country's public holidays for this year and next from **date.nager.at**
+  (free, no key, and — confirmed live — sets CORS headers for direct browser
+  fetches, so no relay needed here, unlike the calendar-feed situation) and
+  upsert them as `calendarEvents` (`source: "holiday"`, `category:
+  "Holiday"`, amber color). Idempotent: `externalUid` is
+  `holiday-{countryCode}-{date}`, so re-running the same country updates
+  existing holiday events instead of duplicating them; a manual edit to one
+  (`userEdited: true`) survives a re-sync the same way an edited feed event
+  does.
 - **Gym tab has no calendar of its own anymore** — it was redundant with the
   Dashboard's, per Adrian's ask ("the gym section should automatically sync
   with the one on the dashboard"). `selectedDateKey`/`calViewDate` are now
@@ -305,6 +346,28 @@ person who runs it), not surfaced to end users at all.
   leave a slot with zero options, so a very short equipment list narrows
   suggestions rather than breaking them. Changing equipment in Goals
   rebuilds the split immediately, same as changing availability.
+  - **Per-weekday overrides**: the single equipment list above is the
+    "every day" default; Goals' "Editing equipment for" selector lets you
+    customize specific weekdays instead (home dumbbells Monday, full gym
+    Wednesday/Friday, say), stored sparsely as `goals.equipmentByDay`
+    (`{"1": [...]}, only customized days present). `assignSplit` now accepts
+    either a flat equipment list (legacy/simple — broadcast to every day) or
+    an array of lists, one per split day in the same order as
+    `preferredDays`; `equipmentForScheduledDays()` builds that per-day array
+    by mapping each scheduled weekday to its override or the default. Since
+    this all lives in Goals (not tied to a specific calendar date) it's
+    editable any time and takes effect on the next save's rebuild, same as
+    everything else equipment-related — "life happens, you can go to the
+    gym after all" just means re-saving that day's override.
+  - **Known data-quality gap found while testing this**: several wger
+    catalog entries are named like a machine ("Smith Machine Slight Incline
+    Press", "Machine chest fly", "Shoulder Press, on Machine") but are
+    tagged `equipment: ["Bodyweight"]` in the source data itself — not a bug
+    in the equipment filter, which correctly treats "Bodyweight" as always
+    available; the underlying wger data is just wrong for these entries. Not
+    fixed (would mean manually correcting tags across the 932-exercise
+    catalog) — same "good enough, not perfect" bucket as the ~30% image
+    coverage.
 - **Progression engine** (`gym.js`, `targetFor`): double progression, same
   shape as a standard lifting program — hit the top of the rep range on
   every set → add weight next time; flat for 3 sessions → suggests a swap;
@@ -340,6 +403,26 @@ person who runs it), not surfaced to end users at all.
     array. Slot-based entries carry `slotLabel` (matched back to the UI by
     label, not array position — position breaks once entries can be skipped
     or mixed with extras). Free-form entries carry `extra: true` instead.
+  - **Session notes**: one free-text `notes` field per `workoutLogs` day
+    (not per exercise — kept simple, one box for "how it felt / anything
+    off"), shown in the Gym day panel and surfaced in the Dashboard
+    calendar's "View details" disclosure for that day. Meant as context the
+    weekly coach note can read (`coach-note.js` already pulls the whole
+    `workoutLogs` doc; it just wasn't using `notes` before this existed).
+  - **Warm-up / cool-down** (`warmups.js`): a static, hand-written routine
+    per gym day type (Push/Pull/Legs/Upper/Lower/Full Body) shown as a
+    collapsible `<details>` above the slots / below them, plus one shared
+    cardio warm-up/cool-down shown in the Cardio section. Same "bundled, no
+    AI call" pattern as `exercises.json`/`foods.json` — not personalized,
+    not tied to a logged run-frequency goal, just a reasonable default per
+    day type.
+  - **Form video links**: no licensed exercise-video source exists in the
+    catalog (wger has stills for ~30% of exercises, no video at all, and
+    scraping a commercial app's videos was declined as copyright
+    infringement, not something to build around). Every exercise instead
+    gets a "Watch form video ↗" link that opens a YouTube search for that
+    exercise's name — zero licensing risk, works for all 932 exercises
+    immediately, not a curated/embedded video.
 
 ---
 
@@ -373,12 +456,12 @@ person who runs it), not surfaced to end users at all.
 | Path | Shape | Notes |
 |---|---|---|
 | `profile/me` | `{age, sex, heightIn, startWeightLb, createdAt, updatedAt}` | `updatedAt` drives the coach-review banner |
-| `meta/goals` | `{goalType, activityLevel, daysPerWeek, preferredDays[], calorieGoal, proteinGoal, waterGoal, stepsGoal, weightGoal, vitaminsList[], equipment[], minIncrementLb}` | daily goals + goal/availability/equipment all in one doc. `equipment`/`minIncrementLb` are Goals-only (not onboarding) — missing/empty means "no restriction" |
+| `meta/goals` | `{goalType, activityLevel, daysPerWeek, preferredDays[], calorieGoal, proteinGoal, waterGoal, stepsGoal, weightGoal, vitaminsList[], equipment[], equipmentByDay{}, minIncrementLb}` | daily goals + goal/availability/equipment all in one doc. `equipment`/`equipmentByDay`/`minIncrementLb` are Goals-only (not onboarding) — missing/empty means "no restriction." `equipmentByDay` is sparse: `{"1": [...]}` for a customized weekday only |
 | `split/current` | `gym.assignSplit()` output (`{name, daysPerWeek, days[]}`) | rebuilt on availability change, never touches history |
 | `entries/{id}` | `{type: food\|water\|weight\|activity\|vitamin\|cardio, ...fields, dateKey, createdAt}` | the general log; gym does NOT live here |
-| `workoutLogs/{dateKey}` | `{dateKey, dayType, entries[], updatedAt}` | one doc per logged gym day; entries are slot-based (`slotLabel`) or free-form (`extra:true`) |
+| `workoutLogs/{dateKey}` | `{dateKey, dayType, entries[], notes, updatedAt}` | one doc per logged gym day; entries are slot-based (`slotLabel`) or free-form (`extra:true`); `notes` is one free-text field for the whole session |
 | `coachNotes/{id}` | `{summary, wins[], concerns[], suggestions[], flags[], calorieGoalChange, weekStart, weekEnd, createdAt}` | written only by `coach-note.js`, via the Admin SDK (bypasses security rules) |
-| `calendarEvents/{id}` | `{title, dateKey, endDateKey, allDay, startTime, endTime, color, notes, source: manual\|feed, feedId?, externalUid?, userEdited?, recurring?, recurrenceGroupId?, createdAt}` | manual + feed-imported events; `endDateKey >= dateKey` for multi-day spans; `recurrenceGroupId` shared by every occurrence of one recurring-event submission |
+| `calendarEvents/{id}` | `{title, dateKey, endDateKey, allDay, startTime, endTime, color, category, notes, source: manual\|feed\|holiday, feedId?, holidayCountry?, externalUid?, userEdited?, recurring?, recurrenceGroupId?, createdAt}` | manual + feed-imported + holiday events; `endDateKey >= dateKey` for multi-day spans; `recurrenceGroupId` shared by every occurrence of one recurring-event submission; `category` drives the Gym tab's upcoming-Cardio banner |
 | `calendarFeeds/{id}` | `{label, url, color, lastSyncedAt, lastSyncError, createdAt}` | one doc per imported iCal/webcal feed subscription |
 
 Security rules (`firestore.rules`): a single wildcard match,
@@ -396,7 +479,8 @@ style.css               # all styling, dark theme
 app.js                  # all client logic: auth, Firestore subscriptions, every view's render + handlers
 gym.js                  # pure functions: assignSplit, targetFor (no DOM/Firebase)
 nutrition.js            # pure functions: computeDailyGoals, GOAL_LABELS, ACTIVITY_LEVELS (no DOM/Firebase)
-calendar.js             # pure functions: parseICS, occursOnDate, isEventExpired (no DOM/Firebase/network)
+calendar.js             # pure functions: parseICS, occursOnDate, isEventExpired, generateRecurrenceDates (no DOM/Firebase/network)
+warmups.js              # static warm-up/cool-down routine data per gym day type + cardio
 exercises.json           # 932-exercise static catalog (seeded, not hand-written)
 foods.json              # 60-item static diet-suggestion catalog (hand-written)
 firebase-config.js      # real Firebase project config (public-safe, committed)

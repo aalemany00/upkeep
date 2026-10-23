@@ -211,12 +211,18 @@ function candidatesForSlot(catalog, muscles, excludeIds, pattern, availableEquip
 // Builds a full split from scratch. Deterministic, instant, no AI call —
 // this is "plain code decides the mechanical mapping" (see CLAUDE.md);
 // the weekly coach note is where qualitative judgment comes in.
-// `equipmentList`: array of EQUIPMENT_OPTIONS strings the user has, or
-// null/undefined for no restriction (everything available).
-export function assignSplit(daysPerWeek, catalog, equipmentList) {
+// `equipmentInput`: either a flat array of EQUIPMENT_OPTIONS strings applied
+// to every day (legacy/simple case), or an array of arrays — one equipment
+// list per split day, same order as `daysPerWeek`/`preferredDays` — so a
+// Monday-at-home, Wednesday-at-the-gym kind of week can suggest differently
+// per day instead of one all-or-nothing equipment setting. null/undefined
+// or an empty list means no restriction (everything available) for that day.
+export function assignSplit(daysPerWeek, catalog, equipmentInput) {
   const days = clampDays(daysPerWeek);
   const template = SPLIT_TEMPLATES[days];
-  const availableEquipment = equipmentList && equipmentList.length ? new Set(equipmentList) : null;
+  const perDayEquipment = Array.isArray(equipmentInput) && Array.isArray(equipmentInput[0])
+    ? equipmentInput
+    : null; // flat list (or nothing) — same equipment set broadcast to every day below
 
   return {
     name: template.name,
@@ -224,6 +230,8 @@ export function assignSplit(daysPerWeek, catalog, equipmentList) {
     algoVersion: SPLIT_ALGO_VERSION,
     days: template.dayTypes.map((dayType, i) => {
       const usedToday = new Set();
+      const dayEquipmentList = perDayEquipment ? perDayEquipment[i] : equipmentInput;
+      const availableEquipment = dayEquipmentList && dayEquipmentList.length ? new Set(dayEquipmentList) : null;
       return {
         key: `${dayType.replace(/\s+/g, "")}${i}`,
         dayType,
