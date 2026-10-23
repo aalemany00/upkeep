@@ -28,7 +28,33 @@ function musclesFor(...groups) {
 // user's stored split predates the current logic — otherwise a fix here
 // would only apply to the next person who re-onboards or changes
 // availability, not to anyone with an existing split already in Firestore.
-export const SPLIT_ALGO_VERSION = 2;
+export const SPLIT_ALGO_VERSION = 3;
+
+// Equipment a user can pick from in Goals (exercises.json's `equipment`
+// field, minus the two "no equipment needed" markers below, which are
+// always treated as available — nobody needs to opt into bodyweight work).
+export const EQUIPMENT_OPTIONS = [
+  "Barbell",
+  "SZ-Bar",
+  "Dumbbell",
+  "Kettlebell",
+  "Cable machine",
+  "Bench",
+  "Incline bench",
+  "Pull-up bar",
+  "Resistance band",
+  "Swiss Ball",
+  "Gym mat"
+];
+const NO_EQUIPMENT_NEEDED = new Set(["Bodyweight", "none (bodyweight exercise)"]);
+
+// `availableEquipment` is a Set (what the user has) or null/undefined
+// (no restriction — the default for anyone who hasn't set this up, so
+// existing users see no behavior change until they opt in via Goals).
+function hasAvailableEquipment(ex, availableEquipment) {
+  if (!availableEquipment) return true;
+  return ex.equipment.every((eq) => NO_EQUIPMENT_NEEDED.has(eq) || availableEquipment.has(eq));
+}
 
 // Human-readable muscle target shown in the UI alongside each slot's
 // movement-pattern label (e.g. "Squat pattern — Quads"), so the muscle being
@@ -160,17 +186,23 @@ function matchesPattern(pattern, name) {
   return typeof pattern === "function" ? pattern(name) : pattern.test(name);
 }
 
-function candidatesForSlot(catalog, muscles, excludeIds, pattern) {
+function candidatesForSlot(catalog, muscles, excludeIds, pattern, availableEquipment) {
   const byMuscle = catalog.filter(
     (ex) => !excludeIds.has(ex.id) && ex.muscles.some((m) => muscles.includes(m))
   );
+  // Prefer exercises the user can actually do with their equipment. Falls
+  // back to the unfiltered muscle match if that would leave nothing (e.g.
+  // someone with almost no equipment selected) — equipment should narrow
+  // the pool, never leave a slot with zero options.
+  const eqFiltered = byMuscle.filter((ex) => hasAvailableEquipment(ex, availableEquipment));
+  const equipmentPool = eqFiltered.length ? eqFiltered : byMuscle;
   // Prefer exercises that actually match this slot's movement pattern (e.g.
   // a real hinge for "Hip hinge", not just anything that happens to touch
-  // hamstrings/glutes). Fall back to the plain muscle match if the pattern
-  // filter would leave nothing — a pattern should narrow the pool, never
-  // empty it.
-  const preferred = pattern ? byMuscle.filter((ex) => matchesPattern(pattern, ex.name)) : [];
-  const pool = preferred.length ? preferred : byMuscle;
+  // hamstrings/glutes). Fall back to the equipment-filtered match if the
+  // pattern filter would leave nothing — a pattern should narrow the pool,
+  // never empty it.
+  const preferred = pattern ? equipmentPool.filter((ex) => matchesPattern(pattern, ex.name)) : [];
+  const pool = preferred.length ? preferred : equipmentPool;
   return pool
     .sort((a, b) => (b.image ? 1 : 0) - (a.image ? 1 : 0) || a.name.localeCompare(b.name))
     .slice(0, 6);
@@ -179,9 +211,12 @@ function candidatesForSlot(catalog, muscles, excludeIds, pattern) {
 // Builds a full split from scratch. Deterministic, instant, no AI call —
 // this is "plain code decides the mechanical mapping" (see CLAUDE.md);
 // the weekly coach note is where qualitative judgment comes in.
-export function assignSplit(daysPerWeek, catalog) {
+// `equipmentList`: array of EQUIPMENT_OPTIONS strings the user has, or
+// null/undefined for no restriction (everything available).
+export function assignSplit(daysPerWeek, catalog, equipmentList) {
   const days = clampDays(daysPerWeek);
   const template = SPLIT_TEMPLATES[days];
+  const availableEquipment = equipmentList && equipmentList.length ? new Set(equipmentList) : null;
 
   return {
     name: template.name,
@@ -193,7 +228,7 @@ export function assignSplit(daysPerWeek, catalog) {
         key: `${dayType.replace(/\s+/g, "")}${i}`,
         dayType,
         slots: SLOT_TEMPLATES[dayType].map((slot) => {
-          const options = candidatesForSlot(catalog, slot.muscles, usedToday, slot.pattern);
+          const options = candidatesForSlot(catalog, slot.muscles, usedToday, slot.pattern, availableEquipment);
           // Exclude every option shown for this slot, not just the default,
           // from every later slot today — otherwise the same exercise can
           // sit in two slots' dropdowns at once (not literally recommended
@@ -220,8 +255,16 @@ export function assignSplit(daysPerWeek, catalog) {
 
 // history: array of past logs for ONE exercise, oldest to newest, each
 // `{ sets: [{ w, r }, ...] }` with r > 0. exerciseMeta: `{ sets, lo, hi, inc }`.
-export function targetFor(history, exerciseMeta) {
-  const { sets: targetSets, lo, hi, inc } = exerciseMeta;
+// `minIncrementLb`: the smallest weight jump actually available (e.g. a
+// gym whose dumbbells only go up by 5lb) — 0/undefined means "trust each
+// exercise's own built-in increment as-is" (prior behavior, so anyone who
+// hasn't set this in Goals sees no change). Only applied to exercises that
+// are loadable at all (inc > 0); it never forces a weight jump onto a
+// bodyweight-classified movement (inc === 0), since those progress by
+// reps/tempo, not plates.
+export function targetFor(history, exerciseMeta, minIncrementLb = 0) {
+  const { sets: targetSets, lo, hi, inc: exerciseInc } = exerciseMeta;
+  const inc = exerciseInc > 0 ? Math.max(exerciseInc, minIncrementLb || 0) : exerciseInc;
 
   if (!history.length) {
     return { status: "new", weight: null, note: `First time — pick a weight where your first set lands in ${lo}-${hi} reps with a couple left in the tank.` };

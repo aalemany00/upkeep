@@ -9,7 +9,7 @@ import {
   getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc,
   query, orderBy, limit, onSnapshot, writeBatch, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { assignSplit, targetFor, MUSCLE_LABEL_BY_SLOT, SPLIT_ALGO_VERSION } from "./gym.js";
+import { assignSplit, targetFor, MUSCLE_LABEL_BY_SLOT, SPLIT_ALGO_VERSION, EQUIPMENT_OPTIONS } from "./gym.js";
 import { computeDailyGoals, GOAL_LABELS } from "./nutrition.js";
 
 const app = initializeApp(firebaseConfig);
@@ -37,6 +37,13 @@ let coachNotes = [];   // generated weekly notes, newest first
 let profile = null;    // bio: age/sex/height/starting weight — null until onboarding finishes
 let split = null;      // the assigned workout split (gym.assignSplit output)
 let workoutLogs = [];  // one doc per logged gym day, newest first
+
+// All targetFor() calls route through this so "smallest weight jump
+// available" (Goals) is applied consistently everywhere a progression
+// target is computed, not just in one place.
+function targetForUser(history, exerciseMeta) {
+  return targetFor(history, exerciseMeta, goals.minIncrementLb || 0);
+}
 let workoutLogsReady = false; // has the live workoutLogs subscription delivered its first real snapshot yet
 
 let exerciseCatalog = [];
@@ -186,16 +193,47 @@ function renderDayChips(container, selectedDays, onToggle) {
   });
 }
 
-async function rebuildSplit(daysPerWeek) {
+// Equipment multi-select, same toggle-chip pattern as the weekday picker.
+function renderEquipmentChips(container, selectedEquipment, onToggle) {
+  container.innerHTML = EQUIPMENT_OPTIONS
+    .map((eq) => `<button type="button" class="chip-btn ${selectedEquipment.includes(eq) ? "taken" : ""}" data-eq="${eq}">${eq}</button>`)
+    .join("");
+  container.querySelectorAll("[data-eq]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const eq = btn.dataset.eq;
+      const next = selectedEquipment.includes(eq) ? selectedEquipment.filter((e) => e !== eq) : [...selectedEquipment, eq];
+      onToggle(next);
+    });
+  });
+}
+
+async function rebuildSplit(daysPerWeek, equipmentList) {
   if (!currentUid) return;
   await catalogReady;
   if (!exerciseCatalog.length) {
     alert("Couldn't load the exercise catalog, so your split wasn't rebuilt. Reload the page and try again.");
     return;
   }
-  const newSplit = assignSplit(daysPerWeek, exerciseCatalog);
+  const newSplit = assignSplit(daysPerWeek, exerciseCatalog, equipmentList);
   await setDoc(doc(db, "users", currentUid, "split", "current"), newSplit);
   return newSplit;
+}
+
+// A split built under an older slot-assignment algorithm (e.g. before a bug
+// fix to which exercises get suggested) otherwise never refreshes until the
+// user happens to change availability or equipment — silently rebuild it
+// instead, same daysPerWeek/equipment, no AI call, logged history untouched.
+// Called from both the split and goals listeners (whichever's snapshot
+// arrives last has both pieces of data loaded) so the rebuild uses real
+// equipment prefs instead of running once, before goals has loaded, with no
+// restriction.
+let staleSplitRebuildInFlight = false;
+function maybeRebuildStaleSplit() {
+  if (!split || split.algoVersion === SPLIT_ALGO_VERSION || staleSplitRebuildInFlight) return;
+  staleSplitRebuildInFlight = true;
+  rebuildSplit(split.daysPerWeek, goals.equipment).finally(() => {
+    staleSplitRebuildInFlight = false;
+  });
 }
 
 let onboardingDays = DEFAULT_DAY_PATTERN[3];
@@ -306,6 +344,7 @@ function subscribeAll(uid) {
     fillGoalsForm();
     renderDashboard();
     renderVitaminChips();
+    maybeRebuildStaleSplit();
   });
 
   const coachQuery = query(collection(db, "users", uid, "coachNotes"), orderBy("createdAt", "desc"), limit(20));
@@ -327,13 +366,7 @@ function subscribeAll(uid) {
   unsubSplit = onSnapshot(splitRef, (snap) => {
     split = snap.exists() ? snap.data() : null;
     renderGym();
-    // A split built under an older slot-assignment algorithm (e.g. before a
-    // bug fix to which exercises get suggested) otherwise never refreshes
-    // until the user happens to change availability — silently rebuild it
-    // here instead, same daysPerWeek, no AI call, logged history untouched.
-    if (split && split.algoVersion !== SPLIT_ALGO_VERSION) {
-      rebuildSplit(split.daysPerWeek);
-    }
+    maybeRebuildStaleSplit();
   });
 
   const workoutsQuery = query(collection(db, "users", uid, "workoutLogs"), orderBy("dateKey", "desc"), limit(200));
@@ -725,10 +758,16 @@ function renderCoachReviewBanner() {
 
 const goalsForm = document.getElementById("goals-form");
 const goalsDaysEl = document.getElementById("goals-days");
+const goalsEquipmentEl = document.getElementById("goals-equipment");
 let goalsDays = [1, 3, 5];
+let goalsEquipment = EQUIPMENT_OPTIONS.slice();
 
 function drawGoalsDays() {
   renderDayChips(goalsDaysEl, goalsDays, (next) => { goalsDays = next; drawGoalsDays(); });
+}
+
+function drawGoalsEquipment() {
+  renderEquipmentChips(goalsEquipmentEl, goalsEquipment, (next) => { goalsEquipment = next; drawGoalsEquipment(); });
 }
 
 function fillGoalsForm() {
@@ -748,6 +787,10 @@ function fillGoalsForm() {
   goalsForm.daysPerWeek.value = goals.daysPerWeek ?? 3;
   goalsDays = goals.preferredDays || DEFAULT_DAY_PATTERN[goals.daysPerWeek || 3];
   drawGoalsDays();
+
+  goalsForm.minIncrementLb.value = goals.minIncrementLb ?? "";
+  goalsEquipment = goals.equipment && goals.equipment.length ? goals.equipment : EQUIPMENT_OPTIONS.slice();
+  drawGoalsEquipment();
 }
 
 goalsForm.addEventListener("submit", async (e) => {
@@ -759,14 +802,21 @@ goalsForm.addEventListener("submit", async (e) => {
     .map((s) => s.trim())
     .filter(Boolean);
 
-  // Snapshot goalsDays now — writing the profile doc below triggers its
-  // onSnapshot listener, which calls fillGoalsForm() and would otherwise
-  // reset this module-level variable mid-submit (a real race that silently
-  // dropped availability changes — confirmed by testing).
+  // Snapshot goalsDays/goalsEquipment now — writing the profile doc below
+  // triggers its onSnapshot listener, which calls fillGoalsForm() and would
+  // otherwise reset these module-level variables mid-submit (the same race
+  // that silently dropped availability changes before — confirmed by
+  // testing — would do the same to equipment).
   const selectedDays = goalsDays.slice();
+  const selectedEquipment = goalsEquipment.slice();
 
   const availabilityChanged = selectedDays.length !== (goals.daysPerWeek || 0)
     || JSON.stringify(selectedDays) !== JSON.stringify(goals.preferredDays || []);
+  const priorEquipment = goals.equipment && goals.equipment.length ? goals.equipment : EQUIPMENT_OPTIONS;
+  const equipmentChanged = JSON.stringify(selectedEquipment.slice().sort())
+    !== JSON.stringify(priorEquipment.slice().sort());
+  const minIncrementLb = Number(data.get("minIncrementLb")) || null;
+  const minIncrementChanged = minIncrementLb !== (goals.minIncrementLb ?? null);
   const goalType = data.get("goalType");
   const activityLevel = data.get("activityLevel");
   const goalTypeChanged = goalType !== goals.goalType;
@@ -781,7 +831,8 @@ goalsForm.addEventListener("submit", async (e) => {
   const bioChanged = ["age", "sex", "heightIn", "startWeightLb"].some(
     (key) => newProfileFields[key] !== (profile?.[key] ?? (key === "sex" ? undefined : NaN))
   );
-  const settingsChanged = availabilityChanged || goalTypeChanged || bioChanged || activityLevelChanged;
+  const settingsChanged = availabilityChanged || goalTypeChanged || bioChanged || activityLevelChanged
+    || equipmentChanged || minIncrementChanged;
 
   await setDoc(doc(db, "users", currentUid, "profile", "me"), {
     ...newProfileFields,
@@ -817,11 +868,13 @@ goalsForm.addEventListener("submit", async (e) => {
     goalType,
     activityLevel,
     daysPerWeek: selectedDays.length,
-    preferredDays: selectedDays
+    preferredDays: selectedDays,
+    equipment: selectedEquipment,
+    minIncrementLb
   }, { merge: true });
 
-  if (availabilityChanged && selectedDays.length) {
-    await rebuildSplit(selectedDays.length);
+  if ((availabilityChanged || equipmentChanged) && selectedDays.length) {
+    await rebuildSplit(selectedDays.length, selectedEquipment);
   }
 
   const saved = document.getElementById("goals-saved");
@@ -962,7 +1015,7 @@ function buildGymDraft(dateKey, dayType) {
       return existingSets.map((s) => ({ w: String(s.w ?? ""), r: String(s.r ?? "") }));
     }
     const exMeta = exerciseById.get(exId);
-    const tgt = exMeta ? targetFor(historyForExercise(exId, dateKey), exMeta) : null;
+    const tgt = exMeta ? targetForUser(historyForExercise(exId, dateKey), exMeta) : null;
     const n = exMeta?.sets || 3;
     return Array.from({ length: n }, () => ({ w: tgt?.weight != null ? String(tgt.weight) : "", r: "" }));
   });
@@ -1075,7 +1128,7 @@ function renderGymDayPanel() {
       const exId = gymDraft.picks[i];
       const ex = exerciseById.get(exId);
       if (!ex) return "";
-      const tgt = targetFor(historyForExercise(exId, selectedDateKey), ex);
+      const tgt = targetForUser(historyForExercise(exId, selectedDateKey), ex);
       const options = slot.options
         .map((id) => `<option value="${id}" ${id === exId ? "selected" : ""}>${exerciseById.get(id)?.name || id}</option>`)
         .join("");
@@ -1114,7 +1167,7 @@ function renderGymDayPanel() {
     .map((item, i) => {
       const ex = exerciseById.get(item.exerciseId);
       if (!ex) return "";
-      const tgt = targetFor(historyForExercise(item.exerciseId, selectedDateKey), ex);
+      const tgt = targetForUser(historyForExercise(item.exerciseId, selectedDateKey), ex);
       return `
         <div class="gym-slot">
           <div class="gym-slot-head">
@@ -1156,7 +1209,7 @@ function renderGymDayPanel() {
       const i = Number(e.target.dataset.slotSelect);
       gymDraft.picks[i] = Number(e.target.value);
       const ex = exerciseById.get(gymDraft.picks[i]);
-      const tgt = targetFor(historyForExercise(gymDraft.picks[i], selectedDateKey), ex);
+      const tgt = targetForUser(historyForExercise(gymDraft.picks[i], selectedDateKey), ex);
       gymDraft.sets[i] = Array.from({ length: ex.sets }, () => ({ w: tgt.weight != null ? String(tgt.weight) : "", r: "" }));
       renderGymDayPanel();
     });
@@ -1193,7 +1246,7 @@ function renderGymDayPanel() {
       btn.addEventListener("click", () => {
         const exId = Number(btn.dataset.addExercise);
         const ex = exerciseById.get(exId);
-        const tgt = targetFor(historyForExercise(exId, selectedDateKey), ex);
+        const tgt = targetForUser(historyForExercise(exId, selectedDateKey), ex);
         gymDraft.extra.push({
           exerciseId: exId,
           sets: Array.from({ length: ex.sets }, () => ({ w: tgt.weight != null ? String(tgt.weight) : "", r: "" }))

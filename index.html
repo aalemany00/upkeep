@@ -296,6 +296,15 @@
         <div class="chip-row" id="goals-days"></div>
         <p class="subtle small">Changing days/availability rebuilds your split the moment you save — your logged history is never touched.</p>
 
+        <h2 style="margin-top:12px;">Equipment</h2>
+        <p class="subtle small">Suggested exercises are limited to what you select here. Bodyweight exercises are always included. Leave everything selected if you have full gym access.</p>
+        <div class="chip-row" id="goals-equipment"></div>
+
+        <label>Smallest weight jump your gym actually has (lb)
+          <input type="number" name="minIncrementLb" min="0" step="0.5" placeholder="e.g. 5" />
+        </label>
+        <p class="subtle small">If your gym's dumbbells or machines only go up in bigger jumps than an exercise's usual increment, progression targets round up to this instead — so you're never told to add a weight you can't actually load. Leave blank to use each exercise's own increment.</p>
+
         <button type="submit" class="btn primary">Save goals</button>
         <p id="goals-saved" class="subtle" hidden>Saved.</p>
       </form>

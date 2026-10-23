@@ -174,11 +174,35 @@ coach-note.js`) by Adrian on his own machine:
     recomposition). It now has 9 slots and covers every `MUSCLE_GROUPS`
     entry. Verified by generating a split for every day count (1–6) and
     checking the full week's slot muscle labels cover all 11 groups.
+- **Equipment** (`gym.js`'s `EQUIPMENT_OPTIONS`, Goals tab): a multi-select
+  (Barbell, Dumbbell, Cable machine, Kettlebell, Pull-up bar, etc. — see the
+  constant for the full list) that restricts `candidatesForSlot`'s pool to
+  exercises the user can actually do. Bodyweight-only exercises (wger's
+  "Bodyweight" / "none (bodyweight exercise)" equipment tags) are always
+  available regardless of selection — nobody opts into bodyweight work.
+  `undefined`/empty selection means no restriction (the default for every
+  existing user and for new signups, since onboarding doesn't ask about
+  equipment — it's Goals-only, same pattern as target weight/vitamins).
+  Falls back to the unfiltered muscle pool if equipment filtering would
+  leave a slot with zero options, so a very short equipment list narrows
+  suggestions rather than breaking them. Changing equipment in Goals
+  rebuilds the split immediately, same as changing availability.
 - **Progression engine** (`gym.js`, `targetFor`): double progression, same
   shape as a standard lifting program — hit the top of the rep range on
   every set → add weight next time; flat for 3 sessions → suggests a swap;
   reps fall below range → drop weight. Pure function: history in, target
   out.
+  - Takes an optional `minIncrementLb` (Goals: "smallest weight jump your
+    gym actually has") — when an exercise is loadable at all (`inc > 0`),
+    the engine uses `max(exercise's own inc, minIncrementLb)` instead of the
+    exercise's built-in increment, so it never suggests a weight jump the
+    user's gym can't physically do (e.g. dumbbells that only go up by 5lb
+    while an exercise's own heuristic increment is 2.5lb). Never applied to
+    bodyweight-classified exercises (`inc === 0`) — those progress by
+    reps/tempo, not plates. 0/unset preserves the exact prior behavior.
+    `app.js` routes every `targetFor` call through a `targetForUser` wrapper
+    so this applies everywhere a progression target is computed, not just
+    one call site.
 - **Calendar** (built-in, no external import): a month grid showing which
   weekdays are scheduled (from availability + split) and which are logged.
   Click a day to open its panel. Google Calendar/external import was asked
@@ -229,7 +253,7 @@ coach-note.js`) by Adrian on his own machine:
 | Path | Shape | Notes |
 |---|---|---|
 | `profile/me` | `{age, sex, heightIn, startWeightLb, createdAt, updatedAt}` | `updatedAt` drives the coach-review banner |
-| `meta/goals` | `{goalType, activityLevel, daysPerWeek, preferredDays[], calorieGoal, proteinGoal, waterGoal, stepsGoal, weightGoal, vitaminsList[]}` | daily goals + goal/availability all in one doc |
+| `meta/goals` | `{goalType, activityLevel, daysPerWeek, preferredDays[], calorieGoal, proteinGoal, waterGoal, stepsGoal, weightGoal, vitaminsList[], equipment[], minIncrementLb}` | daily goals + goal/availability/equipment all in one doc. `equipment`/`minIncrementLb` are Goals-only (not onboarding) — missing/empty means "no restriction" |
 | `split/current` | `gym.assignSplit()` output (`{name, daysPerWeek, days[]}`) | rebuilt on availability change, never touches history |
 | `entries/{id}` | `{type: food\|water\|weight\|activity\|vitamin, ...fields, dateKey, createdAt}` | the general log; gym does NOT live here |
 | `workoutLogs/{dateKey}` | `{dateKey, dayType, entries[], updatedAt}` | one doc per logged gym day; entries are slot-based (`slotLabel`) or free-form (`extra:true`) |
