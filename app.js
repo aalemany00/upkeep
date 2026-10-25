@@ -2278,6 +2278,13 @@ function coachNoteHtml(note) {
   const range = note.weekStart && note.weekEnd ? `${note.weekStart} – ${note.weekEnd}` : "";
   const list = (items) => (items && items.length ? `<ul>${items.map((i) => `<li>${i}</li>`).join("")}</ul>` : "");
   const change = note.calorieGoalChange;
+  const progressionTableHtml = note.progressionTable?.length
+    ? `<h4>Next session targets</h4>
+       <table class="progression-table">
+         <tr><th>Exercise</th><th>This week</th><th>Next time</th></tr>
+         ${note.progressionTable.map((p) => `<tr><td>${p.exercise}</td><td>${p.thisWeek}</td><td>${p.nextTime}</td></tr>`).join("")}
+       </table>`
+    : "";
   return `
     <div class="coach-note-meta">${range}</div>
     <p>${note.summary || ""}</p>
@@ -2285,6 +2292,8 @@ function coachNoteHtml(note) {
     ${note.concerns?.length ? `<h4>Worth watching</h4>${list(note.concerns)}` : ""}
     ${note.flags?.length ? `<h4>Flagged</h4>${list(note.flags)}` : ""}
     ${note.suggestions?.length ? `<h4>Try this week</h4>${list(note.suggestions)}` : ""}
+    ${progressionTableHtml}
+    ${note.exerciseNotes?.length ? `<h4>Exercise notes</h4>${list(note.exerciseNotes)}` : ""}
     ${change ? `
       <p class="subtle small">Suggests ${change > 0 ? "adding" : "cutting"} ${Math.abs(change)} kcal/day.
         <button class="link-btn" data-apply-calorie="${change}">Apply</button>

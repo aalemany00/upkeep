@@ -337,8 +337,30 @@ change in next time.
   targets yourself** — that's `gym.js`'s job, the model only comments on
   cross-session patterns.
 - Output is validated JSON (`summary`, `wins`, `concerns`, `suggestions`,
-  `flags`, `calorieGoalChange`) — if it doesn't parse, nothing is written.
-  `calorieGoalChange` gets an "Apply" button in the Coach tab.
+  `flags`, `exerciseNotes`, `calorieGoalChange`) — if it doesn't parse,
+  nothing is written. `calorieGoalChange` gets an "Apply" button in the
+  Coach tab.
+- **Per-exercise "next session" table** (`progressionTable` on the written
+  doc): Adrian compared this note's gym advice against a prior Claude.ai
+  prototype ("Lift Log") that gave a precise, per-exercise "this week / next
+  time" table — this note's gym feedback was comparatively vague by
+  contrast, because the prompt explicitly forbade the model from stating any
+  per-set numbers (to stop it inventing or contradicting the real
+  double-progression math), but never gave it anywhere to present the real
+  numbers either. Fixed without weakening that boundary: `coach-note.js` now
+  computes the table itself — `buildProgressionTable` calls `gym.js`'s
+  `targetFor` directly (same function, same math as the live Gym tab) for
+  every exercise logged that week, using the user's *full* workout history
+  (a second, unfiltered `workoutLogs` query — the week-scoped one alone
+  isn't enough context for an accurate target). `progressionTable` is
+  attached to the Firestore doc directly in plain code, never part of what
+  Claude outputs or what `parseNote` validates — the model cannot touch it.
+  The model's only new job is `exerciseNotes`: at most one short, generic,
+  non-diagnostic form cue per exercise where one's actually useful (not
+  padded for every row), plus directly answering any genuine form/technique
+  question found in a day's own session `notes` field — notes are still
+  explicitly framed as untrusted data to read, not instructions to follow,
+  so this is "answer a real question in it," not "do what it says."
 
 ---
 
@@ -544,7 +566,7 @@ change in next time.
 | `split/current` | `gym.assignSplit()` output (`{name, daysPerWeek, days[]}`) | rebuilt on availability change, never touches history |
 | `entries/{id}` | `{type: food\|water\|weight\|activity\|vitamin\|cardio, ...fields, dateKey, createdAt}` | the general log; gym does NOT live here |
 | `workoutLogs/{dateKey}` | `{dateKey, dayType, entries[], notes, updatedAt}` | one doc per logged gym day; entries are slot-based (`slotLabel`) or free-form (`extra:true`); `notes` is one free-text field for the whole session |
-| `coachNotes/{id}` | `{summary, wins[], concerns[], suggestions[], flags[], calorieGoalChange, weekStart, weekEnd, createdAt}` | written only by `coach-note.js`, via the Admin SDK (bypasses security rules) |
+| `coachNotes/{id}` | `{summary, wins[], concerns[], suggestions[], flags[], exerciseNotes[], progressionTable[] ({exercise, thisWeek, nextTime}), calorieGoalChange, weekStart, weekEnd, createdAt}` | written only by `coach-note.js`, via the Admin SDK (bypasses security rules). `progressionTable` is plain-code computed, not part of what the model outputs |
 | `calendarEvents/{id}` | `{title, dateKey, endDateKey, allDay, startTime, endTime, color, category, notes, source: manual\|feed\|holiday, feedId?, holidayCountry?, externalUid?, userEdited?, recurring?, recurrenceGroupId?, createdAt}` | manual + feed-imported + holiday events; `endDateKey >= dateKey` for multi-day spans; `recurrenceGroupId` shared by every occurrence of one recurring-event submission; `category` drives the Gym tab's upcoming-Cardio banner |
 | `calendarFeeds/{id}` | `{label, url, color, lastSyncedAt, lastSyncError, createdAt}` | one doc per imported iCal/webcal feed subscription |
 
