@@ -2274,7 +2274,7 @@ function renderGym() {
 // ---------------------------------------------------------------------
 // Coach view
 // ---------------------------------------------------------------------
-function coachNoteHtml(note) {
+function coachNoteHtml(note, showDelete) {
   const range = note.weekStart && note.weekEnd ? `${note.weekStart} – ${note.weekEnd}` : "";
   const list = (items) => (items && items.length ? `<ul>${items.map((i) => `<li>${i}</li>`).join("")}</ul>` : "");
   const change = note.calorieGoalChange;
@@ -2299,7 +2299,13 @@ function coachNoteHtml(note) {
         <button class="link-btn" data-apply-calorie="${change}">Apply</button>
       </p>` : ""}
     <p class="subtle small" style="margin-top:10px;">Not medical or nutrition advice — a rule-of-thumb estimate from your own logged data. Check with a doctor or dietitian for anything health-related.</p>
+    ${showDelete ? `<button type="button" class="link-btn" data-delete-note="${note.id}">Delete this note</button>` : ""}
   `;
+}
+
+async function deleteCoachNote(id) {
+  if (!currentUid) return;
+  await deleteDoc(doc(db, "users", currentUid, "coachNotes", id));
 }
 
 function renderCoachNotes() {
@@ -2309,8 +2315,11 @@ function renderCoachNotes() {
     return;
   }
   el.innerHTML = coachNotes
-    .map((n) => `<div class="coach-note" style="margin-bottom:20px;border-top:1px solid var(--panel-border);padding-top:12px;">${coachNoteHtml(n)}</div>`)
+    .map((n) => `<div class="coach-note" style="margin-bottom:20px;border-top:1px solid var(--panel-border);padding-top:12px;">${coachNoteHtml(n, true)}</div>`)
     .join("");
   wireApplyButtons(el);
+  el.querySelectorAll("[data-delete-note]").forEach((btn) => {
+    btn.addEventListener("click", () => deleteCoachNote(btn.dataset.deleteNote));
+  });
   renderCoachPreview();
 }
