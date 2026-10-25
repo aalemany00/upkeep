@@ -50,3 +50,50 @@ own note in their own app's **Coach** tab.
 Run this whenever you want fresh notes generated — once a week is the
 intended rhythm, but there's nothing stopping you from running it more
 often.
+
+## Automated weekly run (optional, recommended)
+
+Running this by hand means notes only appear when you remember to — which
+doesn't scale once other people (friends/family/classmates) are relying on
+it. `.github/workflows/coach-note.yml` runs this same script on a schedule
+(Sundays by default) via GitHub Actions, so it happens without you.
+
+**This is still free** — it authenticates with a Claude *subscription* OAuth
+token, not a paid API key, so it draws on the same course Claude Code access
+the script already uses locally, not pay-as-you-go billing. GitHub Actions
+minutes are free too at this scale (one short run a week, well under the
+free tier). You still need instructor sign-off before anything that *isn't*
+this — this only automates the existing manual script, same architecture.
+
+One-time setup (do this yourself — these are real credentials, don't share
+them with anyone, including in chat with an AI):
+
+1. **Generate a Claude subscription token.** On a machine where you're
+   logged into the Claude Code CLI, run:
+   ```bash
+   claude setup-token
+   ```
+   Follow the prompt — it opens a browser flow and prints a long-lived
+   token (valid about a year) tied to your own subscription/course access.
+2. **Base64-encode your Firebase service account key** (the same
+   `serviceAccountKey.json` from the one-time setup above):
+   ```bash
+   # Windows (PowerShell):
+   [Convert]::ToBase64String([IO.File]::ReadAllBytes("scripts/serviceAccountKey.json")) | Set-Clipboard
+   # macOS/Linux:
+   base64 -i scripts/serviceAccountKey.json | pbcopy   # or | xclip on Linux
+   ```
+3. **Add two repository secrets** (GitHub repo → Settings → Secrets and
+   variables → Actions → New repository secret):
+   - `CLAUDE_CODE_OAUTH_TOKEN` — the token from step 1.
+   - `FIREBASE_SERVICE_ACCOUNT_KEY_B64` — the base64 string from step 2.
+4. That's it. The workflow runs automatically every Sunday — check the
+   **Actions** tab in GitHub to see past runs, or click **Run workflow**
+   there to trigger one manually and confirm it's working.
+
+To change the schedule, edit the `cron` line in
+`.github/workflows/coach-note.yml` — [crontab.guru](https://crontab.guru) is
+useful for writing the schedule expression. Note: GitHub only runs scheduled
+workflows from the repo's default branch, and (on public repos) disables the
+schedule after 60 days with no other repository activity — pushing any
+commit resets that clock.

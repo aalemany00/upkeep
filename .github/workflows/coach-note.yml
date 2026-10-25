@@ -1,0 +1,44 @@
+name: Weekly coach note
+
+# Runs scripts/coach-note.js on a schedule instead of Adrian remembering to
+# run it by hand. Uses a Claude subscription OAuth token (CLAUDE_CODE_OAUTH_TOKEN),
+# not a paid API key, so this costs nothing beyond the course-provided Claude
+# Code access that already powers the script when run locally — see
+# scripts/README.md's "Automated weekly run" section for one-time setup.
+on:
+  schedule:
+    - cron: "0 14 * * 0" # Sundays at 14:00 UTC — change to whatever day/time you want
+  workflow_dispatch: {} # lets you trigger a run manually from the Actions tab, for testing
+
+permissions:
+  contents: read
+
+jobs:
+  coach-note:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Claude Code CLI
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install script dependencies
+        working-directory: scripts
+        run: npm install
+
+      - name: Write Firebase service account key
+        working-directory: scripts
+        run: echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY_B64 }}" | base64 -d > serviceAccountKey.json
+
+      - name: Run weekly coach note
+        working-directory: scripts
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: node coach-note.js

@@ -287,6 +287,32 @@ changed since the last coach note" banner (Settings → Account & Goals) had
 the same problem and was missed in the first pass — it told every user to
 go run `scripts/coach-note.js`; now it just says the coach will factor the
 change in next time.
+- **Automated weekly run** (`.github/workflows/coach-note.yml`): Adrian
+  flagged that relying on himself to remember to run this manually doesn't
+  scale once real people depend on it. Researched before building (per the
+  project's own "confirm the architecture before building an automation
+  piece" habit): Claude Code officially supports a subscription-based
+  long-lived OAuth token (`claude setup-token` → `CLAUDE_CODE_OAUTH_TOKEN`),
+  separate from an API key — a GitHub Actions workflow authenticating with
+  that token "uses your Claude subscription instead of API billing" per
+  Anthropic's own docs, so this is genuinely free, not a quiet reintroduction
+  of the paid-API path the course guide gates behind instructor sign-off.
+  The workflow runs on a weekly cron (`workflow_dispatch` also enabled for
+  manual test runs from the Actions tab), installs the Claude Code CLI,
+  decodes a base64'd Firebase service account key from a second secret
+  (`FIREBASE_SERVICE_ACCOUNT_KEY_B64`) into `scripts/serviceAccountKey.json`
+  for that run only (ephemeral runner, destroyed after), and runs the exact
+  same `node coach-note.js` as the manual path — no script changes, no new
+  Firestore writes, no change in what the model is told or allowed to do.
+  One-time setup (generating the token, base64'ing the key, adding both as
+  repo secrets) is in `scripts/README.md`'s "Automated weekly run" section —
+  deliberately left for Adrian to do himself, since these are real
+  credentials (a working Claude Code auth token and a Firestore admin key)
+  that shouldn't pass through chat with an AI either way. **Not yet set up**
+  as of this writing — the workflow file exists and is correct per
+  Anthropic's documented pattern, but hasn't been exercised with Adrian's
+  real secrets yet; the first real run should be triggered manually via
+  `workflow_dispatch` to confirm it before trusting the Sunday cron.
 - Loops over **every signed-up user** (Admin Auth `listUsers`), not just
   Adrian — but it's still one person manually running it on his own Claude
   Code access, not a public service. Scaling further = paid API territory,
