@@ -9,6 +9,19 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml" />
 <link rel="apple-touch-icon" href="icon.svg" />
 <link rel="stylesheet" href="style.css" />
+<script>
+  // Applied before first paint so there's no flash of the wrong theme.
+  // Stored choice wins; otherwise follow the OS preference live (handled
+  // by the @media query in style.css for anyone who never explicitly chose).
+  (function () {
+    try {
+      var saved = localStorage.getItem("upkeep-theme");
+      if (saved === "light" || saved === "dark") {
+        document.documentElement.setAttribute("data-theme", saved);
+      }
+    } catch (e) {}
+  })();
+</script>
 </head>
 <body>
 
@@ -78,6 +91,10 @@
       </label>
       <div class="chip-row" id="onboarding-days"></div>
 
+      <h3>Your coach</h3>
+      <p class="subtle small">Just a look — pick whoever you'd rather see your notes from. You can change this anytime in Settings.</p>
+      <div class="avatar-picker" id="onboarding-avatar-picker"></div>
+
       <button type="submit" class="btn primary">Build my plan</button>
     </form>
 
@@ -92,19 +109,63 @@
 
 <!-- App shell -->
 <div id="app" hidden>
+  <!-- Desktop sidebar -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <span class="sidebar-logo" aria-hidden="true">&#128170;</span>
+      <span class="sidebar-title">Upkeep</span>
+    </div>
+    <div class="sidebar-nav" id="tabs">
+      <button class="tab active" data-view="dashboard"><span class="tab-icon" aria-hidden="true">&#8962;</span><span>Dashboard</span></button>
+      <button class="tab" data-view="food"><span class="tab-icon" aria-hidden="true">&#127829;</span><span>Food</span></button>
+      <button class="tab" data-view="gym"><span class="tab-icon" aria-hidden="true">&#127947;</span><span>Gym</span></button>
+      <button class="tab" data-view="calendar"><span class="tab-icon" aria-hidden="true">&#128197;</span><span>Calendar</span></button>
+      <button class="tab" data-view="log"><span class="tab-icon" aria-hidden="true">&#128221;</span><span>Log</span></button>
+      <button class="tab" data-view="coach"><span class="tab-icon" aria-hidden="true">&#128172;</span><span>Coach</span></button>
+    </div>
+    <div class="sidebar-footer">
+      <button id="theme-toggle-btn" class="sidebar-footer-btn" title="Toggle theme" aria-label="Toggle theme">
+        <span class="theme-icon-light" aria-hidden="true">&#9728;</span>
+        <span class="theme-icon-dark" aria-hidden="true">&#9790;</span>
+        <span class="theme-toggle-label">Theme</span>
+      </button>
+      <button id="settings-btn" class="sidebar-footer-btn" title="Settings" aria-label="Settings">
+        <span aria-hidden="true">&#9881;</span><span>Settings</span>
+      </button>
+      <button id="signout-btn" class="sidebar-footer-btn">
+        <span aria-hidden="true">&#8594;</span><span>Sign out</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Mobile topbar -->
   <header class="topbar">
-    <button id="settings-btn" class="btn small" title="Settings" aria-label="Settings">&#9881;</button>
-    <h1>Upkeep</h1>
-    <button id="signout-btn" class="btn small">Sign out</button>
+    <span class="topbar-brand"><span class="sidebar-logo" aria-hidden="true">&#128170;</span> Upkeep</span>
+    <button id="theme-toggle-btn-mobile" class="btn small" title="Toggle theme" aria-label="Toggle theme">
+      <span class="theme-icon-light" aria-hidden="true">&#9728;</span>
+      <span class="theme-icon-dark" aria-hidden="true">&#9790;</span>
+    </button>
   </header>
 
-  <nav class="tabs" id="tabs">
-    <button class="tab active" data-view="dashboard">Dashboard</button>
-    <button class="tab" data-view="food">Food</button>
-    <button class="tab" data-view="gym">Gym</button>
-    <button class="tab" data-view="log">Log</button>
-    <button class="tab" data-view="coach">Coach</button>
+  <!-- Mobile bottom nav -->
+  <nav class="bottom-nav" id="bottom-tabs">
+    <button class="tab active" data-view="dashboard"><span class="tab-icon" aria-hidden="true">&#8962;</span><span>Home</span></button>
+    <button class="tab" data-view="food"><span class="tab-icon" aria-hidden="true">&#127829;</span><span>Food</span></button>
+    <button class="tab" data-view="gym"><span class="tab-icon" aria-hidden="true">&#127947;</span><span>Gym</span></button>
+    <button class="tab" data-view="calendar"><span class="tab-icon" aria-hidden="true">&#128197;</span><span>Cal</span></button>
+    <button class="tab" id="bottom-more-btn" type="button"><span class="tab-icon" aria-hidden="true">&#8943;</span><span>More</span></button>
   </nav>
+
+  <!-- Mobile "More" sheet -->
+  <div class="more-sheet" id="more-sheet" hidden>
+    <div class="more-sheet-card">
+      <button class="more-sheet-item" data-view="log"><span class="tab-icon" aria-hidden="true">&#128221;</span><span>Log</span></button>
+      <button class="more-sheet-item" data-view="coach"><span class="tab-icon" aria-hidden="true">&#128172;</span><span>Coach</span></button>
+      <button class="more-sheet-item" id="settings-btn-mobile"><span aria-hidden="true">&#9881;</span><span>Settings</span></button>
+      <button class="more-sheet-item" id="signout-btn-mobile"><span aria-hidden="true">&#8594;</span><span>Sign out</span></button>
+      <button class="more-sheet-item more-sheet-close" id="more-sheet-close"><span>Close</span></button>
+    </div>
+  </div>
 
   <main id="views">
 
@@ -119,14 +180,17 @@
 
       <div class="panel">
         <div class="panel-head">
-          <h2>Latest coach note</h2>
+          <h2 class="coach-heading"><span id="dashboard-coach-avatar" class="coach-avatar-sm"></span>Latest coach note</h2>
           <button class="link-btn" data-switch-view="coach">See all</button>
         </div>
         <div id="dashboard-coach-preview" class="coach-note">
           <p class="subtle">No coach note yet — your first one shows up here once your coach has reviewed a week of activity.</p>
         </div>
       </div>
+    </section>
 
+    <!-- Calendar -->
+    <section id="view-calendar" class="view">
       <div class="panel">
         <div class="panel-head">
           <h2>Calendar</h2>
@@ -291,6 +355,12 @@
 
       <div class="panel" id="coach-review-banner" hidden>
         <p class="subtle small">Your info changed since your last coach note — your coach will factor this in next time.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Your coach</h2>
+        <p class="subtle small">Just a look — pick whoever you'd rather see your notes from. Changes right away.</p>
+        <div class="avatar-picker" id="settings-avatar-picker"></div>
       </div>
 
       <form id="goals-form" class="panel">
@@ -465,7 +535,7 @@
     <!-- Coach -->
     <section id="view-coach" class="view">
       <div class="panel">
-        <h2>Weekly coach notes</h2>
+        <h2 class="coach-heading"><span id="coach-view-avatar" class="coach-avatar-sm"></span>Weekly coach notes</h2>
         <p class="subtle">Your coach reviews your week and leaves a note here from time to time — check back if you don't see one yet.</p>
         <div id="coach-notes-list"></div>
       </div>

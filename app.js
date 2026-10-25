@@ -14,6 +14,7 @@ import { computeDailyGoals, GOAL_LABELS } from "./nutrition.js";
 import { parseICS, normalizeFeedUrl, occursOnDate, isEventExpired, generateRecurrenceDates, DEFAULT_EVENT_COLOR, DEFAULT_FEED_COLOR, GYM_EVENT_COLOR } from "./calendar.js";
 import { USDA_API_KEY } from "./usda-config.js";
 import { WARMUPS_BY_DAYTYPE, COOLDOWNS_BY_DAYTYPE, CARDIO_WARMUP, CARDIO_COOLDOWN } from "./warmups.js";
+import { COACH_AVATARS, pixelAvatarSvg, coachAvatarById } from "./coach-avatars.js";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -173,6 +174,7 @@ document.getElementById("auth-signup-btn").addEventListener("click", (e) => {
 authForm.addEventListener("submit", (e) => e.preventDefault());
 
 document.getElementById("signout-btn").addEventListener("click", () => signOut(auth));
+document.getElementById("signout-btn-mobile")?.addEventListener("click", () => signOut(auth));
 
 function showAuthError(err) {
   authError.textContent = err.message.replace("Firebase: ", "");
@@ -280,6 +282,51 @@ function maybeRebuildStaleSplit() {
   });
 }
 
+// ---------------------------------------------------------------------
+// Coach avatars — shared between onboarding, Settings, and the small badge
+// shown next to coach notes. Picking one is cosmetic only (see
+// coach-avatars.js); it never changes what the coach says.
+// ---------------------------------------------------------------------
+function renderAvatarPicker(container, selectedId, onPick) {
+  if (!container) return;
+  container.innerHTML = COACH_AVATARS.map((a) => `
+    <button type="button" class="avatar-option${a.id === selectedId ? " selected" : ""}" data-avatar-id="${a.id}" title="${a.tagline}">
+      <span class="avatar-thumb">${pixelAvatarSvg(a.grid, a.palette, 64)}</span>
+      <span class="avatar-name">${a.name}</span>
+    </button>
+  `).join("");
+  container.querySelectorAll("[data-avatar-id]").forEach((btn) => {
+    btn.addEventListener("click", () => onPick(btn.dataset.avatarId));
+  });
+}
+
+function renderCoachAvatarBadges() {
+  const avatar = coachAvatarById(goals.coachAvatar);
+  const svg = pixelAvatarSvg(avatar.grid, avatar.palette, 28);
+  const dashBadge = document.getElementById("dashboard-coach-avatar");
+  const coachBadge = document.getElementById("coach-view-avatar");
+  if (dashBadge) dashBadge.innerHTML = svg;
+  if (coachBadge) coachBadge.innerHTML = svg;
+}
+
+let onboardingCoachAvatar = "sage";
+const onboardingAvatarPickerEl = document.getElementById("onboarding-avatar-picker");
+function drawOnboardingAvatarPicker() {
+  renderAvatarPicker(onboardingAvatarPickerEl, onboardingCoachAvatar, (id) => {
+    onboardingCoachAvatar = id;
+    drawOnboardingAvatarPicker();
+  });
+}
+drawOnboardingAvatarPicker();
+
+const settingsAvatarPickerEl = document.getElementById("settings-avatar-picker");
+function drawSettingsAvatarPicker() {
+  renderAvatarPicker(settingsAvatarPickerEl, goals.coachAvatar || "sage", async (id) => {
+    if (!currentUid) return;
+    await setDoc(doc(db, "users", currentUid, "meta", "goals"), { coachAvatar: id }, { merge: true });
+  });
+}
+
 let onboardingDays = DEFAULT_DAY_PATTERN[3];
 const onboardingForm = document.getElementById("onboarding-form");
 const onboardingDaysEl = document.getElementById("onboarding-days");
@@ -349,6 +396,7 @@ onboardingForm.addEventListener("submit", async (e) => {
     activityLevel,
     daysPerWeek: onboardingDays.length,
     preferredDays: onboardingDays,
+    coachAvatar: onboardingCoachAvatar,
     ...dailyGoals
   }, { merge: true });
 
@@ -390,6 +438,8 @@ function subscribeAll(uid) {
     renderDashboard();
     renderVitaminChips();
     maybeRebuildStaleSplit();
+    drawSettingsAvatarPicker();
+    renderCoachAvatarBadges();
   });
 
   const coachQuery = query(collection(db, "users", uid, "coachNotes"), orderBy("createdAt", "desc"), limit(20));
@@ -479,6 +529,10 @@ function teardownSubscriptions() {
   showingOnboardingReview = false;
   document.getElementById("onboarding-form").hidden = false;
   document.getElementById("onboarding-review").hidden = true;
+  onboardingCoachAvatar = "sage";
+  drawOnboardingAvatarPicker();
+  drawSettingsAvatarPicker();
+  renderCoachAvatarBadges();
   resetDeleteAccountUi();
   loadDietPicks();
   renderDietSuggestions();
@@ -513,8 +567,17 @@ async function removeEntry(id) {
 // ---------------------------------------------------------------------
 // Tabs
 // ---------------------------------------------------------------------
-document.querySelectorAll(".tab").forEach((btn) => {
+// Nav items exist twice (desktop sidebar + mobile bottom nav/more sheet),
+// both tagged with the same data-view — switching one keeps both in sync.
+document.querySelectorAll(".tab[data-view]").forEach((btn) => {
   btn.addEventListener("click", () => switchView(btn.dataset.view));
+});
+
+document.querySelectorAll(".more-sheet-item[data-view]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    switchView(btn.dataset.view);
+    closeMoreSheet();
+  });
 });
 
 document.querySelectorAll("[data-switch-view]").forEach((btn) => {
@@ -522,14 +585,49 @@ document.querySelectorAll("[data-switch-view]").forEach((btn) => {
 });
 
 function switchView(view) {
-  document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
+  document.querySelectorAll(".tab[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${view}`));
 }
+
+const moreSheet = document.getElementById("more-sheet");
+function openMoreSheet() {
+  if (moreSheet) moreSheet.hidden = false;
+}
+function closeMoreSheet() {
+  if (moreSheet) moreSheet.hidden = true;
+}
+document.getElementById("bottom-more-btn")?.addEventListener("click", openMoreSheet);
+document.getElementById("more-sheet-close")?.addEventListener("click", closeMoreSheet);
+moreSheet?.addEventListener("click", (e) => {
+  if (e.target === moreSheet) closeMoreSheet();
+});
 
 // Settings (gear icon) opens the former "Goals" tab, now with Account/Help
 // sub-tabs instead of its own top-level nav slot — consolidating goals,
 // account settings, and setup help in one place instead of a 6th main tab.
 document.getElementById("settings-btn")?.addEventListener("click", () => switchView("goals"));
+document.getElementById("settings-btn-mobile")?.addEventListener("click", () => {
+  switchView("goals");
+  closeMoreSheet();
+});
+
+// Theme toggle — mirrors the flash-prevention script in index.html's <head>.
+function currentTheme() {
+  const saved = localStorage.getItem("upkeep-theme");
+  if (saved === "light" || saved === "dark") return saved;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+function setTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  try {
+    localStorage.setItem("upkeep-theme", theme);
+  } catch (e) {}
+}
+function toggleTheme() {
+  setTheme(currentTheme() === "dark" ? "light" : "dark");
+}
+document.getElementById("theme-toggle-btn")?.addEventListener("click", toggleTheme);
+document.getElementById("theme-toggle-btn-mobile")?.addEventListener("click", toggleTheme);
 document.querySelectorAll("[data-settings-subview]").forEach((btn) => {
   btn.addEventListener("click", () => {
     const target = btn.dataset.settingsSubview;
@@ -1968,7 +2066,7 @@ function renderGymDayPanel() {
           <button type="button" class="btn small" id="gym-day-next">&rsaquo;</button>
         </div>
       </div>
-      <p class="subtle small">${selectedDateKey === todayKey() ? "" : `<button type="button" class="link-btn" id="gym-day-today">Jump to today</button> — `}Pick any date on the <button type="button" class="link-btn" data-switch-view="dashboard">Dashboard calendar</button> to come straight here.</p>
+      <p class="subtle small">${selectedDateKey === todayKey() ? "" : `<button type="button" class="link-btn" id="gym-day-today">Jump to today</button> — `}Pick any date on the <button type="button" class="link-btn" data-switch-view="calendar">Calendar</button> to come straight here.</p>
       <div class="panel">
         <p class="subtle">Rest day — nothing scheduled. Want to log a workout anyway?</p>
         <select id="gym-restday-type">
@@ -1979,7 +2077,7 @@ function renderGymDayPanel() {
     document.getElementById("gym-day-prev").addEventListener("click", () => gymJumpDay(-1));
     document.getElementById("gym-day-next").addEventListener("click", () => gymJumpDay(1));
     document.getElementById("gym-day-today")?.addEventListener("click", () => gymJumpToDate(todayKey()));
-    el.querySelector('[data-switch-view="dashboard"]')?.addEventListener("click", () => switchView("dashboard"));
+    el.querySelector('[data-switch-view="calendar"]')?.addEventListener("click", () => switchView("calendar"));
     document.getElementById("gym-restday-type").addEventListener("change", (e) => {
       restDayOverride = { dateKey: selectedDateKey, dayType: e.target.value };
       renderGymDayPanel();
@@ -2061,7 +2159,7 @@ function renderGymDayPanel() {
       </div>
       <select id="gym-daytype-select">${typeOptions}</select>
     </div>
-    <p class="subtle small" style="margin-top:0;">${selectedDateKey === todayKey() ? "" : `<button type="button" class="link-btn" id="gym-day-today">Jump to today</button> — `}Pick any date on the <button type="button" class="link-btn" data-switch-view="dashboard">Dashboard calendar</button> to come straight here.</p>
+    <p class="subtle small" style="margin-top:0;">${selectedDateKey === todayKey() ? "" : `<button type="button" class="link-btn" id="gym-day-today">Jump to today</button> — `}Pick any date on the <button type="button" class="link-btn" data-switch-view="calendar">Calendar</button> to come straight here.</p>
     ${warmupCooldownHtml(WARMUPS_BY_DAYTYPE[dayType], "Warm-up")}
     ${slotsHtml}
     ${warmupCooldownHtml(COOLDOWNS_BY_DAYTYPE[dayType], "Cool-down")}
@@ -2089,7 +2187,7 @@ function renderGymDayPanel() {
   document.getElementById("gym-day-prev").addEventListener("click", () => gymJumpDay(-1));
   document.getElementById("gym-day-next").addEventListener("click", () => gymJumpDay(1));
   document.getElementById("gym-day-today")?.addEventListener("click", () => gymJumpToDate(todayKey()));
-  el.querySelector('[data-switch-view="dashboard"]')?.addEventListener("click", () => switchView("dashboard"));
+  el.querySelector('[data-switch-view="calendar"]')?.addEventListener("click", () => switchView("calendar"));
 
   el.querySelectorAll("[data-slot-select]").forEach((sel) => {
     sel.addEventListener("change", (e) => {

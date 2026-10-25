@@ -364,6 +364,66 @@ change in next time.
 
 ---
 
+## 2a. Visual redesign — design system, navigation, coach avatars (2026-10-25)
+
+Phase 1 of a full UI redesign (from a mockup + brief Adrian had ChatGPT
+write): design tokens + light/dark theme + a genuinely different
+desktop/mobile nav shell + reskin. Scope deliberately excludes a few things
+from the original brief — see the end of this section.
+
+- **Design tokens** (`style.css` `:root`): every color in the app routes
+  through a small set of CSS custom properties (`--bg`, `--panel`,
+  `--panel-border`, `--text`, `--subtle`, `--accent`, `--accent-dark`,
+  `--accent-contrast`, `--danger`, `--success-bg`, `--shadow`, `--radius`,
+  `--radius-sm`, `--font`). Light values live on `:root`; dark values are
+  duplicated under `:root[data-theme="dark"]` (an explicit user choice) and
+  under `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) }`
+  (nobody's chosen yet — follow the OS). An inline script in `index.html`'s
+  `<head>` applies a saved `localStorage["upkeep-theme"]` choice before first
+  paint, so there's no flash of the wrong theme.
+- **Theme toggle**: a button in the sidebar footer (desktop) and the mobile
+  topbar, wired in `app.js` (`toggleTheme`/`setTheme`/`currentTheme`) —
+  flips `data-theme` on `<html>` and persists to the same localStorage key
+  the head script reads.
+- **Navigation — genuinely different per breakpoint, not one shrunk into the
+  other** (confirmed with Adrian: "Left for desktop but the phone as an
+  entirely different layout"):
+  - **Desktop** (`#sidebar`, >760px): persistent left column — brand, the
+    6 nav items (now including **Calendar**, split out of Dashboard — see
+    below), then a footer with theme toggle / Settings / sign out.
+  - **Mobile** (≤760px): sidebar is `display:none`; a sticky top bar (brand +
+    theme toggle) replaces it, plus a fixed bottom tab bar (`#bottom-tabs`:
+    Home/Food/Gym/Cal/More) and a "More" bottom sheet (`#more-sheet`) for
+    Log/Coach/Settings/Sign out. Both navs share the same `.tab[data-view]`
+    click wiring in `app.js` (`switchView`), so they can never drift apart.
+- **Calendar is now its own top-level view** (`#view-calendar`), pulled out
+  of the Dashboard (which used to embed the whole month grid + imported-
+  feeds panel + day panel). Dashboard is back to just stats + vitamins +
+  coach-note preview. Every place that used to link to "the Dashboard
+  calendar" (`data-switch-view`, the Gym day panel's jump-to-calendar links)
+  now points at `data-switch-view="calendar"` instead.
+- **Pixel-art coach avatars** (`coach-avatars.js`, pure module — no DOM/
+  Firebase, same boundary as `gym.js`/`nutrition.js`/`calendar.js`): three
+  original 10x10-pixel bust characters (Coach Sage, Coach Blaze, Coach Nova),
+  each a grid of palette-key characters turned into an inline SVG (one
+  `<rect>` per pixel — crisp at any size, no `image-rendering` hacks).
+  Style-inspired by the mockup's pixel-character idea, not copied from it or
+  from any existing character. Picked once at onboarding (new "Your coach"
+  step, stored as `goals.coachAvatar`) and changeable anytime in Settings
+  (writes straight to the `goals` doc on click, no "Save" button needed —
+  Adrian's call: "They could also change it at anytime in the settings").
+  The chosen avatar's SVG badge shows next to "Latest coach note" on the
+  Dashboard and next to "Weekly coach notes" in the Coach tab
+  (`renderCoachAvatarBadges()`, driven by the live `goals` Firestore
+  listener). Purely cosmetic — never affects what the coach note says.
+- **Explicitly deferred from the original brief** (per Adrian's own scoped
+  choice — "Phase 1 now: design system + light/dark theme + reskin all
+  pages"): the new weekly-activity bar chart, and a deeper accessibility/
+  responsive audit beyond what this pass already covers (focus-visible
+  outlines, `prefers-reduced-motion`, mobile-width testing).
+
+---
+
 ## 3. The gym system (the most complex part)
 
 - **Exercise catalog** (`exercises.json`, 932 exercises): seeded once from
@@ -580,13 +640,14 @@ needed when new subcollections were added.
 ## 6. File map
 
 ```
-index.html              # all screens/views (auth, onboarding, app shell + 6 tabs)
-style.css               # all styling, dark theme
+index.html              # all screens/views (auth, onboarding, app shell: desktop sidebar + mobile topbar/bottom-nav + 6 views)
+style.css               # design tokens (light/dark via CSS vars) + all component styling
 app.js                  # all client logic: auth, Firestore subscriptions, every view's render + handlers
 gym.js                  # pure functions: assignSplit, targetFor (no DOM/Firebase)
 nutrition.js            # pure functions: computeDailyGoals, GOAL_LABELS, ACTIVITY_LEVELS (no DOM/Firebase)
 calendar.js             # pure functions: parseICS, occursOnDate, isEventExpired, generateRecurrenceDates (no DOM/Firebase/network)
 warmups.js              # static warm-up/cool-down routine data per gym day type + cardio
+coach-avatars.js        # pure functions: 3 original pixel-art coach avatars + SVG builder (no DOM/Firebase)
 exercises.json           # 932-exercise static catalog (seeded, not hand-written)
 foods.json              # 60-item static diet-suggestion catalog (hand-written)
 firebase-config.js      # real Firebase project config (public-safe, committed)

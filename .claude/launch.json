@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "health-coach-static",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8020"],
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["dev-server.js", ".", "8020"],
       "port": 8020
     }
   ]
