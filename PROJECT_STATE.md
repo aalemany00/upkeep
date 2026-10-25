@@ -437,6 +437,17 @@ change in next time.
      engine, same set grid. This was a specific, explicit ask ("act like
      Overload") — don't quietly remove it in favor of "just use the
      suggestions."
+     - `gym.js`'s `searchExercises` scores every exercise by how many typed
+       words it contains, rather than requiring the whole typed phrase as an
+       exact substring (the original implementation) — "seated DB shoulder
+       press" now correctly surfaces "Shoulder Press, Dumbbells" even though
+       the catalog entry has neither "seated" nor the literal word "DB" in
+       it. Also expands common logging shorthand first (DB→dumbbell,
+       BB→barbell, KB→kettlebell, OH→overhead, RDL→romanian deadlift,
+       OHP→overhead press) since that's how people actually write workouts
+       down. Verified against Adrian's own real handwritten log (DB bench
+       press, goblet squat, one-arm row, assisted pull-up, etc.) — every
+       query's correct exercise now ranks first or near it.
   - Firestore shape: one doc per date (`workoutLogs/{dateKey}`), `entries[]`
     array. Slot-based entries carry `slotLabel` (matched back to the UI by
     label, not array position — position breaks once entries can be skipped

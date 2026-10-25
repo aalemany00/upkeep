@@ -186,6 +186,51 @@ function matchesPattern(pattern, name) {
   return typeof pattern === "function" ? pattern(name) : pattern.test(name);
 }
 
+// Common shorthand people actually write in a workout log (DB bench press,
+// RDL, OH extension) that the wger catalog never abbreviates — expanded
+// before matching so free-form search isn't limited to exact wording. Word-
+// boundary matched so this doesn't mangle a word that merely contains these
+// letters (e.g. "band").
+const SEARCH_ABBREVIATIONS = [
+  [/\bdb\b/gi, "dumbbell"],
+  [/\bbb\b/gi, "barbell"],
+  [/\bkb\b/gi, "kettlebell"],
+  [/\boh\b/gi, "overhead"],
+  [/\brdl\b/gi, "romanian deadlift"],
+  [/\bohp\b/gi, "overhead press"]
+];
+
+function expandSearchAbbreviations(query) {
+  return SEARCH_ABBREVIATIONS.reduce((q, [pattern, replacement]) => q.replace(pattern, replacement), query);
+}
+
+// Free-form exercise search used by the Gym tab's "add any other exercise"
+// box. A plain whole-phrase substring match (the original implementation)
+// fails on anything typed in a different word order or with a word the
+// catalog doesn't use (e.g. "seated DB shoulder press" when the catalog
+// just has "Shoulder Press, Dumbbells" — no "seated" in it at all) — this
+// instead scores every exercise by how many of the typed words it contains
+// and ranks by that, so a partial/reordered/abbreviated match still surfaces
+// the closest real exercises instead of "no matches."
+export function searchExercises(query, catalog, limit = 10) {
+  const words = expandSearchAbbreviations(query.toLowerCase())
+    .split(/\s+/)
+    .map((w) => w.trim())
+    .filter(Boolean);
+  if (!words.length) return [];
+
+  return catalog
+    .map((ex) => {
+      const name = ex.name.toLowerCase();
+      const matchCount = words.filter((w) => name.includes(w)).length;
+      return { ex, matchCount };
+    })
+    .filter((s) => s.matchCount > 0)
+    .sort((a, b) => b.matchCount - a.matchCount || a.ex.name.localeCompare(b.ex.name))
+    .slice(0, limit)
+    .map((s) => s.ex);
+}
+
 function candidatesForSlot(catalog, muscles, excludeIds, pattern, availableEquipment) {
   const byMuscle = catalog.filter(
     (ex) => !excludeIds.has(ex.id) && ex.muscles.some((m) => muscles.includes(m))

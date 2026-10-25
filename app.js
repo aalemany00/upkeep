@@ -9,7 +9,7 @@ import {
   getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc,
   query, orderBy, limit, onSnapshot, writeBatch, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { assignSplit, targetFor, MUSCLE_LABEL_BY_SLOT, SPLIT_ALGO_VERSION, EQUIPMENT_OPTIONS } from "./gym.js";
+import { assignSplit, targetFor, MUSCLE_LABEL_BY_SLOT, SPLIT_ALGO_VERSION, EQUIPMENT_OPTIONS, searchExercises } from "./gym.js";
 import { computeDailyGoals, GOAL_LABELS } from "./nutrition.js";
 import { parseICS, normalizeFeedUrl, occursOnDate, isEventExpired, generateRecurrenceDates, DEFAULT_EVENT_COLOR, DEFAULT_FEED_COLOR, GYM_EVENT_COLOR } from "./calendar.js";
 import { USDA_API_KEY } from "./usda-config.js";
@@ -2124,7 +2124,7 @@ function renderGymDayPanel() {
   searchInput.addEventListener("input", () => {
     const q = searchInput.value.trim().toLowerCase();
     if (q.length < 2) { searchResultsEl.innerHTML = ""; return; }
-    const matches = exerciseCatalog.filter((ex) => ex.name.toLowerCase().includes(q)).slice(0, 8);
+    const matches = searchExercises(q, exerciseCatalog, 10);
     searchResultsEl.innerHTML = matches.length
       ? `<ul class="entry-list">${matches.map((ex) => `<li class="entry-row"><span>${ex.name} <span class="subtle small">(${ex.category})</span></span><button type="button" class="btn small" data-add-exercise="${ex.id}">Add</button></li>`).join("")}</ul>`
       : `<p class="subtle small">No matches.</p>`;
