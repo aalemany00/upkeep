@@ -308,11 +308,20 @@ change in next time.
   repo secrets) is in `scripts/README.md`'s "Automated weekly run" section —
   deliberately left for Adrian to do himself, since these are real
   credentials (a working Claude Code auth token and a Firestore admin key)
-  that shouldn't pass through chat with an AI either way. **Not yet set up**
-  as of this writing — the workflow file exists and is correct per
-  Anthropic's documented pattern, but hasn't been exercised with Adrian's
-  real secrets yet; the first real run should be triggered manually via
-  `workflow_dispatch` to confirm it before trusting the Sunday cron.
+  that shouldn't pass through chat with an AI either way. **Confirmed
+  working** — set up and tested via `workflow_dispatch` on 2026-10-25; the
+  first real run hit two snags worth knowing about if this ever needs
+  redoing (e.g. a lost/rotated secret): a secret added through the GitHub
+  web UI can silently save empty if the paste into the value field doesn't
+  land cleanly (surfaced in the run log as the referenced secret showing up
+  blank/unmasked, e.g. `echo ""` instead of `echo "***"`, or an env var
+  logged with nothing after the colon) — copying the value to the clipboard
+  and pasting directly, rather than selecting text out of a file by hand,
+  avoided it the second time. Both secrets (the Firebase key and the Claude
+  token) ended up pasted into chat during debugging despite the "don't
+  share these" guidance above — both were rotated afterward as a precaution,
+  not because anything was actually compromised (no billing-relevant
+  credential, Firestore access scoped to Adrian's own project).
 - Loops over **every signed-up user** (Admin Auth `listUsers`), not just
   Adrian — but it's still one person manually running it on his own Claude
   Code access, not a public service. Scaling further = paid API territory,
