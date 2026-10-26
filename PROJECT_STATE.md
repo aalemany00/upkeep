@@ -420,7 +420,55 @@ from the original brief — see the end of this section.
   choice — "Phase 1 now: design system + light/dark theme + reskin all
   pages"): the new weekly-activity bar chart, and a deeper accessibility/
   responsive audit beyond what this pass already covers (focus-visible
-  outlines, `prefers-reduced-motion`, mobile-width testing).
+  outlines, `prefers-reduced-motion`, mobile-width testing). **Both landed in
+  a follow-up pass, same day** — see below.
+
+### 2b. "This week" chart + accessibility/responsive pass (2026-10-25, Phase 2)
+
+- **Weekly calories chart** (Dashboard, `#dashboard-activity-chart`): one bar
+  per day for the last 7 days (today included), calories logged that day
+  from the `entries` collection, against a dashed goal line at
+  `goals.calorieGoal`. Deliberately **no chart library** — this is a single
+  series, so a hand-built inline SVG (`weeklyCaloriesChartSvg` in `app.js`)
+  covers it without adding a build-step dependency to a project that
+  explicitly has none. Bars turn `var(--danger)` instead of `var(--accent)`
+  on a day that went over goal; today's bar gets a direct value label (the
+  only mark labeled, per the "selective direct labels" rule — labeling
+  every bar would be clutter); every bar has a native `<title>` tooltip; the
+  whole `<svg>` carries `role="img"` + a full `aria-label` text summary
+  ("Calories per day, this week: Mon 1850, Tue …") as the accessible
+  equivalent of a data table, since adding a real toggleable table view
+  wasn't worth the UI weight for one series. Colors are plain CSS vars
+  (`var(--accent)` etc.) inside the inline SVG, so it reads correctly in
+  both themes automatically — no separate dark-mode chart logic needed.
+- **Accessibility pass**:
+  - Contrast-checked every token pair actually used for text (light and
+    dark `--subtle`/`--text` against `--bg`/`--panel`, both `--danger`
+    values, both `--accent-contrast` pairings) — all comfortably pass WCAG
+    AA (4.5:1+); no token changes were needed.
+  - Added a "Skip to content" link (`.skip-link`, visually hidden until
+    focused) at the top of `<body>`, jumping to `#views` (now
+    `tabindex="-1"`) — lets a keyboard user bypass the sidebar/topbar on
+    every page load.
+  - `switchView()` now sets `aria-current="page"` on whichever nav item
+    (sidebar or bottom-nav) matches the active view, and an initial
+    `switchView("dashboard")` call on load sets it correctly for the
+    view that's already active in the static HTML (it doesn't fire from a
+    click the first time).
+  - The mobile "More" sheet is a real modal now: `role="dialog"
+    aria-modal="true"`, the "More" button carries
+    `aria-haspopup`/`aria-expanded`/`aria-controls`, opening it moves focus
+    to its first item, closing it (via the Close button, clicking the
+    overlay, **or a new Escape-key handler**) returns focus to the "More"
+    button rather than dropping it.
+  - Avatar-picker buttons (`renderAvatarPicker` in `app.js`) carry
+    `aria-pressed` reflecting the current selection, so a screen reader
+    announces which coach is picked, not just a visual border.
+  - Bottom-nav tap targets bumped to a 48px minimum height (was as low as
+    ~32px) — the one real touch-target-size fix this pass found.
+  - Manually re-checked layout at 320px, 393px, and 1280px widths in both
+    themes (stat-card grid, the new chart, Settings, the More sheet) — no
+    overflow or clipped content found at any of them.
 
 ---
 

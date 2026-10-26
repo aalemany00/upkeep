@@ -25,6 +25,8 @@
 </head>
 <body>
 
+<a href="#views" class="skip-link">Skip to content</a>
+
 <!-- Auth gate -->
 <section id="auth-screen" class="screen">
   <div class="auth-card">
@@ -110,7 +112,7 @@
 <!-- App shell -->
 <div id="app" hidden>
   <!-- Desktop sidebar -->
-  <nav class="sidebar" id="sidebar">
+  <nav class="sidebar" id="sidebar" aria-label="Main navigation">
     <div class="sidebar-brand">
       <span class="sidebar-logo" aria-hidden="true">&#128170;</span>
       <span class="sidebar-title">Upkeep</span>
@@ -148,16 +150,16 @@
   </header>
 
   <!-- Mobile bottom nav -->
-  <nav class="bottom-nav" id="bottom-tabs">
+  <nav class="bottom-nav" id="bottom-tabs" aria-label="Main navigation">
     <button class="tab active" data-view="dashboard"><span class="tab-icon" aria-hidden="true">&#8962;</span><span>Home</span></button>
     <button class="tab" data-view="food"><span class="tab-icon" aria-hidden="true">&#127829;</span><span>Food</span></button>
     <button class="tab" data-view="gym"><span class="tab-icon" aria-hidden="true">&#127947;</span><span>Gym</span></button>
     <button class="tab" data-view="calendar"><span class="tab-icon" aria-hidden="true">&#128197;</span><span>Cal</span></button>
-    <button class="tab" id="bottom-more-btn" type="button"><span class="tab-icon" aria-hidden="true">&#8943;</span><span>More</span></button>
+    <button class="tab" id="bottom-more-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="more-sheet"><span class="tab-icon" aria-hidden="true">&#8943;</span><span>More</span></button>
   </nav>
 
   <!-- Mobile "More" sheet -->
-  <div class="more-sheet" id="more-sheet" hidden>
+  <div class="more-sheet" id="more-sheet" hidden role="dialog" aria-modal="true" aria-label="More options">
     <div class="more-sheet-card">
       <button class="more-sheet-item" data-view="log"><span class="tab-icon" aria-hidden="true">&#128221;</span><span>Log</span></button>
       <button class="more-sheet-item" data-view="coach"><span class="tab-icon" aria-hidden="true">&#128172;</span><span>Coach</span></button>
@@ -167,11 +169,16 @@
     </div>
   </div>
 
-  <main id="views">
+  <main id="views" tabindex="-1">
 
     <!-- Dashboard -->
     <section id="view-dashboard" class="view active">
       <div class="card-grid" id="dashboard-stats"></div>
+
+      <div class="panel" id="dashboard-chart-panel">
+        <h2>This week</h2>
+        <div id="dashboard-activity-chart"></div>
+      </div>
 
       <div class="panel">
         <h2>Vitamins &amp; supplements today</h2>

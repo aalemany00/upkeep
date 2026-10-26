@@ -290,7 +290,7 @@ function maybeRebuildStaleSplit() {
 function renderAvatarPicker(container, selectedId, onPick) {
   if (!container) return;
   container.innerHTML = COACH_AVATARS.map((a) => `
-    <button type="button" class="avatar-option${a.id === selectedId ? " selected" : ""}" data-avatar-id="${a.id}" title="${a.tagline}">
+    <button type="button" class="avatar-option${a.id === selectedId ? " selected" : ""}" data-avatar-id="${a.id}" title="${a.tagline}" aria-pressed="${a.id === selectedId}">
       <span class="avatar-thumb">${pixelAvatarSvg(a.grid, a.palette, 64)}</span>
       <span class="avatar-name">${a.name}</span>
     </button>
@@ -585,21 +585,37 @@ document.querySelectorAll("[data-switch-view]").forEach((btn) => {
 });
 
 function switchView(view) {
-  document.querySelectorAll(".tab[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
+  document.querySelectorAll(".tab[data-view]").forEach((b) => {
+    const active = b.dataset.view === view;
+    b.classList.toggle("active", active);
+    if (active) b.setAttribute("aria-current", "page");
+    else b.removeAttribute("aria-current");
+  });
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === `view-${view}`));
 }
+switchView("dashboard"); // sets aria-current for the view that's already active in the static HTML
 
 const moreSheet = document.getElementById("more-sheet");
+const bottomMoreBtn = document.getElementById("bottom-more-btn");
 function openMoreSheet() {
-  if (moreSheet) moreSheet.hidden = false;
+  if (!moreSheet) return;
+  moreSheet.hidden = false;
+  bottomMoreBtn?.setAttribute("aria-expanded", "true");
+  moreSheet.querySelector(".more-sheet-item")?.focus();
 }
 function closeMoreSheet() {
-  if (moreSheet) moreSheet.hidden = true;
+  if (!moreSheet || moreSheet.hidden) return;
+  moreSheet.hidden = true;
+  bottomMoreBtn?.setAttribute("aria-expanded", "false");
+  bottomMoreBtn?.focus();
 }
-document.getElementById("bottom-more-btn")?.addEventListener("click", openMoreSheet);
+bottomMoreBtn?.addEventListener("click", openMoreSheet);
 document.getElementById("more-sheet-close")?.addEventListener("click", closeMoreSheet);
 moreSheet?.addEventListener("click", (e) => {
   if (e.target === moreSheet) closeMoreSheet();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && moreSheet && !moreSheet.hidden) closeMoreSheet();
 });
 
 // Settings (gear icon) opens the former "Goals" tab, now with Account/Help
@@ -720,6 +736,7 @@ function renderDashboard() {
     .join("");
 
   renderCoachPreview();
+  renderWeeklyActivityChart();
 }
 
 async function applyCalorieChange(delta) {
@@ -746,6 +763,85 @@ function renderCoachPreview() {
   }
   el.innerHTML = coachNoteHtml(coachNotes[0]);
   wireApplyButtons(el);
+}
+
+// ---------------------------------------------------------------------
+// "This week" chart (Dashboard) — calories logged per day for the last 7
+// days against the daily calorie goal. Plain inline SVG, no chart library
+// (deliberately deferred adding one — see PROJECT_STATE.md): one bar per
+// day is all this needs, and a hand-built bar chart keeps the "no build
+// step" constraint intact. Single series, so no legend — the goal dashed
+// line and the panel title carry what each mark means.
+// ---------------------------------------------------------------------
+function last7DateKeys() {
+  const t = new Date();
+  const out = [];
+  for (let i = 6; i >= 0; i--) {
+    out.push(todayKey(new Date(t.getFullYear(), t.getMonth(), t.getDate() - i)));
+  }
+  return out;
+}
+
+function weeklyCaloriesChartSvg(dateKeys, valuesByKey, goal) {
+  const width = 700;
+  const height = 200;
+  const chartTop = 14;
+  const chartBottom = 150;
+  const chartHeight = chartBottom - chartTop;
+  const barWidth = 56;
+  const gap = (width - barWidth * dateKeys.length) / (dateKeys.length + 1);
+
+  const values = dateKeys.map((k) => valuesByKey[k] || 0);
+  const max = Math.max(goal || 0, ...values, 1) * 1.15;
+  const todayK = todayKey();
+
+  const bars = dateKeys
+    .map((key, i) => {
+      const value = values[i];
+      const x = gap + i * (barWidth + gap);
+      const barHeight = (value / max) * chartHeight;
+      const y = chartBottom - barHeight;
+      const isToday = key === todayK;
+      const over = !!goal && value > goal;
+      const color = over ? "var(--danger)" : "var(--accent)";
+      const dayLabel = WEEKDAY_LABELS[weekdayOf(key)];
+      const valueLabel = isToday && value > 0
+        ? `<text x="${x + barWidth / 2}" y="${y - 6}" text-anchor="middle" font-size="12" fill="var(--text)">${value}</text>`
+        : "";
+      return `
+        <g>
+          <rect x="${x}" y="${y}" width="${barWidth}" height="${Math.max(barHeight, value > 0 ? 2 : 0)}" rx="4" fill="${color}">
+            <title>${dateFromKey(key).toLocaleDateString(undefined, { weekday: "long" })}: ${value} kcal${over ? " (over goal)" : ""}</title>
+          </rect>
+          ${valueLabel}
+          <text x="${x + barWidth / 2}" y="172" text-anchor="middle" font-size="12" fill="${isToday ? "var(--text)" : "var(--subtle)"}" font-weight="${isToday ? "700" : "400"}">${dayLabel}</text>
+        </g>`;
+    })
+    .join("");
+
+  const goalLine = goal
+    ? `<line x1="0" y1="${chartBottom - (goal / max) * chartHeight}" x2="${width}" y2="${chartBottom - (goal / max) * chartHeight}" stroke="var(--subtle)" stroke-width="1.5" stroke-dasharray="5 4"/>`
+    : "";
+
+  const summary = dateKeys.map((k, i) => `${WEEKDAY_LABELS[weekdayOf(k)]} ${values[i]}`).join(", ");
+  const ariaLabel = `Calories per day, this week: ${summary}.${goal ? ` Goal ${goal} kcal per day.` : ""}`;
+
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="${ariaLabel}" style="width:100%; height:auto; display:block;">
+    <line x1="0" y1="${chartBottom}" x2="${width}" y2="${chartBottom}" stroke="var(--panel-border)" stroke-width="1"/>
+    ${goalLine}
+    ${bars}
+  </svg>`;
+}
+
+function renderWeeklyActivityChart() {
+  const el = document.getElementById("dashboard-activity-chart");
+  if (!el) return;
+  const dateKeys = last7DateKeys();
+  const valuesByKey = {};
+  for (const key of dateKeys) {
+    valuesByKey[key] = sumByType(entries.filter((e) => e.dateKey === key), "food", "calories");
+  }
+  el.innerHTML = weeklyCaloriesChartSvg(dateKeys, valuesByKey, goals.calorieGoal);
 }
 
 // ---------------------------------------------------------------------
