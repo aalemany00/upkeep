@@ -117,7 +117,12 @@
       <span class="brand-icon" data-icon="leaf" data-icon-size="20" aria-hidden="true"></span>
       <span class="sidebar-title">Upkeep</span>
     </div>
-    <div class="sidebar-avatar" id="sidebar-avatar"></div>
+    <div class="sidebar-avatar-wrap">
+      <button type="button" class="sidebar-avatar" id="sidebar-avatar-btn" aria-label="Get a note from your coach">
+        <span id="sidebar-avatar" class="sidebar-avatar-face"></span>
+      </button>
+      <div class="coach-bubble" id="coach-bubble" hidden></div>
+    </div>
     <div class="sidebar-nav" id="tabs">
       <button class="tab active" data-view="dashboard"><span class="tab-icon" data-icon="home" aria-hidden="true"></span><span>Dashboard</span></button>
       <button class="tab" data-view="food"><span class="tab-icon" data-icon="utensils" aria-hidden="true"></span><span>Food</span></button>
@@ -136,6 +141,10 @@
   <!-- Mobile topbar -->
   <header class="topbar">
     <span class="topbar-brand"><span class="brand-icon" data-icon="leaf" data-icon-size="18" aria-hidden="true"></span> Upkeep</span>
+    <button type="button" class="sidebar-avatar sidebar-avatar-topbar" id="sidebar-avatar-btn-mobile" aria-label="Get a note from your coach">
+      <span id="sidebar-avatar-mobile" class="sidebar-avatar-face"></span>
+    </button>
+    <div class="coach-bubble coach-bubble-topbar" id="coach-bubble-mobile" hidden></div>
   </header>
 
   <!-- Mobile bottom nav -->

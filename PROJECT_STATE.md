@@ -549,6 +549,36 @@ side by side, rather than from a text description.
     card in the mockup's 4-ring row) moved to a small subtitle line under
     "Today's activity" instead of being dropped.
 
+### 2d. Collapsible coach notes, more detailed avatars, click-to-motivate (2026-10-25)
+
+- **Collapsible coach notes**: the full note (summary/wins/concerns/
+  suggestions/progression table/exercise notes) was too long sitting
+  fully expanded on the Dashboard. `coachNoteCardHtml()` now wraps
+  `coachNoteHtml()` in a native `<details>/<summary>` — no JS needed for
+  the toggle itself. The summary row always shows a label
+  (`coachNoteSummaryLabel()`: "Week of {start} – {end}"), so a collapsed
+  note is still identifiable. Dashboard's preview (`renderCoachPreview`)
+  renders collapsed by default; the Coach tab's list (`renderCoachNotes`)
+  opens only the most recent note, collapsing every older one.
+- **More detailed pixel-art avatars** (`coach-avatars.js`): upgraded from
+  a 10x10 grid to 16x16, built from 8-character half-rows mirrored
+  left-right (`mirrorRow`) so symmetry is guaranteed instead of hand-typed
+  twice. Added glasses (frame + lens + pupil, or solid dark lenses for
+  Nova's "sunglasses" look), cheek blush, a nose shadow, and a shirt collar
+  trim — reads as a real small portrait rather than a blocky icon, closer
+  to the mockup's illustrated character.
+- **Click-to-motivate with a talking animation**: the coach avatar (both
+  the desktop sidebar and the mobile topbar — `#sidebar-avatar-btn` /
+  `#sidebar-avatar-btn-mobile`) is now a button. Clicking it runs
+  `triggerCoachTalk()`: a short CSS keyframe wobble on the avatar
+  (`.coach-talking`, disabled under `prefers-reduced-motion`) plus a
+  speech-bubble popup (`showCoachBubble`) with a line from
+  `randomCoachLine()` — built from the user's own past coach notes
+  (summary/wins/suggestions, pooled across every note) when any exist,
+  falling back to a small built-in encouragement pool before the first
+  note ever lands. Purely cosmetic: no model call, no Firestore write,
+  just picking from content the coach already wrote.
+
 ---
 
 ## 3. The gym system (the most complex part)

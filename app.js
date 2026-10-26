@@ -320,10 +320,65 @@ function renderCoachAvatarBadges() {
   const dashBadge = document.getElementById("dashboard-coach-avatar");
   const coachBadge = document.getElementById("coach-view-avatar");
   const sidebarAvatar = document.getElementById("sidebar-avatar");
+  const sidebarAvatarMobile = document.getElementById("sidebar-avatar-mobile");
   if (dashBadge) dashBadge.innerHTML = svg;
   if (coachBadge) coachBadge.innerHTML = svg;
   if (sidebarAvatar) sidebarAvatar.innerHTML = pixelAvatarSvg(avatar.grid, avatar.palette, 56);
+  if (sidebarAvatarMobile) sidebarAvatarMobile.innerHTML = pixelAvatarSvg(avatar.grid, avatar.palette, 56);
 }
+
+// Clicking the coach avatar in the sidebar gives a short pep talk — pulled
+// from the coach's own past notes when there are any (so it's "inspired by
+// the notes he gave you", not generic filler), falling back to a small
+// built-in pool before the first note ever lands. Purely a fun touch: it
+// never writes anything or calls the model, just picks from what the coach
+// has already said.
+const FALLBACK_COACH_LINES = [
+  "Keep going — every small step adds up.",
+  "You don't have to be perfect today, just consistent.",
+  "Log something today and future-you will thank you.",
+  "Progress isn't always visible day to day — trust the process.",
+  "One more set, one more glass of water, one more good choice."
+];
+
+function randomCoachLine() {
+  const pool = [];
+  for (const note of coachNotes) {
+    if (note.summary) pool.push(note.summary);
+    (note.wins || []).forEach((w) => pool.push(w));
+    (note.suggestions || []).forEach((s) => pool.push(s));
+  }
+  const source = pool.length ? pool : FALLBACK_COACH_LINES;
+  return source[Math.floor(Math.random() * source.length)];
+}
+
+const coachBubbleTimers = {};
+function showCoachBubble(bubbleId, text) {
+  const bubble = document.getElementById(bubbleId);
+  if (!bubble) return;
+  bubble.textContent = text;
+  bubble.hidden = false;
+  bubble.classList.remove("show");
+  void bubble.offsetWidth; // restart the transition if it's already showing
+  bubble.classList.add("show");
+  clearTimeout(coachBubbleTimers[bubbleId]);
+  coachBubbleTimers[bubbleId] = setTimeout(() => {
+    bubble.classList.remove("show");
+    setTimeout(() => { bubble.hidden = true; }, 200);
+  }, 5000);
+}
+
+function triggerCoachTalk(faceId, bubbleId) {
+  const face = document.getElementById(faceId);
+  if (face) {
+    face.classList.remove("coach-talking");
+    void face.offsetWidth;
+    face.classList.add("coach-talking");
+  }
+  showCoachBubble(bubbleId, randomCoachLine());
+}
+document.getElementById("sidebar-avatar-btn")?.addEventListener("click", () => triggerCoachTalk("sidebar-avatar", "coach-bubble"));
+document.getElementById("sidebar-avatar-btn-mobile")?.addEventListener("click", () => triggerCoachTalk("sidebar-avatar-mobile", "coach-bubble-mobile"));
 
 let onboardingCoachAvatar = "sage";
 const onboardingAvatarPickerEl = document.getElementById("onboarding-avatar-picker");
@@ -790,7 +845,7 @@ function renderCoachPreview() {
     el.innerHTML = `<p class="subtle">No coach note yet — your first one shows up here once your coach has reviewed a week of activity.</p>`;
     return;
   }
-  el.innerHTML = coachNoteHtml(coachNotes[0]);
+  el.innerHTML = coachNoteCardHtml(coachNotes[0], { open: false });
   wireApplyButtons(el);
 }
 
@@ -2566,7 +2621,6 @@ function renderGym() {
 // Coach view
 // ---------------------------------------------------------------------
 function coachNoteHtml(note, showDelete) {
-  const range = note.weekStart && note.weekEnd ? `${note.weekStart} – ${note.weekEnd}` : "";
   const list = (items) => (items && items.length ? `<ul>${items.map((i) => `<li>${i}</li>`).join("")}</ul>` : "");
   const change = note.calorieGoalChange;
   const progressionTableHtml = note.progressionTable?.length
@@ -2577,7 +2631,6 @@ function coachNoteHtml(note, showDelete) {
        </table>`
     : "";
   return `
-    <div class="coach-note-meta">${range}</div>
     <p>${note.summary || ""}</p>
     ${note.wins?.length ? `<h4>Wins</h4>${list(note.wins)}` : ""}
     ${note.concerns?.length ? `<h4>Worth watching</h4>${list(note.concerns)}` : ""}
@@ -2594,6 +2647,30 @@ function coachNoteHtml(note, showDelete) {
   `;
 }
 
+// Label shown on the collapsed summary row — always identifies which note
+// this is (its week), regardless of whether it's open or closed.
+function coachNoteSummaryLabel(note) {
+  if (note.weekStart && note.weekEnd) {
+    const fmt = (key) => dateFromKey(key).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    return `Week of ${fmt(note.weekStart)} – ${fmt(note.weekEnd)}`;
+  }
+  return "Coach note";
+}
+
+// A <details>/<summary> wrapper — collapsible by default with no JS needed
+// for the toggle itself, and the label stays visible whether it's open or
+// closed so you always know which week's note you're looking at.
+function coachNoteCardHtml(note, { showDelete = false, open = false } = {}) {
+  return `
+    <details class="coach-note-card"${open ? " open" : ""}>
+      <summary class="coach-note-summary">
+        <span>${coachNoteSummaryLabel(note)}</span>
+        <span class="tab-icon coach-note-chevron" aria-hidden="true">${icon("chevron-right", { size: 16 })}</span>
+      </summary>
+      <div class="coach-note-body">${coachNoteHtml(note, showDelete)}</div>
+    </details>`;
+}
+
 async function deleteCoachNote(id) {
   if (!currentUid) return;
   await deleteDoc(doc(db, "users", currentUid, "coachNotes", id));
@@ -2606,7 +2683,7 @@ function renderCoachNotes() {
     return;
   }
   el.innerHTML = coachNotes
-    .map((n) => `<div class="coach-note" style="margin-bottom:20px;border-top:1px solid var(--panel-border);padding-top:12px;">${coachNoteHtml(n, true)}</div>`)
+    .map((n, i) => coachNoteCardHtml(n, { showDelete: true, open: i === 0 }))
     .join("");
   wireApplyButtons(el);
   el.querySelectorAll("[data-delete-note]").forEach((btn) => {
