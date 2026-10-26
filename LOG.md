@@ -243,6 +243,31 @@ own repo, as required.
   `CLAUDE.md` now points to it first. Maintenance rule going forward: update
   both this log and `PROJECT_STATE.md` whenever something substantial lands.
 
+## 2026-10-25 — UI redesign to match ChatGPT mockups
+
+- Had ChatGPT mock up a full redesign (light/dark themes, sidebar nav,
+  progress-ring dashboard cards, a pixel-art coach character). Asked Claude
+  to implement it in three passes: design system + reskin, then a weekly
+  activity chart + accessibility pass, then a full rebuild once I pointed
+  out the first pass didn't actually match the mockup images — it had
+  worked from the written brief instead of looking at the screenshots
+  directly.
+- Collapsible coach notes: the full note was too long sitting open on the
+  Dashboard. Now collapsed by default, labeled by week, with the most
+  recent note open in the Coach tab.
+- Replaced the single generic coach avatar with 5 named characters (Atlas,
+  Pixel, Mira, Rex, Luna), each with their own look, title, and line. First
+  attempt was Claude hand-drawing pixel-rect versions of my reference art —
+  didn't match at all. Fixed by actually cropping my reference sprite sheet
+  into real images instead of redrawing it.
+- Added a click-to-motivate feature: clicking the coach gives a short
+  animated "talk" with a line pulled from past coach notes (or their own
+  signature line before any notes exist).
+- Open: a couple of the cropped sprites (Atlas's, for one) still have a
+  small sliver of the reference sheet's speech-bubble border in frame —
+  tried a few automated fixes, one of them visibly broke the crop, so I had
+  Claude revert and leave it for later rather than risk the art.
+
 ## Open items
 
 - Delete the `test-coach@example.com` test account and its food entry from
@@ -259,6 +284,8 @@ own repo, as required.
   OAuth setup scoping.
 - Exercise images are only ~30% covered by wger's data; could swap in a
   better-covered source later if the gaps bother me in practice.
+- Clean up the leftover speech-bubble sliver in a few of the coach sprite
+  crops (Atlas's especially) without risking the art — revisit later.
 
 ## Where Claude misread or I had to correct it
 
