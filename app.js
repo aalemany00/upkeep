@@ -15,6 +15,20 @@ import { parseICS, normalizeFeedUrl, occursOnDate, isEventExpired, generateRecur
 import { USDA_API_KEY } from "./usda-config.js";
 import { WARMUPS_BY_DAYTYPE, COOLDOWNS_BY_DAYTYPE, CARDIO_WARMUP, CARDIO_COOLDOWN } from "./warmups.js";
 import { COACH_AVATARS, pixelAvatarSvg, coachAvatarById } from "./coach-avatars.js";
+import { icon, progressRingSvg, mountainIllustrationSvg } from "./icons.js";
+
+// Fills every static [data-icon] placeholder (sidebar nav, settings rows,
+// panel headers, etc.) with its SVG — run once at startup for markup
+// that's already in index.html. Dynamically-rendered HTML (meals, habits,
+// coach notes, ...) calls icon() directly in its own template string
+// instead of relying on this pass.
+function applyIcons(root = document) {
+  root.querySelectorAll("[data-icon]").forEach((el) => {
+    el.innerHTML = icon(el.dataset.icon, { size: Number(el.dataset.iconSize) || 20 });
+  });
+}
+applyIcons();
+document.getElementById("sidebar-illustration")?.insertAdjacentHTML("beforeend", mountainIllustrationSvg(140, 56));
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -305,8 +319,10 @@ function renderCoachAvatarBadges() {
   const svg = pixelAvatarSvg(avatar.grid, avatar.palette, 28);
   const dashBadge = document.getElementById("dashboard-coach-avatar");
   const coachBadge = document.getElementById("coach-view-avatar");
+  const sidebarAvatar = document.getElementById("sidebar-avatar");
   if (dashBadge) dashBadge.innerHTML = svg;
   if (coachBadge) coachBadge.innerHTML = svg;
+  if (sidebarAvatar) sidebarAvatar.innerHTML = pixelAvatarSvg(avatar.grid, avatar.palette, 56);
 }
 
 let onboardingCoachAvatar = "sage";
@@ -463,6 +479,7 @@ function subscribeAll(uid) {
     renderGym();
     renderDashCalendar(); // the dashboard calendar overlays scheduled gym days too
     maybeRebuildStaleSplit();
+    renderWorkoutPlanPanel();
   });
 
   const workoutsQuery = query(collection(db, "users", uid, "workoutLogs"), orderBy("dateKey", "desc"), limit(200));
@@ -479,6 +496,7 @@ function subscribeAll(uid) {
     renderGym();
     renderDashCalendar();
     renderDashDayPanel();
+    renderWorkoutPlanPanel();
   });
 
   const eventsQuery = query(collection(db, "users", uid, "calendarEvents"), orderBy("dateKey", "desc"), limit(500));
@@ -618,16 +636,9 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && moreSheet && !moreSheet.hidden) closeMoreSheet();
 });
 
-// Settings (gear icon) opens the former "Goals" tab, now with Account/Help
-// sub-tabs instead of its own top-level nav slot — consolidating goals,
-// account settings, and setup help in one place instead of a 6th main tab.
-document.getElementById("settings-btn")?.addEventListener("click", () => switchView("goals"));
-document.getElementById("settings-btn-mobile")?.addEventListener("click", () => {
-  switchView("goals");
-  closeMoreSheet();
-});
-
 // Theme toggle — mirrors the flash-prevention script in index.html's <head>.
+// Lives as an "Appearance" row inside Settings (matching the mockup's
+// settings-page list), not a standalone sidebar icon.
 function currentTheme() {
   const saved = localStorage.getItem("upkeep-theme");
   if (saved === "light" || saved === "dark") return saved;
@@ -638,12 +649,16 @@ function setTheme(theme) {
   try {
     localStorage.setItem("upkeep-theme", theme);
   } catch (e) {}
+  const subtitle = document.getElementById("theme-toggle-subtitle");
+  const iconEl = document.getElementById("theme-toggle-icon");
+  if (subtitle) subtitle.textContent = theme === "dark" ? "Dark mode" : "Light mode";
+  if (iconEl) iconEl.innerHTML = icon(theme === "dark" ? "moon" : "sun", { size: 18 });
 }
 function toggleTheme() {
   setTheme(currentTheme() === "dark" ? "light" : "dark");
 }
 document.getElementById("theme-toggle-btn")?.addEventListener("click", toggleTheme);
-document.getElementById("theme-toggle-btn-mobile")?.addEventListener("click", toggleTheme);
+setTheme(currentTheme()); // sync the Settings row's label/icon with whatever the head script already applied
 document.querySelectorAll("[data-settings-subview]").forEach((btn) => {
   btn.addEventListener("click", () => {
     const target = btn.dataset.settingsSubview;
@@ -687,56 +702,70 @@ document.getElementById("log-log-date-today")?.addEventListener("click", () => s
 // ---------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------
+function timeOfDayGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+function renderDashboardHeader() {
+  const greetingText = document.getElementById("dash-greeting-text");
+  const greetingIcon = document.getElementById("dash-greeting-icon");
+  const dateText = document.getElementById("dash-date-text");
+  const hour = new Date().getHours();
+  if (greetingText) greetingText.textContent = timeOfDayGreeting();
+  if (greetingIcon) greetingIcon.innerHTML = icon(hour >= 6 && hour < 19 ? "sun" : "moon", { size: 22 });
+  if (dateText) dateText.textContent = new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+}
+
 function renderDashboard() {
+  renderDashboardHeader();
+
   const today = todaysEntries();
   const calories = sumByType(today, "food", "calories");
   const protein = sumByType(today, "food", "protein");
   const water = sumByType(today, "water", "ml");
   const steps = sumByType(today, "activity", "steps");
   const burned = sumByType(today, "activity", "caloriesBurned") + sumByType(today, "cardio", "caloriesBurned");
-
   const latestWeight = latestWeightLb();
 
   const stats = [
-    { label: "Calories", value: `${calories}`, goal: goals.calorieGoal, raw: calories, unit: "kcal" },
-    { label: "Protein", value: `${protein}g`, goal: goals.proteinGoal, raw: protein, unit: "g" },
-    { label: "Water", value: `${water}ml`, goal: goals.waterGoal, raw: water, unit: "ml" },
-    { label: "Steps", value: `${steps}`, goal: goals.stepsGoal, raw: steps, unit: "steps" },
-    { label: "Calories burned", value: `${burned}`, goal: null, raw: burned, unit: "kcal" },
-    {
-      label: "Weight",
-      value: latestWeight !== null ? `${latestWeight} lb` : "—",
-      goal: goals.weightGoal,
-      raw: latestWeight,
-      unit: "lb",
-      isWeight: true,
-      subtitle: latestWeight !== null
-        ? `last logged ${dateFromKey(latestWeightDateKey()).toLocaleDateString(undefined, { month: "short", day: "numeric" })}${latestWeightDateKey() === todayKey() ? " (today)" : ""}`
-        : null
-    }
+    { label: "Calories", iconName: "flame", value: calories, goal: goals.calorieGoal, unit: "" },
+    { label: "Protein", iconName: "bicep", value: protein, goal: goals.proteinGoal, unit: "g" },
+    { label: "Water", iconName: "droplet", value: water, goal: goals.waterGoal, unit: "ml" },
+    { label: "Steps", iconName: "footprints", value: steps, goal: goals.stepsGoal, unit: "" }
   ];
 
   const container = document.getElementById("dashboard-stats");
   container.innerHTML = stats
     .map((s) => {
-      const hasGoal = s.goal && s.raw !== null;
-      const pct = hasGoal ? barWidth(s.raw, s.goal) : 0;
-      const over = hasGoal && s.raw > s.goal;
+      const hasGoal = !!s.goal;
+      const pct = hasGoal ? barWidth(s.value, s.goal) : 0;
+      const over = hasGoal && s.value > s.goal;
       return `
         <div class="stat-card">
-          <div class="stat-label">${s.label}</div>
-          <div class="stat-value">${s.value}</div>
-          ${s.subtitle ? `<div class="subtle small">${s.subtitle}</div>` : ""}
-          ${hasGoal ? `
-            <div class="bar-track"><div class="bar-fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>
-            <div class="stat-label">goal: ${s.goal}${s.unit === "kcal" || s.unit === "g" || s.unit === "ml" || s.unit === "lb" ? " " + s.unit : ""}</div>
-          ` : ""}
+          <div class="stat-card-top">
+            <span class="stat-card-icon">${icon(s.iconName, { size: 18 })}</span>
+            ${hasGoal ? progressRingSvg(pct, { size: 44, stroke: 4 }) : ""}
+          </div>
+          <div class="stat-card-label">${s.label}</div>
+          <div class="stat-card-value">${s.value}${s.unit}${hasGoal ? `<span class="stat-goal"> / ${s.goal}${s.unit}</span>` : ""}</div>
+          ${hasGoal ? `<div class="bar-track"><div class="bar-fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>` : ""}
         </div>`;
     })
     .join("");
 
+  const weightLine = document.getElementById("dashboard-weight-line");
+  if (weightLine) {
+    weightLine.innerHTML = `${burned} kcal burned today${latestWeight !== null ? ` &middot; last weight ${latestWeight} lb (${dateFromKey(latestWeightDateKey()).toLocaleDateString(undefined, { month: "short", day: "numeric" })}${latestWeightDateKey() === todayKey() ? ", today" : ""})` : ""}`;
+  }
+
   renderCoachPreview();
   renderWeeklyActivityChart();
+  renderDailyHabits();
+  renderMealsList();
+  renderWorkoutPlanPanel();
 }
 
 async function applyCalorieChange(delta) {
@@ -763,6 +792,89 @@ function renderCoachPreview() {
   }
   el.innerHTML = coachNoteHtml(coachNotes[0]);
   wireApplyButtons(el);
+}
+
+function renderWorkoutPlanPanel() {
+  const el = document.getElementById("dashboard-workout-plan");
+  if (!el) return;
+  const scheduled = scheduledDayTypeFor(todayKey());
+  const loggedToday = workoutLogs.some((w) => w.dateKey === todayKey());
+  const subtitle = !scheduled
+    ? "Rest day"
+    : `${scheduled.dayType}${loggedToday ? " · Logged" : ""}`;
+  el.innerHTML = `
+    <span class="workout-plan-icon">${icon("dumbbell", { size: 18 })}</span>
+    <span class="workout-plan-text">
+      <span class="panel-title">Workout plan</span>
+      <span class="subtle small">${subtitle}</span>
+    </span>
+    <span class="tab-icon">${icon("chevron-right", { size: 18 })}</span>
+  `;
+}
+
+// Folds water/steps/supplements into the single "Daily habits" checklist the
+// mockup shows — the underlying data (entries + goals.vitaminsList) and the
+// toggling itself still live on the Log tab; this is a read-only summary.
+function renderDailyHabits() {
+  const el = document.getElementById("dashboard-habits");
+  if (!el) return;
+  const today = todaysEntries();
+  const water = sumByType(today, "water", "ml");
+  const steps = sumByType(today, "activity", "steps");
+  const vitaminsList = goals.vitaminsList || [];
+  const vitaminsTaken = today.filter((e) => e.type === "vitamin").length;
+
+  const rows = [
+    {
+      iconName: "droplet",
+      label: "Water",
+      detail: `${(water / 1000).toFixed(1)} / ${goals.waterGoal ? (goals.waterGoal / 1000).toFixed(1) : "—"} L`,
+      met: !!goals.waterGoal && water >= goals.waterGoal
+    },
+    {
+      iconName: "pill",
+      label: "Supplements",
+      detail: vitaminsList.length ? `${vitaminsTaken} / ${vitaminsList.length}` : "none set up",
+      met: vitaminsList.length > 0 && vitaminsTaken >= vitaminsList.length
+    },
+    {
+      iconName: "footprints",
+      label: "Steps",
+      detail: `${steps.toLocaleString()} / ${goals.stepsGoal ? goals.stepsGoal.toLocaleString() : "—"}`,
+      met: !!goals.stepsGoal && steps >= goals.stepsGoal
+    }
+  ];
+
+  el.innerHTML = rows
+    .map(
+      (r) => `
+      <button type="button" class="habit-row${r.met ? " met" : ""}" data-switch-view="log">
+        <span class="habit-row-icon">${icon(r.iconName, { size: 16 })}</span>
+        <span class="habit-row-text">${r.label}<span class="subtle">${r.detail}</span></span>
+        <span class="habit-row-check">${icon("check-circle", { size: 18 })}</span>
+      </button>`
+    )
+    .join("");
+}
+
+function renderMealsList() {
+  const el = document.getElementById("dashboard-meals");
+  if (!el) return;
+  const meals = todaysEntries().filter((e) => e.type === "food");
+  if (!meals.length) {
+    el.innerHTML = `<p class="subtle small">Nothing logged yet today.</p>`;
+    return;
+  }
+  el.innerHTML = meals
+    .map(
+      (m) => `
+      <button type="button" class="meal-item" data-switch-view="food">
+        <span class="meal-icon">${icon("utensils", { size: 16 })}</span>
+        <span class="meal-text">${m.name}<span class="subtle">${m.calories || 0} cal &middot; ${m.protein || 0}g protein</span></span>
+        <span class="tab-icon">${icon("chevron-right", { size: 16 })}</span>
+      </button>`
+    )
+    .join("");
 }
 
 // ---------------------------------------------------------------------
@@ -1706,19 +1818,12 @@ function describeEntry(e) {
 
 function renderVitaminChips() {
   const list = (goals.vitaminsList || []);
-  // The Dashboard chip always means "today" (it's your at-a-glance status);
-  // the Log tab chip follows whatever date you're logging for, so marking a
-  // vitamin taken on a backdated day doesn't silently mark it for today.
-  const todayTaken = todaysEntries().filter((e) => e.type === "vitamin");
   const selectedTaken = entriesForSelectedDate().filter((e) => e.type === "vitamin");
-
-  const dashEl = document.getElementById("dashboard-vitamins");
   const logEl = document.getElementById("vitamin-quick-list");
+  if (!logEl) return;
 
   if (!list.length) {
-    const msg = `<p class="subtle small">No vitamins set up yet — add some in Goals.</p>`;
-    dashEl.innerHTML = msg;
-    logEl.innerHTML = msg;
+    logEl.innerHTML = `<p class="subtle small">No vitamins set up yet — add some in Settings.</p>`;
     return;
   }
 
@@ -1731,15 +1836,7 @@ function renderVitaminChips() {
       .join("");
   }
 
-  dashEl.innerHTML = chipsHtmlFor(todayTaken);
   logEl.innerHTML = chipsHtmlFor(selectedTaken);
-
-  dashEl.querySelectorAll("[data-vitamin]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      if (btn.dataset.entryId) await removeEntry(btn.dataset.entryId);
-      else await addEntry("vitamin", { name: btn.dataset.vitamin }, todayKey());
-    });
-  });
   logEl.querySelectorAll("[data-vitamin]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       if (btn.dataset.entryId) await removeEntry(btn.dataset.entryId);

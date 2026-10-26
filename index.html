@@ -114,57 +114,46 @@
   <!-- Desktop sidebar -->
   <nav class="sidebar" id="sidebar" aria-label="Main navigation">
     <div class="sidebar-brand">
-      <span class="sidebar-logo" aria-hidden="true">&#128170;</span>
+      <span class="brand-icon" data-icon="leaf" data-icon-size="20" aria-hidden="true"></span>
       <span class="sidebar-title">Upkeep</span>
     </div>
+    <div class="sidebar-avatar" id="sidebar-avatar"></div>
     <div class="sidebar-nav" id="tabs">
-      <button class="tab active" data-view="dashboard"><span class="tab-icon" aria-hidden="true">&#8962;</span><span>Dashboard</span></button>
-      <button class="tab" data-view="food"><span class="tab-icon" aria-hidden="true">&#127829;</span><span>Food</span></button>
-      <button class="tab" data-view="gym"><span class="tab-icon" aria-hidden="true">&#127947;</span><span>Gym</span></button>
-      <button class="tab" data-view="calendar"><span class="tab-icon" aria-hidden="true">&#128197;</span><span>Calendar</span></button>
-      <button class="tab" data-view="log"><span class="tab-icon" aria-hidden="true">&#128221;</span><span>Log</span></button>
-      <button class="tab" data-view="coach"><span class="tab-icon" aria-hidden="true">&#128172;</span><span>Coach</span></button>
+      <button class="tab active" data-view="dashboard"><span class="tab-icon" data-icon="home" aria-hidden="true"></span><span>Dashboard</span></button>
+      <button class="tab" data-view="food"><span class="tab-icon" data-icon="utensils" aria-hidden="true"></span><span>Food</span></button>
+      <button class="tab" data-view="gym"><span class="tab-icon" data-icon="dumbbell" aria-hidden="true"></span><span>Gym</span></button>
+      <button class="tab" data-view="log"><span class="tab-icon" data-icon="list" aria-hidden="true"></span><span>Log</span></button>
+      <button class="tab" data-view="calendar"><span class="tab-icon" data-icon="calendar" aria-hidden="true"></span><span>Calendar</span></button>
+      <button class="tab" data-view="coach"><span class="tab-icon" data-icon="message-circle" aria-hidden="true"></span><span>Coach</span></button>
+      <button class="tab" data-view="goals"><span class="tab-icon" data-icon="settings" aria-hidden="true"></span><span>Settings</span></button>
     </div>
-    <div class="sidebar-footer">
-      <button id="theme-toggle-btn" class="sidebar-footer-btn" title="Toggle theme" aria-label="Toggle theme">
-        <span class="theme-icon-light" aria-hidden="true">&#9728;</span>
-        <span class="theme-icon-dark" aria-hidden="true">&#9790;</span>
-        <span class="theme-toggle-label">Theme</span>
-      </button>
-      <button id="settings-btn" class="sidebar-footer-btn" title="Settings" aria-label="Settings">
-        <span aria-hidden="true">&#9881;</span><span>Settings</span>
-      </button>
-      <button id="signout-btn" class="sidebar-footer-btn">
-        <span aria-hidden="true">&#8594;</span><span>Sign out</span>
-      </button>
+    <div class="sidebar-tagline">
+      <div class="sidebar-illustration" id="sidebar-illustration"></div>
+      <p>Small steps<br />build big results.</p>
     </div>
   </nav>
 
   <!-- Mobile topbar -->
   <header class="topbar">
-    <span class="topbar-brand"><span class="sidebar-logo" aria-hidden="true">&#128170;</span> Upkeep</span>
-    <button id="theme-toggle-btn-mobile" class="btn small" title="Toggle theme" aria-label="Toggle theme">
-      <span class="theme-icon-light" aria-hidden="true">&#9728;</span>
-      <span class="theme-icon-dark" aria-hidden="true">&#9790;</span>
-    </button>
+    <span class="topbar-brand"><span class="brand-icon" data-icon="leaf" data-icon-size="18" aria-hidden="true"></span> Upkeep</span>
   </header>
 
   <!-- Mobile bottom nav -->
   <nav class="bottom-nav" id="bottom-tabs" aria-label="Main navigation">
-    <button class="tab active" data-view="dashboard"><span class="tab-icon" aria-hidden="true">&#8962;</span><span>Home</span></button>
-    <button class="tab" data-view="food"><span class="tab-icon" aria-hidden="true">&#127829;</span><span>Food</span></button>
-    <button class="tab" data-view="gym"><span class="tab-icon" aria-hidden="true">&#127947;</span><span>Gym</span></button>
-    <button class="tab" data-view="calendar"><span class="tab-icon" aria-hidden="true">&#128197;</span><span>Cal</span></button>
+    <button class="tab active" data-view="dashboard"><span class="tab-icon" data-icon="home" aria-hidden="true"></span><span>Home</span></button>
+    <button class="tab" data-view="food"><span class="tab-icon" data-icon="utensils" aria-hidden="true"></span><span>Food</span></button>
+    <button class="tab" data-view="gym"><span class="tab-icon" data-icon="dumbbell" aria-hidden="true"></span><span>Gym</span></button>
+    <button class="tab" data-view="calendar"><span class="tab-icon" data-icon="calendar" aria-hidden="true"></span><span>Cal</span></button>
     <button class="tab" id="bottom-more-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="more-sheet"><span class="tab-icon" aria-hidden="true">&#8943;</span><span>More</span></button>
   </nav>
 
   <!-- Mobile "More" sheet -->
   <div class="more-sheet" id="more-sheet" hidden role="dialog" aria-modal="true" aria-label="More options">
     <div class="more-sheet-card">
-      <button class="more-sheet-item" data-view="log"><span class="tab-icon" aria-hidden="true">&#128221;</span><span>Log</span></button>
-      <button class="more-sheet-item" data-view="coach"><span class="tab-icon" aria-hidden="true">&#128172;</span><span>Coach</span></button>
-      <button class="more-sheet-item" id="settings-btn-mobile"><span aria-hidden="true">&#9881;</span><span>Settings</span></button>
-      <button class="more-sheet-item" id="signout-btn-mobile"><span aria-hidden="true">&#8594;</span><span>Sign out</span></button>
+      <button class="more-sheet-item" data-view="log"><span class="tab-icon" data-icon="list" aria-hidden="true"></span><span>Log</span></button>
+      <button class="more-sheet-item" data-view="coach"><span class="tab-icon" data-icon="message-circle" aria-hidden="true"></span><span>Coach</span></button>
+      <button class="more-sheet-item" data-view="goals"><span class="tab-icon" data-icon="settings" aria-hidden="true"></span><span>Settings</span></button>
+      <button class="more-sheet-item" id="signout-btn-mobile"><span class="tab-icon" data-icon="log-out" aria-hidden="true"></span><span>Sign out</span></button>
       <button class="more-sheet-item more-sheet-close" id="more-sheet-close"><span>Close</span></button>
     </div>
   </div>
@@ -173,25 +162,49 @@
 
     <!-- Dashboard -->
     <section id="view-dashboard" class="view active">
+      <div class="dash-header">
+        <div>
+          <h1 class="dash-greeting"><span id="dash-greeting-text">Good afternoon</span><span class="tab-icon" id="dash-greeting-icon"></span></h1>
+          <p class="subtle">Your daily overview</p>
+        </div>
+        <div class="dash-date"><span class="tab-icon" data-icon="calendar" data-icon-size="16" aria-hidden="true"></span><span id="dash-date-text"></span></div>
+      </div>
+
       <div class="card-grid" id="dashboard-stats"></div>
 
-      <div class="panel" id="dashboard-chart-panel">
-        <h2>This week</h2>
-        <div id="dashboard-activity-chart"></div>
-      </div>
-
-      <div class="panel">
-        <h2>Vitamins &amp; supplements today</h2>
-        <div id="dashboard-vitamins" class="chip-row"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <h2 class="coach-heading"><span id="dashboard-coach-avatar" class="coach-avatar-sm"></span>Latest coach note</h2>
-          <button class="link-btn" data-switch-view="coach">See all</button>
+      <div class="dash-grid-2col">
+        <div class="panel">
+          <h2 class="panel-title"><span class="tab-icon" data-icon="bar-chart" aria-hidden="true"></span>Today's activity</h2>
+          <p class="subtle small" id="dashboard-weight-line" style="margin:-6px 0 10px;"></p>
+          <div id="dashboard-activity-chart"></div>
         </div>
-        <div id="dashboard-coach-preview" class="coach-note">
-          <p class="subtle">No coach note yet — your first one shows up here once your coach has reviewed a week of activity.</p>
+        <div class="dash-col-stack">
+          <div class="panel">
+            <button type="button" class="workout-plan-card" id="dashboard-workout-plan" data-switch-view="gym"></button>
+          </div>
+          <div class="panel">
+            <h2 class="panel-title"><span class="tab-icon" data-icon="check-circle" aria-hidden="true"></span>Daily habits</h2>
+            <div id="dashboard-habits"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="dash-grid-2col">
+        <div class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title"><span class="tab-icon" data-icon="utensils" aria-hidden="true"></span>Meals</h2>
+            <button class="link-btn" data-switch-view="food">View all</button>
+          </div>
+          <div id="dashboard-meals"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2 class="panel-title coach-heading"><span id="dashboard-coach-avatar" class="coach-avatar-sm"></span>Coach notes</h2>
+            <button class="link-btn" data-switch-view="coach">See all</button>
+          </div>
+          <div id="dashboard-coach-preview" class="coach-note">
+            <p class="subtle">No coach note yet — your first one shows up here once your coach has reviewed a week of activity.</p>
+          </div>
         </div>
       </div>
     </section>
@@ -200,7 +213,7 @@
     <section id="view-calendar" class="view">
       <div class="panel">
         <div class="panel-head">
-          <h2>Calendar</h2>
+          <h2 class="panel-title"><span class="tab-icon" data-icon="calendar" aria-hidden="true"></span>Calendar</h2>
           <button type="button" class="link-btn" id="ecal-toggle-feeds-btn">Imported calendars</button>
         </div>
         <div class="cal-head">
@@ -241,7 +254,7 @@
 
       <div class="panel">
         <div class="panel-head">
-          <h2>Diet suggestions</h2>
+          <h2 class="panel-title"><span class="tab-icon" data-icon="utensils" aria-hidden="true"></span>Diet suggestions</h2>
           <button type="button" class="link-btn" id="food-shuffle-all-btn">Shuffle all</button>
         </div>
         <p class="subtle small">Picked to vary day to day so you're not eating the same thing every time — swap any slot, or shuffle it. "Log this" adds it straight to today's food below.</p>
@@ -271,7 +284,7 @@
       <div class="panel" id="gym-split-summary"></div>
 
       <div class="panel">
-        <h2>Cardio</h2>
+        <h2 class="panel-title"><span class="tab-icon" data-icon="footprints" aria-hidden="true"></span>Cardio</h2>
         <div id="gym-cardio-upcoming"></div>
         <form class="log-form" id="form-cardio" data-type="cardio">
           <select name="cardioType" required>
@@ -353,6 +366,23 @@
     <!-- Settings (Goals/account settings + Help) -->
     <section id="view-goals" class="view">
 
+      <div class="panel settings-row-list">
+        <button type="button" class="settings-row" id="theme-toggle-btn">
+          <span class="settings-row-icon" id="theme-toggle-icon"></span>
+          <span class="settings-row-text">
+            <span class="settings-row-title">Appearance</span>
+            <span class="settings-row-subtitle" id="theme-toggle-subtitle">Light mode</span>
+          </span>
+          <span class="tab-icon" data-icon="chevron-right" aria-hidden="true"></span>
+        </button>
+        <button type="button" class="settings-row" id="signout-btn">
+          <span class="settings-row-icon"><span class="tab-icon" data-icon="log-out" aria-hidden="true"></span></span>
+          <span class="settings-row-text">
+            <span class="settings-row-title">Sign out</span>
+          </span>
+        </button>
+      </div>
+
       <nav class="tabs" id="settings-subtabs" style="margin-bottom:12px;">
         <button class="subtab active" data-settings-subview="account">Account &amp; Goals</button>
         <button class="subtab" data-settings-subview="help">Help</button>
@@ -365,13 +395,13 @@
       </div>
 
       <div class="panel">
-        <h2>Your coach</h2>
+        <h2 class="panel-title"><span class="tab-icon" data-icon="message-circle" aria-hidden="true"></span>Your coach</h2>
         <p class="subtle small">Just a look — pick whoever you'd rather see your notes from. Changes right away.</p>
         <div class="avatar-picker" id="settings-avatar-picker"></div>
       </div>
 
       <form id="goals-form" class="panel">
-        <h2>Your info</h2>
+        <h2 class="panel-title"><span class="tab-icon" data-icon="settings" aria-hidden="true"></span>Your info</h2>
         <div class="row">
           <label class="small grow">Age
             <input type="number" name="age" min="13" max="100" />

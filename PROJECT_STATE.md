@@ -470,6 +470,85 @@ from the original brief — see the end of this section.
     themes (stat-card grid, the new chart, Settings, the More sheet) — no
     overflow or clipped content found at any of them.
 
+### 2c. Redesign Phase 3 — matching the mockups one-to-one (2026-10-25)
+
+Adrian's first look at Phase 1/2 came back as "this looks nothing like the
+images I gave you" — Phase 1's reskin had followed a written ChatGPT brief,
+not the actual mockup screenshots, and drifted visually (wrong sidebar
+content, no avatar in the nav, no progress rings, generic emoji instead of
+a real icon set, a cooler palette than the mockup's warm cream/forest-green
+light theme and vivid navy/mint dark theme). This pass rebuilds the
+Dashboard and shared chrome to match the two mockup images directly,
+side by side, rather than from a text description.
+
+- **`icons.js`** (new, pure module): a hand-written outline-icon set
+  (`icon(name, opts)`, lucide-style — stroke-based, 24x24 viewBox, sized via
+  `size`) covering every icon the mockup uses (home, utensils, dumbbell,
+  calendar, message-circle, settings, flame, bicep, droplet, footprints,
+  bar-chart, check-circle, pill, chevron-right/left, sun/moon, plus,
+  send, log-out, list, leaf), plus `progressRingSvg(percent, opts)` (an SVG
+  ring with an arc sized to `percent`, colors via CSS vars so it reads
+  correctly in both themes) and `mountainIllustrationSvg()` (the small
+  decorative sidebar illustration — original shapes, not traced from the
+  mockup's art). `app.js`'s `applyIcons()` fills every static
+  `[data-icon]` placeholder once at startup; dynamically-rendered HTML
+  (meals, habits, coach notes, …) calls `icon()` directly in its own
+  template string.
+- **Design tokens retuned to the mockup's actual palette**: light theme is
+  now a warm cream (`--bg: #f5f4ee`) with a deep forest-green accent
+  (`--accent: #1f6e4a`); dark theme is a near-black navy (`--bg: #10151a`)
+  with a vivid mint accent (`--accent: #30c977`) — matching the two
+  mockup screenshots' light/dark panels directly, not an approximation.
+  Added `--accent-light` (lighter mint, available for future "today"-style
+  highlights) and `--ring-track` (the progress ring's background circle).
+- **Sidebar rebuilt to match**: logo (leaf icon) + the user's own pixel-art
+  coach avatar (reusing `coach-avatars.js` — the mockup's avatar is a
+  fixed illustration; this one is already personalizable, which is strictly
+  more than the mockup does) + nav items with real icons + a bottom
+  tagline ("Small steps build big results.") with the small mountain
+  illustration. **Settings is now a direct nav item** (still routes to the
+  existing `view-goals` section/id — only the entry point moved, not the
+  view's internal id) instead of a separate gear icon, matching the
+  mockup's 6-item sidebar. The old sidebar-footer theme-toggle/sign-out
+  buttons were removed; both now live as `.settings-row` rows at the top
+  of the Settings page (`#theme-toggle-btn`, `#signout-btn` — same ids,
+  new home), matching the mockup's Settings-page row style
+  (icon-in-circle + title + subtitle + chevron).
+- **Dashboard rebuilt to the mockup's structure**: a greeting header
+  (time-of-day greeting + sun/moon icon + today's date, `renderDashboardHeader()`),
+  4 ring stat cards (Calories/Protein/Water/Steps — icon + `progressRingSvg`
+  + big value + thin bar, `renderDashboard()`), a 2-column grid of
+  [Today's activity chart] + [Workout plan card / Daily habits list]
+  stacked, then a second 2-column grid of [Meals] + [Coach notes]. New
+  render functions: `renderWorkoutPlanPanel()` (today's scheduled split day
+  via the existing `scheduledDayTypeFor()`, clickable to the Gym tab),
+  `renderDailyHabits()` (folds water/supplements/steps into one read-only
+  checklist — the actual toggling still happens on the Log tab, this is
+  a summary, per the mockup's "Daily habits" card), `renderMealsList()`
+  (today's food entries as a clickable list). The old separate "Vitamins &
+  supplements" chip panel on the Dashboard was removed (its Log-tab
+  counterpart, `renderVitaminChips()`'s `#vitamin-quick-list`, is
+  unchanged) since Daily habits now covers that at a glance.
+- **Deliberate deviations from the mockup**, called out rather than
+  silently dropped:
+  - **"Log" stayed as its own nav item** (water/weight/steps/vitamin entry
+    has no other home in this app's data model; the mockup's cleaner
+    6-item sidebar assumes logging happens inline on each page, which
+    would be a real feature change, not a reskin).
+  - **Meals show a generic utensils icon, not food photos** — there's no
+    photo-per-food-entry data in this app (manual entries + a static
+    suggestion catalog), so a real thumbnail isn't available without
+    adding an image-sourcing feature.
+  - **Settings keeps its existing "Account & Goals" / "Help" sub-tabs**
+    below the new Appearance/Sign-out rows, rather than the mockup's
+    separate Account/Appearance/Units/Calendar/Equipment/Notifications
+    sub-pages — that split is an information-architecture change, not a
+    visual one; the content itself (profile, goals, equipment, holidays,
+    delete account) is unchanged.
+  - **Weight and calories-burned** (tracked features with no dedicated
+    card in the mockup's 4-ring row) moved to a small subtitle line under
+    "Today's activity" instead of being dropped.
+
 ---
 
 ## 3. The gym system (the most complex part)
@@ -696,6 +775,7 @@ nutrition.js            # pure functions: computeDailyGoals, GOAL_LABELS, ACTIVI
 calendar.js             # pure functions: parseICS, occursOnDate, isEventExpired, generateRecurrenceDates (no DOM/Firebase/network)
 warmups.js              # static warm-up/cool-down routine data per gym day type + cardio
 coach-avatars.js        # pure functions: 3 original pixel-art coach avatars + SVG builder (no DOM/Firebase)
+icons.js                # pure functions: outline-icon set, progress-ring SVG, sidebar illustration (no DOM/Firebase)
 exercises.json           # 932-exercise static catalog (seeded, not hand-written)
 foods.json              # 60-item static diet-suggestion catalog (hand-written)
 firebase-config.js      # real Firebase project config (public-safe, committed)

@@ -7,51 +7,57 @@
    through one of these variables so a theme switch is instant and total.
 --------------------------------------------------------------------- */
 :root {
-  --bg: #f6f7f2;
+  --bg: #f5f4ee;
   --panel: #ffffff;
-  --panel-border: #dce3dc;
-  --text: #19352d;
-  --subtle: #5b6f66;
-  --accent: #347858;
-  --accent-dark: #2a6048;
+  --panel-border: #e8e6dd;
+  --text: #1f2d24;
+  --subtle: #76847a;
+  --accent: #1f6e4a;
+  --accent-dark: #17563a;
+  --accent-light: #8fd9ac;
   --accent-contrast: #ffffff;
+  --ring-track: #edefe8;
   --danger: #c0392b;
   --success-bg: #e3f2e8;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow: 0 1px 2px rgba(25, 53, 45, 0.06), 0 1px 1px rgba(25, 53, 45, 0.04);
+  --radius: 14px;
+  --radius-sm: 10px;
+  --shadow: 0 1px 2px rgba(31, 45, 36, 0.06), 0 2px 8px rgba(31, 45, 36, 0.04);
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color-scheme: light;
 }
 
 :root[data-theme="dark"] {
-  --bg: #141a1b;
-  --panel: #20292a;
-  --panel-border: #374344;
-  --text: #f1f5f1;
-  --subtle: #9aa6a7;
-  --accent: #8be69b;
-  --accent-dark: #6bc47f;
-  --accent-contrast: #0b1a10;
+  --bg: #10151a;
+  --panel: #1a2129;
+  --panel-border: #2a333d;
+  --text: #edf1ed;
+  --subtle: #8b96a0;
+  --accent: #30c977;
+  --accent-dark: #25a862;
+  --accent-light: #8ff0b3;
+  --accent-contrast: #06150c;
+  --ring-track: #2a333d;
   --danger: #e4664f;
-  --success-bg: #1f3328;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.2);
+  --success-bg: #173322;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 10px rgba(0, 0, 0, 0.25);
   color-scheme: dark;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #141a1b;
-    --panel: #20292a;
-    --panel-border: #374344;
-    --text: #f1f5f1;
-    --subtle: #9aa6a7;
-    --accent: #8be69b;
-    --accent-dark: #6bc47f;
-    --accent-contrast: #0b1a10;
+    --bg: #10151a;
+    --panel: #1a2129;
+    --panel-border: #2a333d;
+    --text: #edf1ed;
+    --subtle: #8b96a0;
+    --accent: #30c977;
+    --accent-dark: #25a862;
+    --accent-light: #8ff0b3;
+    --accent-contrast: #06150c;
+    --ring-track: #2a333d;
     --danger: #e4664f;
-    --success-bg: #1f3328;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.2);
+    --success-bg: #173322;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 10px rgba(0, 0, 0, 0.25);
     color-scheme: dark;
   }
 }
@@ -172,12 +178,25 @@ input[type="number"] {
 .sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 10px 20px;
+  gap: 8px;
+  padding: 0 10px 18px;
+  color: var(--accent);
 }
 
-.sidebar-logo { font-size: 1.4em; }
-.sidebar-title { font-size: 1.2em; font-weight: 700; letter-spacing: -0.01em; }
+.sidebar-title { font-size: 1.2em; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
+
+.sidebar-avatar {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 18px;
+}
+.sidebar-avatar svg {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 2px solid var(--panel-border);
+}
 
 .sidebar-nav {
   display: flex;
@@ -186,41 +205,18 @@ input[type="number"] {
   flex: 1;
 }
 
-.sidebar-footer {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.sidebar-tagline {
   border-top: 1px solid var(--panel-border);
-  padding-top: 10px;
+  padding-top: 14px;
+  text-align: center;
 }
-
-.sidebar-footer-btn {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-  background: transparent;
-  border: none;
-  color: var(--subtle);
-  border-radius: var(--radius-sm);
-  font-size: 0.9em;
-  cursor: pointer;
-  text-align: left;
-  width: 100%;
-}
-.sidebar-footer-btn:hover { background: var(--bg); color: var(--text); }
-
-#theme-toggle-btn .theme-icon-dark,
-#theme-toggle-btn-mobile .theme-icon-dark { display: none; }
-:root[data-theme="dark"] #theme-toggle-btn .theme-icon-light,
-:root[data-theme="dark"] #theme-toggle-btn-mobile .theme-icon-light { display: none; }
-:root[data-theme="dark"] #theme-toggle-btn .theme-icon-dark,
-:root[data-theme="dark"] #theme-toggle-btn-mobile .theme-icon-dark { display: inline; }
+.sidebar-tagline p { color: var(--subtle); font-size: 0.82em; line-height: 1.4; margin: 6px 0 0; }
+.sidebar-illustration { display: flex; justify-content: center; }
 
 #views {
   flex: 1;
   min-width: 0;
-  max-width: 820px;
+  max-width: 1040px;
   margin: 0 auto;
   padding: 28px 24px 48px;
 }
@@ -239,7 +235,8 @@ input[type="number"] {
   white-space: nowrap;
   text-align: left;
 }
-.tab-icon { font-size: 1.1em; line-height: 1; }
+.tab-icon { display: inline-flex; line-height: 1; }
+.tab-icon svg { display: block; }
 
 .sidebar-nav .tab { width: 100%; }
 .sidebar-nav .tab:hover { background: var(--bg); color: var(--text); }
@@ -300,6 +297,192 @@ input[type="number"] {
 }
 
 .bar-fill.over { background: var(--danger); }
+
+/* Dashboard header: greeting + date */
+.dash-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.dash-greeting { display: flex; align-items: center; gap: 8px; margin: 0; }
+.dash-greeting .tab-icon { color: var(--accent); }
+.dash-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--subtle);
+  font-size: 0.85em;
+  padding-top: 4px;
+}
+
+/* Stat cards with a progress ring (Dashboard top row) */
+.stat-card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+.stat-card-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--success-bg);
+  color: var(--accent);
+}
+.stat-card-label { font-size: 0.85em; color: var(--subtle); margin-bottom: 2px; }
+.stat-card-value { font-size: 1.3em; font-weight: 700; margin-bottom: 10px; }
+.stat-card-value .stat-goal { font-size: 0.65em; font-weight: 400; color: var(--subtle); }
+
+/* Two-column Dashboard grid (chart+workout/habits, meals+coach) */
+.dash-grid-2col {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.dash-col-stack { display: flex; flex-direction: column; gap: 16px; }
+.dash-col-stack .panel { margin-bottom: 0; }
+@media (max-width: 900px) {
+  .dash-grid-2col { grid-template-columns: 1fr; }
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.05em;
+  font-weight: 700;
+  margin: 0 0 12px;
+}
+.panel-title .tab-icon { color: var(--accent); }
+
+/* Workout-plan panel: a clickable row styled like a mini panel */
+.workout-plan-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  font: inherit;
+}
+.workout-plan-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--success-bg);
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.workout-plan-text { flex: 1; min-width: 0; }
+.workout-plan-text .panel-title { margin: 0; font-size: 1em; }
+.workout-plan-text .subtle { display: block; margin-top: 2px; }
+.workout-plan-card > .tab-icon { color: var(--subtle); flex: 0 0 auto; }
+
+/* Daily habits list */
+.habit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--panel-border);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 10px 0;
+  font: inherit;
+}
+.habit-row:first-child { border-top: none; padding-top: 0; }
+.habit-row:hover { background: var(--bg); }
+.habit-row-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--success-bg);
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.habit-row-text { flex: 1; min-width: 0; font-size: 0.9em; }
+.habit-row-text .subtle { display: block; font-size: 0.85em; }
+.habit-row-check { flex: 0 0 auto; color: var(--panel-border); }
+.habit-row.met .habit-row-check { color: var(--accent); }
+
+/* Meals list */
+.meal-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: inherit;
+  text-align: left;
+  padding: 10px 0;
+  border-top: 1px solid var(--panel-border);
+  font: inherit;
+}
+.meal-item:first-child { border-top: none; padding-top: 0; }
+.meal-item:hover { background: var(--bg); cursor: pointer; }
+.meal-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--success-bg);
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.meal-text { flex: 1; min-width: 0; }
+.meal-text .subtle { display: block; font-size: 0.85em; }
+
+/* Settings rows (Appearance, Sign out, …) */
+.settings-row-list { display: flex; flex-direction: column; }
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: inherit;
+  text-align: left;
+  padding: 12px 0;
+  border-top: 1px solid var(--panel-border);
+  cursor: pointer;
+  font: inherit;
+}
+.settings-row:first-child { border-top: none; padding-top: 0; }
+.settings-row:hover { background: var(--bg); }
+.settings-row-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--success-bg);
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.settings-row-text { flex: 1; min-width: 0; }
+.settings-row-title { display: block; font-weight: 600; }
+.settings-row-subtitle { display: block; font-size: 0.85em; color: var(--subtle); }
+.settings-row > .tab-icon:last-child { color: var(--subtle); flex: 0 0 auto; }
 
 .panel {
   background: var(--panel);
