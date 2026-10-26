@@ -14,7 +14,7 @@ import { computeDailyGoals, GOAL_LABELS } from "./nutrition.js";
 import { parseICS, normalizeFeedUrl, occursOnDate, isEventExpired, generateRecurrenceDates, DEFAULT_EVENT_COLOR, DEFAULT_FEED_COLOR, GYM_EVENT_COLOR } from "./calendar.js";
 import { USDA_API_KEY } from "./usda-config.js";
 import { WARMUPS_BY_DAYTYPE, COOLDOWNS_BY_DAYTYPE, CARDIO_WARMUP, CARDIO_COOLDOWN } from "./warmups.js";
-import { COACH_AVATARS, pixelAvatarSvg, coachAvatarById } from "./coach-avatars.js";
+import { COACH_AVATARS, coachAvatarById } from "./coach-avatars.js";
 import { icon, progressRingSvg, mountainIllustrationSvg } from "./icons.js";
 
 // Fills every static [data-icon] placeholder (sidebar nav, settings rows,
@@ -305,8 +305,9 @@ function renderAvatarPicker(container, selectedId, onPick) {
   if (!container) return;
   container.innerHTML = COACH_AVATARS.map((a) => `
     <button type="button" class="avatar-option${a.id === selectedId ? " selected" : ""}" data-avatar-id="${a.id}" title="${a.tagline}" aria-pressed="${a.id === selectedId}">
-      <span class="avatar-thumb">${pixelAvatarSvg(a.grid, a.palette, 64)}</span>
-      <span class="avatar-name">${a.name}</span>
+      <span class="avatar-thumb"><img src="${a.face}" alt="${a.name}" /></span>
+      <span class="avatar-name"><span class="avatar-badge-icon" style="color:${a.accent}">${icon(a.badgeIcon, { size: 13 })}</span>${a.name}</span>
+      <span class="avatar-title subtle small">${a.title}</span>
     </button>
   `).join("");
   container.querySelectorAll("[data-avatar-id]").forEach((btn) => {
@@ -314,17 +315,42 @@ function renderAvatarPicker(container, selectedId, onPick) {
   });
 }
 
+// Every small inline badge (Dashboard/Coach tab headings, sidebar, mobile
+// topbar) shows just the coach's face — "fully splayed out" full-body art
+// is reserved for the one hero panel at the top of the Coach tab.
 function renderCoachAvatarBadges() {
   const avatar = coachAvatarById(goals.coachAvatar);
-  const svg = pixelAvatarSvg(avatar.grid, avatar.palette, 28);
+  const faceImg = `<img src="${avatar.face}" alt="${avatar.name}" />`;
   const dashBadge = document.getElementById("dashboard-coach-avatar");
   const coachBadge = document.getElementById("coach-view-avatar");
   const sidebarAvatar = document.getElementById("sidebar-avatar");
   const sidebarAvatarMobile = document.getElementById("sidebar-avatar-mobile");
-  if (dashBadge) dashBadge.innerHTML = svg;
-  if (coachBadge) coachBadge.innerHTML = svg;
-  if (sidebarAvatar) sidebarAvatar.innerHTML = pixelAvatarSvg(avatar.grid, avatar.palette, 56);
-  if (sidebarAvatarMobile) sidebarAvatarMobile.innerHTML = pixelAvatarSvg(avatar.grid, avatar.palette, 56);
+  if (dashBadge) dashBadge.innerHTML = faceImg;
+  if (coachBadge) coachBadge.innerHTML = faceImg;
+  if (sidebarAvatar) sidebarAvatar.innerHTML = faceImg;
+  if (sidebarAvatarMobile) sidebarAvatarMobile.innerHTML = faceImg;
+  renderCoachHero();
+}
+
+// The Coach tab's "meet your coach" panel: full body, idle animation,
+// name/title/tagline, sitting right above the notes list it's paired with.
+function renderCoachHero() {
+  const el = document.getElementById("coach-hero");
+  if (!el) return;
+  const avatar = coachAvatarById(goals.coachAvatar);
+  el.innerHTML = `
+    <button type="button" class="coach-hero-figure" id="coach-hero-figure" aria-label="Get a note from ${avatar.name}">
+      <img src="${avatar.full}" alt="${avatar.name}, ${avatar.title}" />
+    </button>
+    <div class="coach-hero-text">
+      <h3><span class="avatar-badge-icon" style="color:${avatar.accent}">${icon(avatar.badgeIcon, { size: 16 })}</span>${avatar.name} <span class="subtle">· ${avatar.title}</span></h3>
+      <p class="coach-hero-tagline">${avatar.tagline}</p>
+      <p class="subtle small">${avatar.subtitle}</p>
+    </div>
+  `;
+  document.getElementById("coach-hero-figure")?.addEventListener("click", () => {
+    triggerCoachTalk("coach-hero-figure", "coach-bubble-hero");
+  });
 }
 
 // Clicking the coach avatar in the sidebar gives a short pep talk — pulled
@@ -342,14 +368,18 @@ const FALLBACK_COACH_LINES = [
 ];
 
 function randomCoachLine() {
-  const pool = [];
+  const avatar = coachAvatarById(goals.coachAvatar);
+  // The coach's own signature line is always in the mix — not just a
+  // placeholder for before notes exist, but a recurring part of their
+  // personality even once real note-derived lines are available.
+  const pool = [avatar.tagline];
   for (const note of coachNotes) {
     if (note.summary) pool.push(note.summary);
     (note.wins || []).forEach((w) => pool.push(w));
     (note.suggestions || []).forEach((s) => pool.push(s));
   }
-  const source = pool.length ? pool : FALLBACK_COACH_LINES;
-  return source[Math.floor(Math.random() * source.length)];
+  if (pool.length === 1) pool.push(...FALLBACK_COACH_LINES);
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 const coachBubbleTimers = {};
@@ -380,7 +410,7 @@ function triggerCoachTalk(faceId, bubbleId) {
 document.getElementById("sidebar-avatar-btn")?.addEventListener("click", () => triggerCoachTalk("sidebar-avatar", "coach-bubble"));
 document.getElementById("sidebar-avatar-btn-mobile")?.addEventListener("click", () => triggerCoachTalk("sidebar-avatar-mobile", "coach-bubble-mobile"));
 
-let onboardingCoachAvatar = "sage";
+let onboardingCoachAvatar = "atlas";
 const onboardingAvatarPickerEl = document.getElementById("onboarding-avatar-picker");
 function drawOnboardingAvatarPicker() {
   renderAvatarPicker(onboardingAvatarPickerEl, onboardingCoachAvatar, (id) => {
@@ -392,7 +422,7 @@ drawOnboardingAvatarPicker();
 
 const settingsAvatarPickerEl = document.getElementById("settings-avatar-picker");
 function drawSettingsAvatarPicker() {
-  renderAvatarPicker(settingsAvatarPickerEl, goals.coachAvatar || "sage", async (id) => {
+  renderAvatarPicker(settingsAvatarPickerEl, goals.coachAvatar || "atlas", async (id) => {
     if (!currentUid) return;
     await setDoc(doc(db, "users", currentUid, "meta", "goals"), { coachAvatar: id }, { merge: true });
   });
@@ -602,7 +632,7 @@ function teardownSubscriptions() {
   showingOnboardingReview = false;
   document.getElementById("onboarding-form").hidden = false;
   document.getElementById("onboarding-review").hidden = true;
-  onboardingCoachAvatar = "sage";
+  onboardingCoachAvatar = "atlas";
   drawOnboardingAvatarPicker();
   drawSettingsAvatarPicker();
   renderCoachAvatarBadges();

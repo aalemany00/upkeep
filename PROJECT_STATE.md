@@ -579,6 +579,54 @@ side by side, rather than from a text description.
   note ever lands. Purely cosmetic: no model call, no Firestore write,
   just picking from content the coach already wrote.
 
+### 2e. Replaced the coach cast with real sprite art — Atlas/Pixel/Mira/Rex/Luna (2026-10-25)
+
+Adrian supplied finished character art (a reference sheet: 5 named coaches,
+each with a title and a signature line) and asked for them to replace the
+procedurally-drawn coaches, with facial animation on small badges and a
+full-body animated display next to the notes in the Coach tab. A first pass
+redrew the characters as hand-coded pixel-rect SVGs (same technique as the
+original 3 avatars, just bigger grids) — Adrian's reaction: "they dont
+match the sprites i gave you at all," correctly, since a hand-drawn
+reinterpretation of reference art is not the reference art. The fix was to
+stop redrawing and use the real images.
+
+- **`avatars/*.png`** (new, static image assets — the first non-code,
+  non-JSON assets in the repo): each of the 5 characters cropped twice
+  from Adrian's reference sheet using Python/Pillow (`PIL.Image.crop`,
+  run once as a one-off script, not part of the app) — a `-face.png` (tight
+  head crop, for every small badge) and a `-full.png` (the whole figure on
+  its original card-colored background, for the Coach tab hero). The card's
+  pastel background came along with the crop deliberately — it already
+  matches each character's accent color, so it works as the badge/hero
+  background with no extra styling.
+- **`coach-avatars.js` is now pure metadata** — `id`, `name`, `title`,
+  `tagline`, `subtitle`, `badgeIcon`, `accent`, and the two image paths.
+  No grid, no palette, no SVG builder; `pixelAvatarSvg`/`pixelFaceSvg` are
+  gone. Rendering is a plain `<img>` wherever a coach appears, sized and
+  cropped entirely by CSS (`object-fit: cover` + `object-position: top`
+  for circular badges, `object-fit: contain` for the full-body hero so
+  nothing gets cropped off).
+- **Animation, now CSS-on-`<img>` instead of SVG-internals**: every face
+  badge (sidebar, mobile topbar, Dashboard/Coach headings, the avatar
+  picker) gets a continuous subtle "breathe" (`@keyframes face-idle`,
+  scale 1 → 1.035 → 1) — real sprite art can't isolate just the eyes for a
+  true blink, so this is the idle "alive" cue instead. The full-body Coach
+  tab hero sways continuously (`@keyframes coach-idle-sway`). Clicking
+  either (sidebar/topbar face, or the hero figure) adds `.coach-talking`
+  for a quick wobble (`@keyframes coach-talk`) plus the same speech-bubble
+  motivational line as before. All three idle/talk animations respect
+  `prefers-reduced-motion`.
+- **Coach tab hero** (`#coach-hero`, `renderCoachHero()`): the full-body
+  image + name/title/tagline/subtitle sits above the notes list —
+  "fully splayed out ... next to the notes they give." `avatar.badgeIcon`
+  (the small leaf/code/lotus/paw/moon icon from the reference cards) shows
+  next to the name here and in the avatar picker, tinted with that
+  coach's own `accent` color.
+- `randomCoachLine()` still always includes the selected coach's own
+  `tagline` in the line pool alongside real note content — unchanged by
+  this rework, since it never depended on the pixel-art implementation.
+
 ---
 
 ## 3. The gym system (the most complex part)
@@ -804,8 +852,9 @@ gym.js                  # pure functions: assignSplit, targetFor (no DOM/Firebas
 nutrition.js            # pure functions: computeDailyGoals, GOAL_LABELS, ACTIVITY_LEVELS (no DOM/Firebase)
 calendar.js             # pure functions: parseICS, occursOnDate, isEventExpired, generateRecurrenceDates (no DOM/Firebase/network)
 warmups.js              # static warm-up/cool-down routine data per gym day type + cardio
-coach-avatars.js        # pure functions: 3 original pixel-art coach avatars + SVG builder (no DOM/Firebase)
+coach-avatars.js        # pure metadata: the 5 coach characters (name/title/tagline/image paths), no DOM/Firebase
 icons.js                # pure functions: outline-icon set, progress-ring SVG, sidebar illustration (no DOM/Firebase)
+avatars/                # coach sprite images, cropped from Adrian's reference sheet (*-face.png, *-full.png)
 exercises.json           # 932-exercise static catalog (seeded, not hand-written)
 foods.json              # 60-item static diet-suggestion catalog (hand-written)
 firebase-config.js      # real Firebase project config (public-safe, committed)

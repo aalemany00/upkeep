@@ -31,7 +31,10 @@ const ICON_PATHS = {
   "log-out": `<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>`,
   mountain: `<path d="m8 17 4-7 4 7"/><path d="m3 17 6-11 4 7"/><path d="M21 17H3"/>`,
   list: `<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>`,
-  "chevron-left": `<path d="m15 18-6-6 6-6"/>`
+  "chevron-left": `<path d="m15 18-6-6 6-6"/>`,
+  code: `<path d="m8 9-4 3 4 3"/><path d="m16 9 4 3-4 3"/><path d="m13 6-2 12"/>`,
+  lotus: `<path d="M12 21c-4-1-6-4-6-7 2 1 4 2 6 5 2-3 4-4 6-5 0 3-2 6-6 7Z"/><path d="M12 14c-2-2-2-5-1-8 2 1 3 3 3 5 0-2 1-4 3-5 1 3 1 6-1 8"/>`,
+  paw: `<circle cx="7" cy="9" r="2"/><circle cx="12" cy="6.5" r="2"/><circle cx="17" cy="9" r="2"/><path d="M12 12c3 0 5 2 5 4.5A3.5 3.5 0 0 1 13.5 20c-.6 0-1.1-.1-1.5-.3-.4.2-.9.3-1.5.3A3.5 3.5 0 0 1 7 16.5C7 14 9 12 12 12Z"/>`
 
 };
 
