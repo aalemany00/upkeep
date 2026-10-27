@@ -867,6 +867,50 @@ by earlier testing because they only show up over multiple sessions/days:
   exercises surface before an unrelated exercise wger merely filed under
   the "Abs" category.
 
+### 3b. Gym day panel: collapsible slots + full-length cues (2026-10-26)
+
+Follow-up feedback on the Gym day panel from more real-world use:
+
+- **Exercise cues no longer cut off mid-sentence**: `toEntry()` in
+  `scripts/seed-exercises.js` used to cap the wger description at 300
+  characters (`.slice(0, 300)`), which cut 353 of 932 entries off mid-word
+  (e.g. Bench Press ending at "Push the ba"). `scripts/refresh-cues.js`
+  (new, one-off migration) re-fetches the full, untruncated description
+  text from wger.de for every exercise and updates just the `cue` field in
+  place — 382 of 932 cues changed; the longest is now 1751 characters. The
+  data layer no longer imposes any length cap at all; truncation moved
+  entirely to the UI (below), as a collapse, not a cut.
+- **Long cues collapse behind "Show more"** (`gymCueHtml()`/
+  `wireCueToggles()` in `app.js`): any cue over ~220 characters renders
+  CSS-line-clamped to 3 lines with a toggle button; short cues render
+  plain. Pure DOM class toggle, no re-render, so it can't be disturbed by
+  (or disturb) the slot-level expand/collapse state below.
+- **Each exercise slot is its own collapsible `<details>` card**, collapsed
+  by default, so the whole day's plan is scannable at a glance before
+  committing to filling in any one exercise (Adrian's framing: "look at
+  everything you'll have to do for the day, then expand the ones you're
+  on"). The `<summary>` shows the muscle group, exercise name, and a
+  one-line set/rep (or set/hold) summary; expanding reveals the exercise
+  picker, image, video link, cue, progression note, and the sets grid.
+  Applies identically to the day's suggested slots and to free-form "extra"
+  exercises added via search — both now share one inner-markup builder
+  (`exerciseSlotCardHtml()`), which previously only served extras while the
+  main slots duplicated the same markup inline. Since neither this nor the
+  cue-collapse logic is split-specific, it's automatically identical across
+  every split size (tested Push/Pull/Legs and Full Body).
+- **Expand/collapse state survives re-renders**: `renderGymDayPanel()`
+  replaces the whole panel's `innerHTML` on almost every interaction
+  (changing an exercise, adding a set, adding/removing an extra, swapping a
+  day), which would otherwise silently re-collapse anything the user had
+  opened. `expandedGymSlots`/`expandedGymExtras` (two module-level `Set`s
+  in `app.js`) track which cards are open outside the draft itself, restored
+  via the `open` attribute on each render and kept in sync by a `toggle`
+  listener on each `<details>`; both reset whenever the draft itself is
+  rebuilt for a new date or day type.
+- Spacing cleanup: `.gym-slot`/`.gym-slot-body`/`.sets-grid`/`.target-line`
+  in `style.css` got consistent gaps (flex `gap` instead of ad hoc margins)
+  so the card doesn't read as cramped once it's expanded.
+
 ---
 
 ## 4. Nutrition math (`nutrition.js`) — plain code, not AI
@@ -938,6 +982,7 @@ scripts/
   coach-note.js         # the weekly AI coach — run manually, see scripts/README.md
   seed-exercises.js     # one-time (re-runnable) catalog builder from wger.de; exports classify()
   reclassify-exercises.js  # re-applies classify() to the existing catalog in place, no live fetch
+  refresh-cues.js        # re-fetches full (untruncated) wger descriptions, updates cue field only
   serviceAccountKey.json  # GITIGNORED — Firebase Admin credential, never commit
   package.json / package-lock.json / node_modules/  # deps for the scripts above
 CLAUDE.md               # instructions for a Claude session working in this repo

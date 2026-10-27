@@ -2251,6 +2251,26 @@ async function swapScheduledDayByType(dayType) {
 
 let gymDraft = null; // { dateKey, dayType, picks: [exerciseId...], sets: [[{w,r}...]...], extra: [{exerciseId, sets}] }
 
+// Which slot/extra <details> cards are manually expanded — tracked outside
+// gymDraft because renderGymDayPanel() replaces the panel's innerHTML on
+// almost every interaction, which would otherwise silently re-collapse an
+// open card. Reset whenever the draft itself is rebuilt for a new day.
+let expandedGymSlots = new Set();
+let expandedGymExtras = new Set();
+function resetGymExpandState() {
+  expandedGymSlots = new Set();
+  expandedGymExtras = new Set();
+}
+
+// A one-line "still to log / logged" summary for a collapsed slot card, so
+// the whole day's plan can be scanned without opening every exercise.
+function gymSlotSummaryLine(ex, sets) {
+  const unitWord = ex.unit === "sec" ? "sec" : "reps";
+  const done = sets.length && sets.every((s) => s.r !== "" && s.r != null);
+  const range = `${sets.length} x ${ex.lo}-${ex.hi} ${unitWord}`;
+  return done ? `${range} — logged` : range;
+}
+
 // Template-slot entries are matched by slotLabel (not array position) so a
 // day that skipped a slot, or has extras mixed in, doesn't misalign.
 function buildGymDraft(dateKey, dayType) {
@@ -2297,6 +2317,20 @@ function warmupCooldownHtml(steps, label) {
   </details>`;
 }
 
+// Exercise cues come straight from wger's own description text (no length
+// cap at the data layer anymore — a 300-char cap used to cut some off
+// mid-sentence, even mid-word). Long ones clamp to a few lines with a
+// "Show more" toggle instead, so a long cue doesn't dominate the card.
+const CUE_CLAMP_THRESHOLD = 220;
+function gymCueHtml(cue) {
+  if (!cue || cue.length <= CUE_CLAMP_THRESHOLD) {
+    return `<p class="gym-cue">${cue || ""}</p>`;
+  }
+  return `
+    <p class="gym-cue clamped" data-cue>${cue}</p>
+    <button type="button" class="link-btn small" data-cue-toggle>Show more</button>`;
+}
+
 function exerciseSlotCardHtml(ex, tgt, sets, rowAttrs) {
   const isHold = ex.unit === "sec";
   const rows = sets
@@ -2309,12 +2343,26 @@ function exerciseSlotCardHtml(ex, tgt, sets, rowAttrs) {
   return `
     ${ex.image ? `<img src="${ex.image}" alt="${ex.name} form example" loading="lazy" />` : ""}
     ${youtubeSearchLinkHtml(ex.name)}
-    <p class="gym-cue">${ex.cue}</p>
+    ${gymCueHtml(ex.cue)}
     <div class="target-line ${tgt.status}">${tgt.note}</div>
     <div class="sets-grid">
       <span class="hd">Set</span><span class="hd">Weight (lb${ex.inc === 0 ? ", optional" : ""})</span><span class="hd">${isHold ? "Hold (sec)" : "Reps"}</span>
       ${rows}
     </div>`;
+}
+
+// A click handler shared by every rendered gym-cue "Show more" toggle —
+// pure DOM mutation, no re-render, so it can't interfere with (or be wiped
+// out by) the slot-level expand/collapse state below.
+function wireCueToggles(container) {
+  container.querySelectorAll("[data-cue-toggle]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const cue = btn.previousElementSibling;
+      const expanded = !cue.classList.contains("clamped");
+      cue.classList.toggle("clamped", expanded);
+      btn.textContent = expanded ? "Show more" : "Show less";
+    });
+  });
 }
 
 function renderGymSplitSummary() {
@@ -2392,6 +2440,7 @@ function renderGymDayPanel() {
 
   if (!gymDraft || gymDraft.dateKey !== selectedDateKey || gymDraft.dayType !== dayType) {
     gymDraft = buildGymDraft(selectedDateKey, dayType);
+    resetGymExpandState();
   }
 
   const typeOptions = distinctDayTypes().map((t) => `<option value="${t}" ${t === dayType ? "selected" : ""}>${t}</option>`).join("");
@@ -2406,35 +2455,23 @@ function renderGymDayPanel() {
       const options = slot.options
         .map((id) => `<option value="${id}" ${id === exId ? "selected" : ""}>${exerciseById.get(id)?.name || id}</option>`)
         .join("");
-      const rows = gymDraft.sets[i]
-        .map((row, j) => `
-          <span class="n">${j + 1}</span>
-          <input type="number" inputmode="decimal" step="any" min="0" placeholder="lb" value="${row.w}" data-slot="${i}" data-set="${j}" data-field="w" />
-          <input type="number" inputmode="numeric" min="0" placeholder="${tgt.aim?.[j] ?? `${ex.lo}-${ex.hi}`}" value="${row.r}" data-slot="${i}" data-set="${j}" data-field="r" />
-        `)
-        .join("");
 
       const muscleLabel = slot.muscleLabel || MUSCLE_LABEL_BY_SLOT[slot.label] || "";
       return `
-        <div class="gym-slot">
-          <div class="gym-slot-head">
+        <details class="gym-slot" data-slot-details="${i}"${expandedGymSlots.has(i) ? " open" : ""}>
+          <summary class="gym-slot-summary">
             <div>
               <strong>${muscleLabel || slot.label}</strong>
-              ${muscleLabel ? `<span class="subtle small" style="display:block;">${slot.label}</span>` : ""}
+              <span class="subtle small">${ex.name} &middot; ${gymSlotSummaryLine(ex, gymDraft.sets[i])}</span>
             </div>
-            <span class="subtle small">${ex.sets} x ${ex.lo}-${ex.hi}${ex.unit === "sec" ? " sec" : ""}</span>
+            <span class="tab-icon gym-slot-chevron" aria-hidden="true">${icon("chevron-right", { size: 16 })}</span>
+          </summary>
+          <div class="gym-slot-body">
+            <select data-slot-select="${i}">${options}</select>
+            ${exerciseSlotCardHtml(ex, tgt, gymDraft.sets[i], (j, field) => `data-slot="${i}" data-set="${j}" data-field="${field}"`)}
+            <button type="button" class="btn ghost small" data-add-set="${i}">+ set</button>
           </div>
-          <select data-slot-select="${i}">${options}</select>
-          ${ex.image ? `<img src="${ex.image}" alt="${ex.name} form example" loading="lazy" />` : ""}
-    ${youtubeSearchLinkHtml(ex.name)}
-          <p class="gym-cue">${ex.cue}</p>
-          <div class="target-line ${tgt.status}">${tgt.note}</div>
-          <div class="sets-grid">
-            <span class="hd">Set</span><span class="hd">Weight (lb${ex.inc === 0 ? ", optional" : ""})</span><span class="hd">${ex.unit === "sec" ? "Hold (sec)" : "Reps"}</span>
-            ${rows}
-          </div>
-          <button type="button" class="btn ghost small" data-add-set="${i}">+ set</button>
-        </div>`;
+        </details>`;
     })
     .join("");
 
@@ -2444,14 +2481,22 @@ function renderGymDayPanel() {
       if (!ex) return "";
       const tgt = targetForUser(historyForExercise(item.exerciseId, selectedDateKey), ex);
       return `
-        <div class="gym-slot">
-          <div class="gym-slot-head">
-            <strong>${ex.name}</strong>
-            <button type="button" class="remove-btn" data-remove-extra="${i}" title="Remove">&times;</button>
+        <details class="gym-slot" data-extra-details="${i}"${expandedGymExtras.has(i) ? " open" : ""}>
+          <summary class="gym-slot-summary">
+            <div>
+              <strong>${ex.name}</strong>
+              <span class="subtle small">${gymSlotSummaryLine(ex, item.sets)}</span>
+            </div>
+            <span class="row" style="gap:6px;align-items:center;">
+              <button type="button" class="remove-btn" data-remove-extra="${i}" title="Remove">&times;</button>
+              <span class="tab-icon gym-slot-chevron" aria-hidden="true">${icon("chevron-right", { size: 16 })}</span>
+            </span>
+          </summary>
+          <div class="gym-slot-body">
+            ${exerciseSlotCardHtml(ex, tgt, item.sets, (j, field) => `data-extra="${i}" data-set="${j}" data-field="${field}"`)}
+            <button type="button" class="btn ghost small" data-add-extra-set="${i}">+ set</button>
           </div>
-          ${exerciseSlotCardHtml(ex, tgt, item.sets, (j, field) => `data-extra="${i}" data-set="${j}" data-field="${field}"`)}
-          <button type="button" class="btn ghost small" data-add-extra-set="${i}">+ set</button>
-        </div>`;
+        </details>`;
     })
     .join("");
 
@@ -2491,6 +2536,7 @@ function renderGymDayPanel() {
       // Not a scheduled day (e.g. picking a type after already logging one
       // today) — no other weekday to swap with, so just show it.
       gymDraft = buildGymDraft(selectedDateKey, e.target.value);
+      resetGymExpandState();
       renderGymDayPanel();
     }
   });
@@ -2554,11 +2600,31 @@ function renderGymDayPanel() {
   });
 
   el.querySelectorAll("[data-remove-extra]").forEach((btn) => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault(); // sits inside a <summary> — don't also toggle it open/closed
+      e.stopPropagation();
       gymDraft.extra.splice(Number(btn.dataset.removeExtra), 1);
       renderGymDayPanel();
     });
   });
+
+  el.querySelectorAll("[data-slot-details]").forEach((details) => {
+    details.addEventListener("toggle", () => {
+      const i = Number(details.dataset.slotDetails);
+      if (details.open) expandedGymSlots.add(i);
+      else expandedGymSlots.delete(i);
+    });
+  });
+
+  el.querySelectorAll("[data-extra-details]").forEach((details) => {
+    details.addEventListener("toggle", () => {
+      const i = Number(details.dataset.extraDetails);
+      if (details.open) expandedGymExtras.add(i);
+      else expandedGymExtras.delete(i);
+    });
+  });
+
+  wireCueToggles(el);
 
   el.querySelectorAll("[data-add-extra-set]").forEach((btn) => {
     btn.addEventListener("click", () => {
