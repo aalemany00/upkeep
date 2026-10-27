@@ -204,14 +204,69 @@ function expandSearchAbbreviations(query) {
   return SEARCH_ABBREVIATIONS.reduce((q, [pattern, replacement]) => q.replace(pattern, replacement), query);
 }
 
+// Common body-part words don't share a text stem with the catalog names
+// that train them ("abs" isn't a substring of "Abdominal Crunch" or "Ab
+// wheel" — "ab" and "abdominal" are different word stems). Each query word
+// below also checks these alternate forms against the exercise name itself,
+// so a name match (the strongest signal) still fires for a same-muscle
+// word the name happens to spell differently.
+const SEARCH_WORD_ALTERNATES = {
+  abs: ["ab", "abdominal", "core"],
+  ab: ["abs", "abdominal", "core"],
+  core: ["abs", "ab", "abdominal"],
+  legs: ["leg", "quad", "quadriceps", "hamstring"],
+  leg: ["legs", "quad", "quadriceps", "hamstring"],
+  // "butt" is deliberately left out of the alternates lists below (not just
+  // dropped for its own entry) — it's a substring of unrelated names like
+  // "Butterfly", so including it would surface those as false matches for
+  // *every* word that maps to it, not just when someone actually types "butt".
+  glutes: ["glute", "gluteus", "booty"],
+  glute: ["glutes", "gluteus", "booty"],
+  booty: ["glute", "glutes", "gluteus"],
+  butt: ["glute", "glutes", "gluteus", "booty"],
+  arms: ["arm", "bicep", "tricep"],
+  arm: ["arms", "bicep", "tricep"],
+  back: ["lat", "lats"],
+  calves: ["calf"],
+  calf: ["calves"],
+  chest: ["pec", "pecs", "pectoral"],
+  shoulders: ["shoulder", "delt", "deltoid"],
+  shoulder: ["shoulders", "delt", "deltoid"]
+};
+
+// Plain-English words for each of wger's Latin muscle names, so searching
+// works for someone who knows what a movement *feels like* ("ab workout")
+// but not its catalog name or the Latin muscle it targets. Appended to each
+// exercise's searchable text, never shown in the UI.
+const MUSCLE_SEARCH_SYNONYMS = {
+  "Pectoralis major": "chest pecs pectorals",
+  "Latissimus dorsi": "lats back",
+  Trapezius: "traps upper back",
+  "Anterior deltoid": "shoulders delts deltoid",
+  "Biceps brachii": "biceps arms",
+  Brachialis: "biceps arms",
+  "Triceps brachii": "triceps arms",
+  "Quadriceps femoris": "quads quadriceps legs thighs",
+  "Biceps femoris": "hamstrings legs",
+  "Gluteus maximus": "glutes butt booty",
+  Gastrocnemius: "calves legs",
+  Soleus: "calves legs",
+  "Rectus abdominis": "abs core abdominals stomach",
+  "Obliquus externus abdominis": "obliques abs core side"
+};
+
 // Free-form exercise search used by the Gym tab's "add any other exercise"
-// box. A plain whole-phrase substring match (the original implementation)
-// fails on anything typed in a different word order or with a word the
-// catalog doesn't use (e.g. "seated DB shoulder press" when the catalog
-// just has "Shoulder Press, Dumbbells" — no "seated" in it at all) — this
-// instead scores every exercise by how many of the typed words it contains
-// and ranks by that, so a partial/reordered/abbreviated match still surfaces
-// the closest real exercises instead of "no matches."
+// box. A plain whole-phrase substring match on just the name (the original
+// implementation) fails two ways: a different word order or an abbreviation
+// the catalog doesn't use (e.g. "seated DB shoulder press" when the catalog
+// just has "Shoulder Press, Dumbbells"), and anyone searching by what a
+// movement targets rather than its name (e.g. "ab workout" for an exercise
+// whose catalog name doesn't contain "ab" at all). This scores every
+// exercise against its name *and* its muscle/category/equipment — in
+// plain-English synonyms, not wger's Latin muscle names — by how many of
+// the typed words match, so a partial, reordered, abbreviated, or
+// body-part-only search still surfaces the closest real exercises instead
+// of "no matches."
 export function searchExercises(query, catalog, limit = 10) {
   const words = expandSearchAbbreviations(query.toLowerCase())
     .split(/\s+/)
@@ -221,8 +276,19 @@ export function searchExercises(query, catalog, limit = 10) {
 
   return catalog
     .map((ex) => {
-      const name = ex.name.toLowerCase();
-      const matchCount = words.filter((w) => name.includes(w)).length;
+      const muscleWords = ex.muscles.map((m) => MUSCLE_SEARCH_SYNONYMS[m] || "").join(" ");
+      const haystack = `${ex.name} ${ex.category} ${ex.equipment.join(" ")} ${muscleWords}`.toLowerCase();
+      const nameLower = ex.name.toLowerCase();
+      // Matching the exercise's own name (directly, or via a same-muscle
+      // word the name spells differently) is worth more than matching only
+      // via category/equipment/muscle synonyms, so a direct name hit always
+      // ranks above a body-part-only one.
+      const matchCount = words.reduce((total, w) => {
+        const forms = [w, ...(SEARCH_WORD_ALTERNATES[w] || [])];
+        if (forms.some((f) => nameLower.includes(f))) return total + 2;
+        if (forms.some((f) => haystack.includes(f))) return total + 1;
+        return total;
+      }, 0);
       return { ex, matchCount };
     })
     .filter((s) => s.matchCount > 0)
@@ -316,11 +382,12 @@ export function assignSplit(daysPerWeek, catalog, equipmentInput) {
 // bodyweight-classified movement (inc === 0), since those progress by
 // reps/tempo, not plates.
 export function targetFor(history, exerciseMeta, minIncrementLb = 0) {
-  const { sets: targetSets, lo, hi, inc: exerciseInc } = exerciseMeta;
+  const { sets: targetSets, lo, hi, inc: exerciseInc, unit = "reps" } = exerciseMeta;
   const inc = exerciseInc > 0 ? Math.max(exerciseInc, minIncrementLb || 0) : exerciseInc;
+  const unitWord = unit === "sec" ? "sec" : "reps";
 
   if (!history.length) {
-    return { status: "new", weight: null, note: `First time — pick a weight where your first set lands in ${lo}-${hi} reps with a couple left in the tank.` };
+    return { status: "new", weight: null, note: `First time — pick a weight where your first set lands in ${lo}-${hi} ${unitWord} with a couple left in the tank.` };
   }
 
   const last = history[history.length - 1];
@@ -331,10 +398,10 @@ export function targetFor(history, exerciseMeta, minIncrementLb = 0) {
 
   if (allAtTop) {
     if (topWeight === 0) {
-      return { status: "up", weight: 0, note: `Hit ${hi} reps on every set — make it harder (slower tempo, added weight if possible), then rebuild from ${lo}.` };
+      return { status: "up", weight: 0, note: `Hit ${hi} ${unitWord} on every set — make it harder (slower tempo${unit === "sec" ? "" : ", added weight if possible"}, or a tougher variation), then rebuild from ${lo}.` };
     }
     const next = topWeight + inc;
-    return { status: "up", weight: next, note: `Hit ${hi} on every set last time — go up to ${next} and aim for ${lo}+ reps.` };
+    return { status: "up", weight: next, note: `Hit ${hi} on every set last time — go up to ${next} and aim for ${lo}+ ${unitWord}.` };
   }
 
   if (history.length >= 3) {
@@ -348,7 +415,7 @@ export function targetFor(history, exerciseMeta, minIncrementLb = 0) {
 
   if (avgReps < lo - 0.5 && topWeight > 0) {
     const next = Math.max(0, topWeight - Math.max(inc, 2.5));
-    return { status: "down", weight: next, note: `Reps dropped below ${lo} last time — drop to ${next} and rebuild toward ${hi}.` };
+    return { status: "down", weight: next, note: `${unit === "sec" ? "Hold time" : "Reps"} dropped below ${lo} last time — drop to ${next} and rebuild toward ${hi}.` };
   }
 
   const aim = lastSets.map((s) => Math.min(hi, s.r + 1));

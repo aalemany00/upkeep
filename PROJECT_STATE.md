@@ -795,6 +795,72 @@ stop redrawing and use the real images.
     exercise's name — zero licensing risk, works for all 932 exercises
     immediately, not a curated/embedded video.
 
+### 3a. Real-use fixes from a week of actually logging (2026-10-26)
+
+Five issues Adrian hit using the app for a real week of training, not caught
+by earlier testing because they only show up over multiple sessions/days:
+
+- **Moving a training day to a different weekday** (`swapScheduledDay()`,
+  `scheduledDayList()` in `app.js`): doing Legs today used to only add a
+  one-off logged day — Friday was still scheduled as Legs too, since
+  `goals.preferredDays` (which weekday hosts which split-day index) never
+  changed, only what the Gym day panel displayed. Now there's a real "Move a
+  training day here" picker on every Gym day (rest day or already-scheduled)
+  that swaps weekday *assignments* in `preferredDays`: if today's already a
+  training day, it exchanges which weekday hosts which type; if today was a
+  rest day, the other day's slot moves here and that weekday becomes the new
+  rest day. Rebuilds the split afterward (equipment can differ by weekday)
+  but never touches logged history, same as any other availability change.
+- **Isometric holds (planks, wall sits, dead hangs, L-sits, ...) tracked by
+  time, not reps**: `exercises.json` entries now carry a `unit` field
+  (`"reps"` or `"sec"`), detected by name (`ISOMETRIC_RE` in
+  `scripts/seed-exercises.js`'s `classify()`). `targetFor()` (`gym.js`)
+  phrases every note in the right unit ("Hit 60 sec on every set" instead of
+  "60 reps"), and the Gym day panel's sets-grid header switches to
+  "Hold (sec)" for these. 33 of 932 exercises reclassified as holds.
+- **Progression now reaches a weight increase sooner for lifts with coarse
+  plate jumps**: `classify()` went from 3 generic buckets (bodyweight /
+  "compound" / everything else — every barbell AND dumbbell AND machine
+  compound lift shared one 6-10 rep range) to 6, assigned by actual loading
+  role: barbell compound lifts get a strength-leaning 5-8 rep range (so the
+  app's coarsest increment — a full plate per side — actually gets
+  recommended regularly, instead of grinding reps up through a wide
+  hypertrophy range first); dumbbell/kettlebell/machine compound work keeps
+  a classic 8-12 hypertrophy range; isolation/accessory work keeps 10-15.
+  This was never `minIncrementLb` biasing toward reps (it only scales the
+  size of a weight jump once one's already due) — the real cause was one
+  rep range doing duty for every compound lift regardless of how it's
+  loaded. 817 of 932 exercises got a different sets/rep-range/increment
+  under the new heuristic — not arbitrary variety, each bucket has a
+  one-line rationale in `classify()`'s comments (NSCA-style: lower reps for
+  primary heavy lifts, higher reps for accessory/isolation work).
+  `scripts/reclassify-exercises.js` (new) re-applies `classify()` to the
+  *existing* catalog in place (same ids/names/images) whenever the
+  heuristic changes, instead of a full live re-seed from wger.de.
+  `seed-exercises.js`'s `main()` is now guarded to only run on direct
+  execution, so importing `classify()` from it (as the migration script
+  does) can't accidentally trigger a live fetch.
+  - A side effect of the more granular loading check: bodyweight movements
+    that use a prop with no actual load (pull-ups on a pull-up bar, dips,
+    bench-assisted work) are now correctly classified as bodyweight
+    (`inc: 0`) — previously only *exactly* no-equipment/"none (bodyweight
+    exercise)" counted, so pull-ups fell through to the generic bucket and
+    got a 2.5lb plate increment they can't actually use.
+- **Exercise search finds things by what they target, not just their
+  name** (`searchExercises()` in `gym.js`): searching "ab workout" (a real
+  example — Adrian had logged ab exercises without knowing their catalog
+  names) previously matched nothing, since the catalog name often doesn't
+  contain the muscle word at all. Each exercise is now also matched against
+  its category/equipment and a plain-English synonym for its wger muscle
+  tags (`MUSCLE_SEARCH_SYNONYMS`: "Rectus abdominis" → "abs core
+  abdominals stomach", etc.), plus a small word-alternates table
+  (`SEARCH_WORD_ALTERNATES`) so a body-part word that doesn't share a text
+  stem with the exercise name ("abs" vs. "Abdominal Crunch") still counts
+  as a name-level match, not just a weaker category-level one. A direct
+  name/alternate match always outranks a synonym-only match, so real ab
+  exercises surface before an unrelated exercise wger merely filed under
+  the "Abs" category.
+
 ---
 
 ## 4. Nutrition math (`nutrition.js`) — plain code, not AI
@@ -864,9 +930,10 @@ manifest.json, sw.js, icon.svg   # PWA shell
 dev-server.js           # local static server (see Dev environment below)
 scripts/
   coach-note.js         # the weekly AI coach — run manually, see scripts/README.md
-  seed-exercises.js     # one-time (re-runnable) catalog builder from wger.de
+  seed-exercises.js     # one-time (re-runnable) catalog builder from wger.de; exports classify()
+  reclassify-exercises.js  # re-applies classify() to the existing catalog in place, no live fetch
   serviceAccountKey.json  # GITIGNORED — Firebase Admin credential, never commit
-  package.json / package-lock.json / node_modules/  # deps for the two scripts above
+  package.json / package-lock.json / node_modules/  # deps for the scripts above
 CLAUDE.md               # instructions for a Claude session working in this repo
 LOG.md                  # chronological plans/changes log (course requirement)
 PROJECT_STATE.md        # this file

@@ -9,20 +9,67 @@
 const BASE = "https://wger.de/api/v2/exerciseinfo/?format=json&limit=100&language=2";
 const OUT_FILE = new URL("../exercises.json", import.meta.url);
 
-const COMPOUND_EQUIPMENT = new Set(["Barbell", "SZ-Bar", "Smith machine"]);
+// "Loaded" equipment actually adds external resistance you can add plates/
+// pins to; props like a pull-up bar, a bench, or a mat assist a bodyweight
+// movement without loading it, so an exercise tagged only with those is
+// still bodyweight for progression purposes (fixes pull-ups etc. previously
+// falling through to the generic isolation bucket and getting a plate-sized
+// weight increment they can't actually use).
+const LOAD_BARBELL = new Set(["Barbell", "SZ-Bar", "Smith machine"]);
+const LOAD_DB_KB = new Set(["Dumbbell", "Kettlebell"]);
+const LOAD_MACHINE = new Set(["Cable machine"]);
 const COMPOUND_CATEGORIES = new Set(["Chest", "Back", "Legs", "Shoulders"]);
+
+// Isometric holds (planks, wall sits, dead hangs, L-sits, ...) aren't
+// reps at all — tracked in seconds instead, with its own rep-range fields
+// reused as a time range (lo/hi seconds). A general-fitness hold
+// progression (build time at one difficulty before moving to a harder
+// variation) is the same "add a little, then add a little more" shape as
+// double progression, just measured in time instead of reps.
+const ISOMETRIC_RE = /\bplank\b|wall sit|hollow (body )?hold|\bl-?sit\b|dead ?hang|isometric|static hold|glute bridge hold|wall squat hold/i;
 
 function stripHtml(html) {
   return (html || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function classify(category, equipmentNames) {
-  const isBodyweight = equipmentNames.length === 0 || equipmentNames.includes("none (bodyweight exercise)");
-  const isCompound = !isBodyweight && COMPOUND_CATEGORIES.has(category) && equipmentNames.some((e) => COMPOUND_EQUIPMENT.has(e));
+// Rep ranges and weight increments by exercise role, not one-size-fits-all:
+//   - Isometric holds: time-based, not reps at all.
+//   - Bodyweight: progress by reps/tempo/a harder variation, never plates
+//     (inc 0) — a compound bodyweight move (pull-up, dip, push-up) is hard
+//     enough at a lower rep count than an isolation-style bodyweight move
+//     (most core work), which suits a higher-rep range instead.
+//   - Barbell compound lifts (squat/deadlift/bench/OHP/row): the classic
+//     strength-leaning rep range, so the coarsest increment this app uses
+//     (a whole plate per side) actually gets hit regularly instead of
+//     grinding reps up through a wide hypertrophy range first.
+//   - Dumbbell/kettlebell/machine compound work: still a big muscle group,
+//     but harder to load as heavy and often loaded in smaller increments —
+//     a hypertrophy rep range fits better than a pure strength range.
+//   - Everything else (isolation/accessory work): the standard isolation
+//     hypertrophy/endurance range, with a light increment.
+export function classify(name, category, equipmentNames) {
+  if (ISOMETRIC_RE.test(name)) {
+    return { sets: 3, lo: 20, hi: 60, inc: 0, unit: "sec" };
+  }
 
-  if (isBodyweight) return { sets: 3, lo: 8, hi: 15, inc: 0 };
-  if (isCompound) return { sets: 3, lo: 6, hi: 10, inc: 5 };
-  return { sets: 3, lo: 10, hi: 15, inc: 2.5 };
+  const isPrimary = COMPOUND_CATEGORIES.has(category);
+  const hasBarbell = equipmentNames.some((e) => LOAD_BARBELL.has(e));
+  const hasDbKb = equipmentNames.some((e) => LOAD_DB_KB.has(e));
+  const hasMachine = equipmentNames.some((e) => LOAD_MACHINE.has(e));
+  const isLoaded = hasBarbell || hasDbKb || hasMachine;
+
+  if (!isLoaded) {
+    return isPrimary
+      ? { sets: 3, lo: 6, hi: 12, inc: 0, unit: "reps" }
+      : { sets: 3, lo: 10, hi: 20, inc: 0, unit: "reps" };
+  }
+  if (hasBarbell && isPrimary) {
+    return { sets: 3, lo: 5, hi: 8, inc: 5, unit: "reps" };
+  }
+  if (isPrimary) {
+    return { sets: 3, lo: 8, hi: 12, inc: hasDbKb ? 2.5 : 5, unit: "reps" };
+  }
+  return { sets: 3, lo: 10, hi: 15, inc: 2.5, unit: "reps" };
 }
 
 async function fetchAllPages() {
@@ -48,17 +95,18 @@ function toEntry(raw) {
   const muscleNames = (raw.muscles || []).map((m) => m.name);
   const image = raw.images && raw.images.length ? raw.images[0].image : null;
   const cue = stripHtml(en.description).slice(0, 300) || "Controlled reps, full range of motion, stop a rep or two before form breaks.";
-  const { sets, lo, hi, inc } = classify(category, equipmentNames);
+  const name = en.name.trim();
+  const { sets, lo, hi, inc, unit } = classify(name, category, equipmentNames);
 
   return {
     id: raw.id,
-    name: en.name.trim(),
+    name,
     category,
     muscles: muscleNames,
     equipment: equipmentNames.length ? equipmentNames : ["Bodyweight"],
     image,
     cue,
-    sets, lo, hi, inc
+    sets, lo, hi, inc, unit
   };
 }
 
@@ -87,7 +135,14 @@ async function main() {
   console.log(`Wrote ${OUT_FILE.pathname.replace(/^\//, "")}`);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// Only run the live fetch when this file is executed directly (`node
+// seed-exercises.js`) — not when `classify` is imported elsewhere (e.g. the
+// reclassify-exercises.js migration script), which should never trigger a
+// network call to wger.de just to reuse the classification heuristic.
+const { pathToFileURL } = await import("node:url");
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
