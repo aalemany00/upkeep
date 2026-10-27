@@ -627,6 +627,43 @@ stop redrawing and use the real images.
   `tagline` in the line pool alongside real note content — unchanged by
   this rework, since it never depended on the pixel-art implementation.
 
+### 2f. Swapped in AI-generated sprite packs for all 5 coaches (2026-10-26)
+
+Adrian had two AI-generated sprite packs downloaded (a dense multi-pose
+"animation sheet" pack, and a "fitness_coach_sprites" pack with each pose
+pre-separated into its own PNG) and asked which was worth using over the
+hand-cropped art from 2e, given how badly the last manual crop attempt
+(the Atlas speech-bubble cleanup) went.
+
+- Inspected both zips' actual files (not just the reference renders) before
+  deciding: the dense-sheet pack's own README admits its cells aren't
+  uniformly spaced — the exact failure mode that broke the Atlas crop
+  before, so it was ruled out. The pre-separated pack was usable but
+  uneven: Atlas/Mira/Pixel's idle frame was already clean; Luna and Rex had
+  bleed slivers from neighboring poses at the edges (a sliver of feet at
+  the top of every Luna frame, multiple-edge bleed on Rex).
+- Rather than hand-trim those edges (the thing that went wrong last time),
+  wrote a one-off script (scratchpad only, not committed) that auto-crops
+  each frame to its largest contiguous block of non-transparent pixels —
+  first by rows, then by columns within that — which throws out any
+  thinner bleed sliver automatically and keeps the actual character,
+  without guessing per-character pixel offsets by eye. Verified every
+  result visually before using it. Produced a clean `-full.png` for all 5
+  characters this way; each `-face.png` is a top ~42-52%-height crop of
+  that same clean full image (tuned slightly per character's proportions).
+  These replace the 2e crops in `avatars/` (same filenames, so no code
+  changed — `coach-avatars.js`'s metadata and every render path were
+  already generic over whichever images live there).
+- Live-tested all 5 by switching the selected coach in Settings and
+  checking the Coach-tab hero and every badge location; all render clean,
+  including Rex, which had the worst bleed going in.
+- Not a real finding, but noted in passing: switching coach avatar in
+  Settings didn't initially appear to persist — turned out to be a test
+  artifact (the still-mounted onboarding form has its own copy of the
+  avatar picker with duplicate `data-avatar-id` attributes, so a
+  `document.querySelector` grabbed that one instead of
+  `#settings-avatar-picker`'s), not an app bug.
+
 ---
 
 ## 3. The gym system (the most complex part)
