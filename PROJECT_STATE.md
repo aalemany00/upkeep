@@ -800,17 +800,23 @@ stop redrawing and use the real images.
 Five issues Adrian hit using the app for a real week of training, not caught
 by earlier testing because they only show up over multiple sessions/days:
 
-- **Moving a training day to a different weekday** (`swapScheduledDay()`,
-  `scheduledDayList()` in `app.js`): doing Legs today used to only add a
-  one-off logged day — Friday was still scheduled as Legs too, since
-  `goals.preferredDays` (which weekday hosts which split-day index) never
-  changed, only what the Gym day panel displayed. Now there's a real "Move a
-  training day here" picker on every Gym day (rest day or already-scheduled)
-  that swaps weekday *assignments* in `preferredDays`: if today's already a
-  training day, it exchanges which weekday hosts which type; if today was a
-  rest day, the other day's slot moves here and that weekday becomes the new
-  rest day. Rebuilds the split afterward (equipment can differ by weekday)
-  but never touches logged history, same as any other availability change.
+- **Moving a training day to a different weekday** (`swapScheduledDayByType()`
+  in `app.js`): doing Legs today used to only add a one-off logged day —
+  Friday was still scheduled as Legs too, since `goals.preferredDays`
+  (which weekday hosts which split-day index) never changed, only what the
+  Gym day panel displayed. First fix added a second "swap with" dropdown
+  next to the existing day-type select, which Adrian correctly called
+  overcomplicated — picking a type from the *one* dropdown that was already
+  there should just do it. `swapScheduledDayByType(dayType)` now finds
+  whichever other weekday currently runs the chosen type and swaps weekday
+  *assignments* in `preferredDays`: if today's already a training day, it
+  exchanges which weekday hosts which type; if today was a rest day, the
+  other day's slot moves here and that weekday becomes the new rest day. A
+  no-op if the chosen type is already today's. Rebuilds the split afterward
+  (equipment can differ by weekday) but never touches logged history, same
+  as any other availability change. The rest-day panel's "pick a workout
+  type" dropdown and the scheduled-day panel's day-type dropdown both call
+  this directly now — no separate override state, no second control.
 - **Isometric holds (planks, wall sits, dead hangs, L-sits, ...) tracked by
   time, not reps**: `exercises.json` entries now carry a `unit` field
   (`"reps"` or `"sec"`), detected by name (`ISOMETRIC_RE` in

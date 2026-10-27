@@ -2214,32 +2214,30 @@ function scheduledDayTypeFor(dateKey) {
   return split.days[idx] || null;
 }
 
-// Every currently-scheduled weekday + the dayType it runs, for the "swap
-// with another day" pickers below.
-function scheduledDayList() {
-  const preferredDays = goals.preferredDays || [];
-  if (!split) return [];
-  return preferredDays
-    .map((weekday, i) => ({ weekday, dayType: split.days[i]?.dayType }))
-    .filter((d) => d.dayType);
-}
-
-// Actually moves a training day to a different weekday, rather than just
-// logging a one-off type for today (which leaves the original weekday
-// still scheduled for the same thing — the bug Adrian hit: doing Legs
-// today didn't stop Friday from also being Legs). If today is already a
-// training day, this swaps which weekday hosts which type; if today was a
-// rest day, the other day's slot moves here and that weekday becomes the
-// new rest day. Exercise selections get rebuilt (equipment can differ by
+// Picking a day type from the panel's one dropdown (scheduled day or rest
+// day alike) actually moves that training day here, rather than just
+// logging a one-off type for today — the bug Adrian hit: doing Legs today
+// used to leave Friday still scheduled as Legs too, since nothing about
+// the schedule itself changed. This finds whichever OTHER weekday
+// currently runs the chosen type and swaps with it: if today's already a
+// training day, it exchanges which weekday hosts which type; if today was
+// a rest day, the other day's slot moves here and that weekday becomes the
+// new rest day. A no-op if the chosen type is already today's (nothing to
+// swap with). Exercise selections get rebuilt (equipment can differ by
 // weekday) but logged history is never touched, same as any other
 // availability change.
-async function swapScheduledDay(otherWeekday) {
+async function swapScheduledDayByType(dayType) {
   if (!currentUid || !split) return;
   const preferredDays = (goals.preferredDays || []).slice();
   const todayWeekday = weekdayOf(selectedDateKey);
-  const otherIdx = preferredDays.indexOf(otherWeekday);
-  if (otherIdx === -1) return;
   const todayIdx = preferredDays.indexOf(todayWeekday);
+  const otherIdx = split.days.findIndex((d, i) => d.dayType === dayType && i !== todayIdx);
+  if (otherIdx === -1) {
+    gymDraft = buildGymDraft(selectedDateKey, dayType);
+    renderGymDayPanel();
+    return;
+  }
+  const otherWeekday = preferredDays[otherIdx];
   if (todayIdx !== -1) {
     [preferredDays[todayIdx], preferredDays[otherIdx]] = [preferredDays[otherIdx], preferredDays[todayIdx]];
   } else {
@@ -2247,34 +2245,11 @@ async function swapScheduledDay(otherWeekday) {
   }
   await setDoc(doc(db, "users", currentUid, "meta", "goals"), { preferredDays }, { merge: true });
   await rebuildSplit(preferredDays.length, equipmentForScheduledDays(preferredDays, goals.equipment, goals.equipmentByDay));
-  restDayOverride = null;
   gymDraft = null;
   renderGymDayPanel();
 }
 
-function swapDayPickerHtml(selectId, excludeWeekday) {
-  const options = scheduledDayList()
-    .filter((d) => d.weekday !== excludeWeekday)
-    .map((d) => `<option value="${d.weekday}">${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][d.weekday]} — ${d.dayType}</option>`)
-    .join("");
-  if (!options) return "";
-  return `
-    <label class="small">Move a training day here
-      <select id="${selectId}">
-        <option value="" disabled selected>Pick a day to swap with</option>
-        ${options}
-      </select>
-    </label>`;
-}
-
 let gymDraft = null; // { dateKey, dayType, picks: [exerciseId...], sets: [[{w,r}...]...], extra: [{exerciseId, sets}] }
-// A date that's neither scheduled nor already logged is a rest day — it
-// shouldn't silently show some split day's exercises (it used to fall back
-// to distinctDayTypes()[0], which made every "off" day look like it was
-// recommending a specific workout). Picking a type from the panel's
-// dropdown on a rest day opts into logging one anyway, tracked here so it
-// doesn't carry over to the next day you look at.
-let restDayOverride = null; // { dateKey, dayType }
 
 // Template-slot entries are matched by slotLabel (not array position) so a
 // day that skipped a slot, or has extras mixed in, doesn't misalign.
@@ -2385,8 +2360,7 @@ function renderGymDayPanel() {
 
   const scheduled = scheduledDayTypeFor(selectedDateKey);
   const existing = logForDate(selectedDateKey);
-  const override = restDayOverride?.dateKey === selectedDateKey ? restDayOverride.dayType : null;
-  const dayType = existing?.dayType || scheduled?.dayType || override;
+  const dayType = existing?.dayType || scheduled?.dayType;
   const dateLabel = dateFromKey(selectedDateKey).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
 
   if (!dayType) {
@@ -2400,25 +2374,18 @@ function renderGymDayPanel() {
       </div>
       <p class="subtle small">${selectedDateKey === todayKey() ? "" : `<button type="button" class="link-btn" id="gym-day-today">Jump to today</button> — `}Pick any date on the <button type="button" class="link-btn" data-switch-view="calendar">Calendar</button> to come straight here.</p>
       <div class="panel">
-        <p class="subtle">Rest day — nothing scheduled. Want to log a workout anyway?</p>
+        <p class="subtle">Rest day — nothing scheduled. Move a training day here?</p>
         <select id="gym-restday-type">
           <option value="" disabled selected>Pick a workout type</option>
           ${distinctDayTypes().map((t) => `<option value="${t}">${t}</option>`).join("")}
         </select>
-        <p class="subtle small" style="margin-top:8px;">That only logs today — it won't change your schedule, so whichever day normally has that workout still has it too.</p>
-        ${swapDayPickerHtml("gym-swap-day", null)}
-        <p class="subtle small" style="margin-top:4px;">This actually moves that day's workout here, and makes it a rest day instead — not just a one-off log.</p>
       </div>`;
     document.getElementById("gym-day-prev").addEventListener("click", () => gymJumpDay(-1));
     document.getElementById("gym-day-next").addEventListener("click", () => gymJumpDay(1));
     document.getElementById("gym-day-today")?.addEventListener("click", () => gymJumpToDate(todayKey()));
     el.querySelector('[data-switch-view="calendar"]')?.addEventListener("click", () => switchView("calendar"));
     document.getElementById("gym-restday-type").addEventListener("change", (e) => {
-      restDayOverride = { dateKey: selectedDateKey, dayType: e.target.value };
-      renderGymDayPanel();
-    });
-    document.getElementById("gym-swap-day")?.addEventListener("change", (e) => {
-      swapScheduledDay(Number(e.target.value));
+      swapScheduledDayByType(e.target.value);
     });
     return;
   }
@@ -2498,10 +2465,6 @@ function renderGymDayPanel() {
       <select id="gym-daytype-select">${typeOptions}</select>
     </div>
     <p class="subtle small" style="margin-top:0;">${selectedDateKey === todayKey() ? "" : `<button type="button" class="link-btn" id="gym-day-today">Jump to today</button> — `}Pick any date on the <button type="button" class="link-btn" data-switch-view="calendar">Calendar</button> to come straight here.</p>
-    ${scheduled?.dayType ? `
-      <p class="subtle small">The dropdown above only changes what's shown here today. To actually move this day's workout to a different weekday:</p>
-      ${swapDayPickerHtml("gym-swap-day-2", weekdayOf(selectedDateKey))}
-    ` : ""}
     ${warmupCooldownHtml(WARMUPS_BY_DAYTYPE[dayType], "Warm-up")}
     ${slotsHtml}
     ${warmupCooldownHtml(COOLDOWNS_BY_DAYTYPE[dayType], "Cool-down")}
@@ -2522,11 +2485,14 @@ function renderGymDayPanel() {
   `;
 
   document.getElementById("gym-daytype-select").addEventListener("change", (e) => {
-    gymDraft = buildGymDraft(selectedDateKey, e.target.value);
-    renderGymDayPanel();
-  });
-  document.getElementById("gym-swap-day-2")?.addEventListener("change", (e) => {
-    swapScheduledDay(Number(e.target.value));
+    if (scheduled?.dayType) {
+      swapScheduledDayByType(e.target.value);
+    } else {
+      // Not a scheduled day (e.g. picking a type after already logging one
+      // today) — no other weekday to swap with, so just show it.
+      gymDraft = buildGymDraft(selectedDateKey, e.target.value);
+      renderGymDayPanel();
+    }
   });
 
   document.getElementById("gym-day-prev").addEventListener("click", () => gymJumpDay(-1));
