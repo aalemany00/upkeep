@@ -6,9 +6,14 @@
 // first frame the Coach hero paints before animation kicks in). `idle`
 // is a 2-frame full-body loop (same pose, blink/alt-idle variant) the
 // Coach hero cycles through continuously; `react` is a third full-body
-// frame (thumbs-up) swapped in briefly when the coach is clicked. Actual
-// cycling/swapping is plain JS + CSS (see app.js/style.css); this module
-// only describes who each coach is and where their art lives.
+// celebratory frame swapped in briefly when the coach is clicked — a
+// thumbs-up for Atlas/Pixel, an arms-up cheer for Mira/Rex/Luna (their
+// pack's own thumbs-up pose had a source-art defect — a disconnected
+// hand/arm for Luna, a paw clipped by the sprite sheet's own cell edge
+// for Rex — so the cheer pose was used instead; same crop pipeline, just
+// a different source frame). Actual cycling/swapping is plain JS + CSS
+// (see app.js/style.css); this module only describes who each coach is
+// and where their art lives.
 
 export const COACH_AVATARS = [
   {

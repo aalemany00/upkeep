@@ -725,6 +725,29 @@ pack (it has 8 poses per character, only pose 1 had been used so far).
 - Live-tested all 5 coaches (idle loop ticking, click → thumbs-up → restore
   verified via direct `img.src` checks, not just eyeballing) before
   cleaning up the test account.
+- **Follow-up fix, same day**: Adrian reported Mira/Rex/Luna's left side
+  "cut off" during the reaction animation. Checking via a screenshot plus
+  zooming into the raw source frames (not just trusting the earlier
+  automated `img.src` checks, which only confirm the swap *happens*, not
+  that the image content is correct) found two different *pre-existing
+  defects in the sprite pack's own thumbs-up pose*, not a cropping bug:
+  Luna's thumbs-up frame has her left hand/forearm drawn disconnected from
+  her arm in the original AI-generated artwork; Rex's paw is clipped by
+  the sprite sheet's own cell boundary (his paw pixels touch column 0 of
+  the raw, uncropped frame file — nothing left to recover). The
+  largest-contiguous-block crop faithfully preserved both source defects
+  rather than causing them. Fix: swapped those three characters' `react`
+  frame from pose 6 (thumbs-up) to pose 5 ("celebrate," arms raised) —
+  checked clean in the source art for all three before using it; same crop
+  pipeline, just a different input frame. Atlas/Pixel keep their
+  already-clean thumbs-up pose, so the reaction gesture now differs by
+  character (thumbs-up vs. cheer) — a visible inconsistency, but the
+  alternative was shipping a broken limb. Lesson for next time: visually
+  zoom into the actual source pixels of each pose before relying on one
+  (otherwise-identical-looking) pose being clean for one character to mean
+  it's clean for all of them — AI-generated sprite packs can have
+  per-frame, per-character defects that don't show up in a quick glance at
+  a magnified screenshot.
 
 ---
 
