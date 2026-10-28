@@ -1,9 +1,14 @@
 // Coach characters — real sprite art (Atlas, Pixel, Mira, Rex, Luna), each
-// cropped from the reference sheet Adrian supplied into a face image
-// (small badges) and a full-body image (the Coach tab hero). Pure data,
-// no DOM/Firebase — same boundary as gym.js/nutrition.js/calendar.js.
-// Rendering/animation is plain <img> + CSS (see app.js/style.css); this
-// module only describes who each coach is and where their art lives.
+// cropped from an AI-generated sprite pack Adrian supplied. Pure data, no
+// DOM/Firebase — same boundary as gym.js/nutrition.js/calendar.js.
+//
+// `face`/`full` are the static poses (avatar picker thumbnail, and the
+// first frame the Coach hero paints before animation kicks in). `idle`
+// is a 2-frame full-body loop (same pose, blink/alt-idle variant) the
+// Coach hero cycles through continuously; `react` is a third full-body
+// frame (thumbs-up) swapped in briefly when the coach is clicked. Actual
+// cycling/swapping is plain JS + CSS (see app.js/style.css); this module
+// only describes who each coach is and where their art lives.
 
 export const COACH_AVATARS = [
   {
@@ -15,7 +20,9 @@ export const COACH_AVATARS = [
     badgeIcon: "leaf",
     accent: "#2f8f5b",
     face: "avatars/atlas-face.png",
-    full: "avatars/atlas-full.png"
+    full: "avatars/atlas-full.png",
+    idle: ["avatars/atlas-full.png", "avatars/atlas-idle2.png"],
+    react: "avatars/atlas-react.png"
   },
   {
     id: "pixel",
@@ -26,7 +33,9 @@ export const COACH_AVATARS = [
     badgeIcon: "code",
     accent: "#2f6fb8",
     face: "avatars/pixel-face.png",
-    full: "avatars/pixel-full.png"
+    full: "avatars/pixel-full.png",
+    idle: ["avatars/pixel-full.png", "avatars/pixel-idle2.png"],
+    react: "avatars/pixel-react.png"
   },
   {
     id: "mira",
@@ -37,7 +46,9 @@ export const COACH_AVATARS = [
     badgeIcon: "lotus",
     accent: "#8a6fd1",
     face: "avatars/mira-face.png",
-    full: "avatars/mira-full.png"
+    full: "avatars/mira-full.png",
+    idle: ["avatars/mira-full.png", "avatars/mira-idle2.png"],
+    react: "avatars/mira-react.png"
   },
   {
     id: "rex",
@@ -48,7 +59,9 @@ export const COACH_AVATARS = [
     badgeIcon: "paw",
     accent: "#c9892f",
     face: "avatars/rex-face.png",
-    full: "avatars/rex-full.png"
+    full: "avatars/rex-full.png",
+    idle: ["avatars/rex-full.png", "avatars/rex-idle2.png"],
+    react: "avatars/rex-react.png"
   },
   {
     id: "luna",
@@ -59,7 +72,9 @@ export const COACH_AVATARS = [
     badgeIcon: "moon",
     accent: "#2e8f82",
     face: "avatars/luna-face.png",
-    full: "avatars/luna-full.png"
+    full: "avatars/luna-full.png",
+    idle: ["avatars/luna-full.png", "avatars/luna-idle2.png"],
+    react: "avatars/luna-react.png"
   }
 ];
 

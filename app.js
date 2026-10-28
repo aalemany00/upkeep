@@ -334,13 +334,22 @@ function renderCoachAvatarBadges() {
 
 // The Coach tab's "meet your coach" panel: full body, idle animation,
 // name/title/tagline, sitting right above the notes list it's paired with.
+//
+// "Idle animation" is real sprite-frame cycling, not just a CSS wiggle on
+// one static image — avatar.idle is a 2-frame loop (same pose, blink/alt-
+// idle variant) swapped on an interval, and a click briefly swaps in
+// avatar.react (a distinct thumbs-up frame) before resuming the loop. The
+// CSS sway/wobble (style.css) still runs on the container underneath this,
+// so the two layer together rather than replacing each other.
+let coachIdleTimer = null;
 function renderCoachHero() {
   const el = document.getElementById("coach-hero");
   if (!el) return;
+  clearInterval(coachIdleTimer);
   const avatar = coachAvatarById(goals.coachAvatar);
   el.innerHTML = `
     <button type="button" class="coach-hero-figure" id="coach-hero-figure" aria-label="Get a note from ${avatar.name}">
-      <img src="${avatar.full}" alt="${avatar.name}, ${avatar.title}" />
+      <img src="${avatar.idle[0]}" alt="${avatar.name}, ${avatar.title}" />
     </button>
     <div class="coach-hero-text">
       <h3><span class="avatar-badge-icon" style="color:${avatar.accent}">${icon(avatar.badgeIcon, { size: 16 })}</span>${avatar.name} <span class="subtle">· ${avatar.title}</span></h3>
@@ -348,8 +357,17 @@ function renderCoachHero() {
       <p class="subtle small">${avatar.subtitle}</p>
     </div>
   `;
+  const heroImg = el.querySelector("#coach-hero-figure img");
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    let idleFrame = 0;
+    coachIdleTimer = setInterval(() => {
+      if (!heroImg.isConnected) { clearInterval(coachIdleTimer); return; }
+      idleFrame = (idleFrame + 1) % avatar.idle.length;
+      heroImg.src = avatar.idle[idleFrame];
+    }, 2200);
+  }
   document.getElementById("coach-hero-figure")?.addEventListener("click", () => {
-    triggerCoachTalk("coach-hero-figure", "coach-bubble-hero");
+    triggerCoachTalk("coach-hero-figure", "coach-bubble-hero", avatar.react, avatar.idle[0]);
   });
 }
 
@@ -398,12 +416,26 @@ function showCoachBubble(bubbleId, text) {
   }, 5000);
 }
 
-function triggerCoachTalk(faceId, bubbleId) {
+// reactSrc/restoreSrc are only passed for the hero figure (it has real
+// sprite frames to swap to); the small face badges just get the CSS wobble
+// below with no frame change.
+const coachReactTimers = {};
+function triggerCoachTalk(faceId, bubbleId, reactSrc, restoreSrc) {
   const face = document.getElementById(faceId);
   if (face) {
     face.classList.remove("coach-talking");
     void face.offsetWidth;
     face.classList.add("coach-talking");
+    if (reactSrc) {
+      const img = face.querySelector("img");
+      if (img) {
+        img.src = reactSrc;
+        clearTimeout(coachReactTimers[faceId]);
+        coachReactTimers[faceId] = setTimeout(() => {
+          if (img.isConnected) img.src = restoreSrc;
+        }, 900);
+      }
+    }
   }
   showCoachBubble(bubbleId, randomCoachLine());
 }

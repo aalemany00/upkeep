@@ -323,9 +323,35 @@ change in next time.
   not because anything was actually compromised (no billing-relevant
   credential, Firestore access scoped to Adrian's own project).
 - Loops over **every signed-up user** (Admin Auth `listUsers`), not just
-  Adrian — but it's still one person manually running it on his own Claude
-  Code access, not a public service. Scaling further = paid API territory,
-  explicitly deferred.
+  Adrian — but it's still one person manually running it, not a public
+  service. Scaling further = paid-plan territory, explicitly deferred.
+- **Tried switching to Gemini's free API, abandoned it (2026-10-27)**: a
+  classmate's question ("how did you link AI to Artifact 3?") raised that
+  `claude -p` only works while Adrian's course Claude Code access is active,
+  so a same-session experiment swapped `coach-note.js` over to Gemini
+  (`fetch` to `generativelanguage.googleapis.com`, no new dependency) to see
+  if it'd keep working after the course ends. In practice, Gemini's free
+  tier fought back at every step: `gemini-2.5-flash` 404s for new API keys,
+  `gemini-3.8-flash`'s free quota is a mere 20 requests/day (burned through
+  it mid-testing), and Pro-tier models aren't available on the free plan at
+  all (quota limit of exactly 0). The one tier with real headroom
+  (`gemini-flash-lite-latest`) produced noticeably shallower notes than
+  Claude's — comparing a Claude-era note against a same-account Gemini note
+  side by side in Firestore: Claude caught a likely data-entry typo ("480
+  min for a 3-mile walk looks wrong"), showed real week-over-week trend
+  analysis, and explained *why* a cue mattered; Gemini's version was
+  correct and safe (same validation boundary, same non-diagnostic
+  flagging) but generic — fewer items per list, no trend callouts, no
+  typo-catching. Since the coach note is the core AI piece of the app,
+  reverted back to `claude -p` rather than trade depth for a hypothetical
+  "survives after the course" benefit Artifact 3 doesn't actually need. The
+  Gemini code was never committed, so reverting was a clean `git restore`.
+  Worth remembering if revisited later: query
+  `GET generativelanguage.googleapis.com/v1beta/models` directly (free, no
+  quota cost) to see what's actually available instead of guessing model
+  names from error messages — a paid Gemini tier might close this quality
+  gap, but that reintroduces the same instructor-sign-off question the
+  course guide raises for any paid API.
 - For each user with activity in the last 7 days: reads entries (food/
   water/weight/vitamins), gym sessions (exercise names/sets/weights),
   profile, and goals from Firestore, builds a prompt, runs it through
@@ -663,6 +689,42 @@ hand-cropped art from 2e, given how badly the last manual crop attempt
   avatar picker with duplicate `data-avatar-id` attributes, so a
   `document.querySelector` grabbed that one instead of
   `#settings-avatar-picker`'s), not an app bug.
+
+### 2g. Real sprite-frame animation for the Coach hero (2026-10-28)
+
+2e/2f gave each coach one static full-body image plus a CSS sway/wobble —
+motion on the container, not actual different artwork. Adrian asked for
+real animation, pointing back at the same `fitness_coach_sprites.zip`
+pack (it has 8 poses per character, only pose 1 had been used so far).
+
+- Re-ran the exact largest-contiguous-block auto-crop from 2f against pose
+  2 ("blink/alt idle" per the pack's own README) and pose 6 ("thumbs-up")
+  for all 5 characters — 10 new clean frames, no new cropping approach
+  needed since the one from 2f already handles this pack's bleed reliably.
+  Saved as `avatars/<name>-idle2.png` and `avatars/<name>-react.png`.
+- `coach-avatars.js` gained `idle: [full, idle2]` (a 2-frame loop) and
+  `react` (the thumbs-up frame) per character, alongside the existing
+  static `face`/`full`. Scoped to the Coach-tab hero only, not the small
+  circular face badges (sidebar/topbar/dashboard) — a 2-frame swap on a
+  28px circle is barely perceptible next to the complexity of giving 4
+  separate DOM locations their own frame timers, so those keep their
+  existing lightweight CSS "breathe" pulse.
+- `renderCoachHero()` (`app.js`) now runs a `setInterval` (2.2s) swapping
+  the hero `<img>`'s `src` between `avatar.idle[0]`/`avatar.idle[1]` —
+  real different artwork, not a transform — layered underneath the
+  existing CSS sway so both run together. Gated behind
+  `prefers-reduced-motion`, matching the CSS animations' existing behavior.
+  The interval is cleared at the top of every re-render (new coach picked,
+  a fresh coach note arrives) so switching coaches never leaves a stale
+  timer pointing at the wrong character's frames.
+- `triggerCoachTalk()` gained two optional params (`reactSrc`/`restoreSrc`)
+  — only the hero's click handler passes them, swapping the `<img>` to the
+  thumbs-up frame for 900ms before restoring, on top of the existing CSS
+  wobble + speech-bubble line. The sidebar/topbar face-badge callers are
+  unchanged (no args passed = no frame swap, CSS wobble only).
+- Live-tested all 5 coaches (idle loop ticking, click → thumbs-up → restore
+  verified via direct `img.src` checks, not just eyeballing) before
+  cleaning up the test account.
 
 ---
 
