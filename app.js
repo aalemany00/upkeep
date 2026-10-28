@@ -573,6 +573,12 @@ function subscribeAll(uid) {
     maybeRebuildStaleSplit();
     drawSettingsAvatarPicker();
     renderCoachAvatarBadges();
+    // timeFormat lives on this doc too — re-render whatever's currently
+    // showing a saved time (sleep entries, the calendar day panel) so
+    // flipping the Settings toggle takes effect immediately, not just on
+    // the next unrelated re-render.
+    renderTodayEntries();
+    renderDashDayPanel();
   });
 
   const coachQuery = query(collection(db, "users", uid, "coachNotes"), orderBy("createdAt", "desc"), limit(20));
@@ -1445,7 +1451,7 @@ function renderDashDayPanel() {
   const listHtml = events.length
     ? `<ul class="entry-list">${events.map((e) => {
         const expired = !e.gym && isEventExpired(e, now);
-        const timeLabel = e.allDay ? "All day" : [e.startTime, e.endTime].filter(Boolean).join(" – ") || "";
+        const timeLabel = e.allDay ? "All day" : [e.startTime, e.endTime].filter(Boolean).map(formatTime).join(" – ") || "";
         return `
           <li class="entry-row ${expired ? "expired" : ""}">
             <span>
@@ -1659,6 +1665,22 @@ async function syncHolidays(countryCode) {
 document.getElementById("goals-holiday-sync-btn")?.addEventListener("click", () => {
   syncHolidays(document.getElementById("goals-holiday-country").value);
 });
+
+// Every stored time is a plain "HH:MM" 24h string (what <input type="time">
+// always gives/accepts, regardless of how the browser displays it) — this
+// is the one place that turns it into whatever the user picked in Settings
+// (goals.timeFormat), for every place a saved time is shown back as text
+// (sleep entries, calendar event times). The <input type="time"> widgets
+// themselves still follow the browser/OS locale — that's not something a
+// web app can override, only the app's own read-only text can.
+function formatTime(hhmm) {
+  if (!hhmm) return hhmm;
+  if ((goals.timeFormat || "12h") === "24h") return hhmm;
+  const [h, m] = hhmm.split(":").map(Number);
+  const period = h < 12 ? "AM" : "PM";
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
+}
 
 // ---------------------------------------------------------------------
 // Log view
@@ -1967,7 +1989,16 @@ function describeEntry(e) {
     case "activity": return `🚶 ${e.steps ? `${e.steps} steps` : ""}${e.steps && e.caloriesBurned ? ", " : ""}${e.caloriesBurned ? `${e.caloriesBurned} kcal burned` : ""}`;
     case "cardio": return `🏃 ${e.cardioType || "Cardio"} — ${e.durationMin || 0} min${e.distanceMi ? `, ${e.distanceMi} mi` : ""}${e.caloriesBurned ? `, ${e.caloriesBurned} kcal burned` : ""}`;
     case "vitamin": return `💊 ${e.name}`;
-    case "sleep": return `🌙 ${e.hours}h sleep${e.bedtime && e.wake ? ` (${e.bedtime} → ${e.wake})` : ""}`;
+    case "sleep": {
+      // hours is normally computed and stored at log time, but recompute
+      // from bedtime/wake here too — belt and suspenders against any entry
+      // that ended up saved without it (seen once: a GitHub Pages/CDN
+      // deploy propagation window where index.html and app.js briefly
+      // didn't match, so the old submit handler ran without the hours
+      // calculation it now has).
+      const hours = e.hours ?? (e.bedtime && e.wake ? sleepDurationHours(e.bedtime, e.wake) : null);
+      return `🌙 ${hours != null ? `${hours}h ` : ""}sleep${e.bedtime && e.wake ? ` (${formatTime(e.bedtime)} → ${formatTime(e.wake)})` : ""}`;
+    }
     default: return e.type;
   }
 }
@@ -2056,6 +2087,7 @@ function fillGoalsForm() {
   goalsForm.sex.value = profile?.sex || "male";
   goalsForm.heightIn.value = profile?.heightIn ?? "";
   goalsForm.startWeightLb.value = profile?.startWeightLb ?? "";
+  goalsForm.timeFormat.value = goals.timeFormat || "12h";
 
   goalsForm.calorieGoal.value = goals.calorieGoal ?? "";
   goalsForm.proteinGoal.value = goals.proteinGoal ?? "";
@@ -2151,6 +2183,7 @@ goalsForm.addEventListener("submit", async (e) => {
   await setDoc(doc(db, "users", currentUid, "meta", "goals"), {
     ...finalGoalValues,
     sleepGoal: Number(data.get("sleepGoal")) || null,
+    timeFormat: data.get("timeFormat") || "12h",
     weightGoal: Number(data.get("weightGoal")) || null,
     vitaminsList,
     goalType,

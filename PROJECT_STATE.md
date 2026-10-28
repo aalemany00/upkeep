@@ -1104,6 +1104,44 @@ like water/steps (not just a bare log with no goal).
   dashboard card, Daily Habits, Today's Entries text, changing the goal in
   Settings, and deleting the entry) before cleaning up the test account.
 
+**Follow-up, same day**: Adrian reported Today's Entries showing a bare
+"sleep" with no duration for an entry logged earlier. The deployed `app.js`
+already had the fix (checked directly via `curl` against the live GitHub
+Pages URL) — this was a stale-browser-cache symptom, not a code bug;
+resolved with a hard refresh. While looking into it, he also asked for a
+12h/24h time-format setting (a real, separate ask, not related to the
+caching report) — added `goals.timeFormat` (`"12h"` default or `"24h"`),
+a Settings dropdown, and a shared `formatTime(hhmm)` helper applied
+everywhere a saved `"HH:MM"` string is shown back as text: sleep entries
+and calendar event times. Scope note worth remembering: this can't affect
+how the native `<input type="time">` *widgets* themselves display while
+typing — that follows the browser/OS locale, which a web page can't
+override; the setting only controls the app's own read-only text.
+Initially the setting didn't visibly update already-rendered text until a
+full reload — `goals.timeFormat` lives on the same Firestore doc as every
+other Goal, but the `meta/goals` `onSnapshot` handler didn't re-render
+`renderTodayEntries()`/`renderDashDayPanel()`, only the handful of
+goals-specific views. Fixed by adding both calls there, so flipping the
+toggle reflects immediately, the same session, with no reload needed.
+
+**Second follow-up**: a specific entry in Adrian's real account showed
+"undefinedh sleep (22:35 → 06:30)" — not another cache issue this time, a
+genuinely malformed Firestore doc: `bedtime`/`wake` saved, `hours` missing
+entirely. Likely cause: a GitHub Pages/CDN deploy propagation window where
+`index.html` (which already had the new Sleep form) and `app.js` (which
+still had the old generic submit handler, without the hours-computation
+branch) briefly didn't match, so that one submission went through without
+ever computing a duration. `describeEntry`'s sleep case now recomputes
+`hours` from `bedtime`/`wake` on the fly whenever the stored field is
+missing, rather than trusting it was always set at log time — so this
+displays correctly going forward without needing to touch the old
+Firestore doc itself. General lesson: a value computed once at write time
+and merely displayed thereafter should be recoverable from its own source
+fields at read time too, specifically because a write can land from a
+version of the code that didn't compute it yet (deploy propagation, an
+older cached client, etc.) — trusting "it was always set" is the real bug
+here, not the one-off deploy timing.
+
 ---
 
 ## 5. Data model (Firestore, under `users/{uid}/...`)
@@ -1111,7 +1149,7 @@ like water/steps (not just a bare log with no goal).
 | Path | Shape | Notes |
 |---|---|---|
 | `profile/me` | `{age, sex, heightIn, startWeightLb, createdAt, updatedAt}` | `updatedAt` drives the coach-review banner |
-| `meta/goals` | `{goalType, activityLevel, daysPerWeek, preferredDays[], calorieGoal, proteinGoal, waterGoal, stepsGoal, sleepGoal, weightGoal, vitaminsList[], equipment[], equipmentByDay{}, minIncrementLb}` | daily goals + goal/availability/equipment all in one doc. `equipment`/`equipmentByDay`/`minIncrementLb` are Goals-only (not onboarding) — missing/empty means "no restriction." `equipmentByDay` is sparse: `{"1": [...]}` for a customized weekday only. `sleepGoal` is always manual (like `weightGoal`) — never computed, defaults to 8 via a UI fallback when unset |
+| `meta/goals` | `{goalType, activityLevel, daysPerWeek, preferredDays[], calorieGoal, proteinGoal, waterGoal, stepsGoal, sleepGoal, weightGoal, vitaminsList[], equipment[], equipmentByDay{}, minIncrementLb, timeFormat}` | daily goals + goal/availability/equipment all in one doc. `equipment`/`equipmentByDay`/`minIncrementLb` are Goals-only (not onboarding) — missing/empty means "no restriction." `equipmentByDay` is sparse: `{"1": [...]}` for a customized weekday only. `sleepGoal` is always manual (like `weightGoal`) — never computed, defaults to 8 via a UI fallback when unset. `timeFormat` is `"12h"` (default) or `"24h"` — a display preference for any saved `HH:MM` string (sleep times, calendar event times), not something that changes what an `<input type="time">` itself looks like |
 | `split/current` | `gym.assignSplit()` output (`{name, daysPerWeek, days[]}`) | rebuilt on availability change, never touches history |
 | `entries/{id}` | `{type: food\|water\|weight\|activity\|vitamin\|cardio\|sleep, ...fields, dateKey, createdAt}` | the general log; gym does NOT live here. `sleep` entries carry `{bedtime, wake, hours}` — `hours` is computed client-side from the two time fields (handles the overnight wrap), not typed directly |
 | `workoutLogs/{dateKey}` | `{dateKey, dayType, entries[], notes, updatedAt}` | one doc per logged gym day; entries are slot-based (`slotLabel`) or free-form (`extra:true`); `notes` is one free-text field for the whole session |
