@@ -6,4 +6,4 @@
 // signup page, no billing involved either way.
 //
 // Get your key, then replace the placeholder below with it.
-export const USDA_API_KEY = "YOUR_API_KEY_HERE";
+export const USDA_API_KEY = "G69q8FPjzwhdmQMHQrRnQcwfMhHcFz6GJBkqLw6Q";
