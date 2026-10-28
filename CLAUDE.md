@@ -1,8 +1,9 @@
 # Upkeep
 
 TCSS 490 Artifact 3 ("AI Inside It"). A health tracker — food/calories/
-protein, gym workouts, water, steps, weight, vitamins/supplements, and goals —
-synced between phone and PC, with a weekly AI-written coaching note. Built
+protein, gym workouts, water, steps, sleep, weight, vitamins/supplements,
+and goals — synced between phone and PC, with a weekly AI-written coaching
+note. Built
 for Adrian but usable by other people (friends/family/classmates) too: any
 number of people can sign up, each sees only their own data.
 
@@ -72,6 +73,12 @@ substantial lands — a new feature, a real bug fix, an architecture decision.
   changed AND the field wasn't manually edited away from what was already
   stored (tested both paths — a manual override survives an unrelated
   save, and changing the goal type recomputes it).
+- Sleep goal is **not** computed like calories/protein/water/steps — general
+  sleep guidance doesn't scale with BMR/activity the way energy needs do, so
+  it's a flat default (8h, same "always manual" treatment as target weight)
+  shown via a fallback (`goals.sleepGoal || 8`) wherever it's displayed,
+  rather than written to Firestore until the user actually changes it in
+  Goals.
 - Diet suggestions (`foods.json`, Food tab): a curated, varied static
   catalog (15 each of breakfast/lunch/dinner/snack, real variety across
   diets/cuisines, approximate macros like Lift Log's meal builder) — a

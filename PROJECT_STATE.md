@@ -1056,7 +1056,53 @@ Follow-up feedback on the Gym day panel from more real-world use:
 - Target weight and vitamins list are **always** manual — explicitly out of
   scope for auto-computation, per Adrian's own framing ("sometimes people
   don't know what those may be" isn't the point; the point is the app has
-  no basis to guess them).
+  no basis to guess them). Sleep goal joins this group (see 4a below).
+
+### 4a. Sleep tracking (2026-10-28)
+
+Adrian asked for a sleep tracker, same scale as the other single-value
+trackers (water/steps/weight). Two decisions made with him before building,
+rather than guessing: log bedtime+wake time (not a raw hours number — the
+app computes duration), and give it a default goal + dashboard treatment
+like water/steps (not just a bare log with no goal).
+
+- New entry type `sleep`, logged via a `form-sleep` log-form (`index.html`)
+  with two `<input type="time">` fields (`bedtime`, `wake`) instead of a
+  single number — matches how a person actually thinks about their night
+  ("I went to bed at 11, woke up at 6:30"), with the app doing the duration
+  math instead of asking for mental arithmetic.
+- `sleepDurationHours(bedtime, wake)` (`app.js`) handles the overnight wrap
+  (wake's time-of-day is numerically *earlier* than bedtime for any normal
+  night — adding 24h whenever the raw difference comes out ≤ 0) and rounds
+  to 2 decimals (e.g. "7.5"). A live preview (`#sleep-duration-preview`)
+  shows the computed hours as both time fields fill in, before submitting,
+  so a typo (like swapping the two fields) is obvious immediately rather
+  than after the entry's saved.
+  The generic `.log-form` submit handler (shared by every log form) special-
+  cases `type === "sleep"` to inject the computed `hours` field — every
+  other form still just passes its raw FormData straight through.
+- **Sleep goal is manual, not computed** — joins target weight/vitamins in
+  that category (see 4 above) rather than calories/protein/water/steps,
+  since general sleep guidance (7-9h) doesn't scale with BMR/activity the
+  way energy needs do. Defaults to 8h via a UI-level fallback
+  (`goals.sleepGoal || 8`) everywhere it's displayed; nothing is written to
+  Firestore until the user actually changes it in Goals, same treatment as
+  `minIncrementLb`.
+- Shows up everywhere the other daily trackers do: a 5th Dashboard stat
+  card (progress ring, moon icon — reusing the icon already used for dark
+  mode and Luna's badge), a row in Daily Habits, and in Today's Entries
+  (`🌙 7.5h sleep (23:00 → 06:30)`). Computed the same way as the other
+  dashboard stats (`sumByType(today, "sleep", "hours")`) — works correctly
+  for the expected one-entry-per-night usage; logging sleep twice in one
+  day would sum rather than overwrite, same tradeoff water already has.
+- Incidental fix while touching the Log forms: `input[type="date"]` and
+  `input[type="time"]` had no CSS at all (every other input type did),
+  so the existing date picker (`#log-log-date`) was unstyled browser-default
+  the whole time — not something introduced here, just noticed and fixed
+  alongside adding the new time inputs.
+- Live-tested end-to-end (logged a night, checked the live preview, the
+  dashboard card, Daily Habits, Today's Entries text, changing the goal in
+  Settings, and deleting the entry) before cleaning up the test account.
 
 ---
 
@@ -1065,9 +1111,9 @@ Follow-up feedback on the Gym day panel from more real-world use:
 | Path | Shape | Notes |
 |---|---|---|
 | `profile/me` | `{age, sex, heightIn, startWeightLb, createdAt, updatedAt}` | `updatedAt` drives the coach-review banner |
-| `meta/goals` | `{goalType, activityLevel, daysPerWeek, preferredDays[], calorieGoal, proteinGoal, waterGoal, stepsGoal, weightGoal, vitaminsList[], equipment[], equipmentByDay{}, minIncrementLb}` | daily goals + goal/availability/equipment all in one doc. `equipment`/`equipmentByDay`/`minIncrementLb` are Goals-only (not onboarding) — missing/empty means "no restriction." `equipmentByDay` is sparse: `{"1": [...]}` for a customized weekday only |
+| `meta/goals` | `{goalType, activityLevel, daysPerWeek, preferredDays[], calorieGoal, proteinGoal, waterGoal, stepsGoal, sleepGoal, weightGoal, vitaminsList[], equipment[], equipmentByDay{}, minIncrementLb}` | daily goals + goal/availability/equipment all in one doc. `equipment`/`equipmentByDay`/`minIncrementLb` are Goals-only (not onboarding) — missing/empty means "no restriction." `equipmentByDay` is sparse: `{"1": [...]}` for a customized weekday only. `sleepGoal` is always manual (like `weightGoal`) — never computed, defaults to 8 via a UI fallback when unset |
 | `split/current` | `gym.assignSplit()` output (`{name, daysPerWeek, days[]}`) | rebuilt on availability change, never touches history |
-| `entries/{id}` | `{type: food\|water\|weight\|activity\|vitamin\|cardio, ...fields, dateKey, createdAt}` | the general log; gym does NOT live here |
+| `entries/{id}` | `{type: food\|water\|weight\|activity\|vitamin\|cardio\|sleep, ...fields, dateKey, createdAt}` | the general log; gym does NOT live here. `sleep` entries carry `{bedtime, wake, hours}` — `hours` is computed client-side from the two time fields (handles the overnight wrap), not typed directly |
 | `workoutLogs/{dateKey}` | `{dateKey, dayType, entries[], notes, updatedAt}` | one doc per logged gym day; entries are slot-based (`slotLabel`) or free-form (`extra:true`); `notes` is one free-text field for the whole session |
 | `coachNotes/{id}` | `{summary, wins[], concerns[], suggestions[], flags[], exerciseNotes[], progressionTable[] ({exercise, thisWeek, nextTime}), calorieGoalChange, weekStart, weekEnd, createdAt}` | written only by `coach-note.js`, via the Admin SDK (bypasses security rules). `progressionTable` is plain-code computed, not part of what the model outputs. User-deletable from the client (Coach tab's "Delete this note") — the only coach-note write path the web app itself has |
 | `calendarEvents/{id}` | `{title, dateKey, endDateKey, allDay, startTime, endTime, color, category, notes, source: manual\|feed\|holiday, feedId?, holidayCountry?, externalUid?, userEdited?, recurring?, recurrenceGroupId?, createdAt}` | manual + feed-imported + holiday events; `endDateKey >= dateKey` for multi-day spans; `recurrenceGroupId` shared by every occurrence of one recurring-event submission; `category` drives the Gym tab's upcoming-Cardio banner |

@@ -136,7 +136,9 @@ h3 { font-size: 1em; font-weight: 600; }
 input[type="email"],
 input[type="password"],
 input[type="text"],
-input[type="number"] {
+input[type="number"],
+input[type="date"],
+input[type="time"] {
   background: var(--bg);
   border: 1px solid var(--panel-border);
   color: var(--text);
@@ -956,4 +958,5 @@ select {
   font-size: 1em;
   width: 100%;
 }
-#onboarding-form label.small { font-size: 0.85em; color: var(--subtle); display: flex; flex-direction: column; gap: 4px; }
+#onboarding-form label.small,
+#form-sleep label.small { font-size: 0.85em; color: var(--subtle); display: flex; flex-direction: column; gap: 4px; }

@@ -844,6 +844,7 @@ function renderDashboard() {
   const protein = sumByType(today, "food", "protein");
   const water = sumByType(today, "water", "ml");
   const steps = sumByType(today, "activity", "steps");
+  const sleep = sumByType(today, "sleep", "hours");
   const burned = sumByType(today, "activity", "caloriesBurned") + sumByType(today, "cardio", "caloriesBurned");
   const latestWeight = latestWeightLb();
 
@@ -851,7 +852,8 @@ function renderDashboard() {
     { label: "Calories", iconName: "flame", value: calories, goal: goals.calorieGoal, unit: "" },
     { label: "Protein", iconName: "bicep", value: protein, goal: goals.proteinGoal, unit: "g" },
     { label: "Water", iconName: "droplet", value: water, goal: goals.waterGoal, unit: "ml" },
-    { label: "Steps", iconName: "footprints", value: steps, goal: goals.stepsGoal, unit: "" }
+    { label: "Steps", iconName: "footprints", value: steps, goal: goals.stepsGoal, unit: "" },
+    { label: "Sleep", iconName: "moon", value: sleep, goal: goals.sleepGoal || 8, unit: "h" }
   ];
 
   const container = document.getElementById("dashboard-stats");
@@ -940,6 +942,8 @@ function renderDailyHabits() {
   const steps = sumByType(today, "activity", "steps");
   const vitaminsList = goals.vitaminsList || [];
   const vitaminsTaken = today.filter((e) => e.type === "vitamin").length;
+  const sleep = sumByType(today, "sleep", "hours");
+  const sleepGoal = goals.sleepGoal || 8;
 
   const rows = [
     {
@@ -959,6 +963,12 @@ function renderDailyHabits() {
       label: "Steps",
       detail: `${steps.toLocaleString()} / ${goals.stepsGoal ? goals.stepsGoal.toLocaleString() : "—"}`,
       met: !!goals.stepsGoal && steps >= goals.stepsGoal
+    },
+    {
+      iconName: "moon",
+      label: "Sleep",
+      detail: `${sleep || 0} / ${sleepGoal}h`,
+      met: sleep >= sleepGoal
     }
   ];
 
@@ -1653,6 +1663,17 @@ document.getElementById("goals-holiday-sync-btn")?.addEventListener("click", () 
 // ---------------------------------------------------------------------
 // Log view
 // ---------------------------------------------------------------------
+// Bedtime → wake time, handling the overnight wrap (wake time-of-day is
+// numerically earlier than bedtime for any normal night's sleep) by adding
+// 24h whenever the raw difference comes out zero or negative.
+function sleepDurationHours(bedtime, wake) {
+  const [bh, bm] = bedtime.split(":").map(Number);
+  const [wh, wm] = wake.split(":").map(Number);
+  let minutes = (wh * 60 + wm) - (bh * 60 + bm);
+  if (minutes <= 0) minutes += 24 * 60;
+  return Math.round((minutes / 60) * 100) / 100;
+}
+
 document.querySelectorAll(".log-form").forEach((form) => {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -1663,14 +1684,31 @@ document.querySelectorAll(".log-form").forEach((form) => {
       if (value === "") continue;
       fields[key] = isNaN(Number(value)) ? value : Number(value);
     }
+    if (type === "sleep" && fields.bedtime && fields.wake) {
+      fields.hours = sleepDurationHours(fields.bedtime, fields.wake);
+    }
     await addEntry(type, fields);
     form.reset();
+    document.getElementById("sleep-duration-preview").textContent = "";
   });
 });
 
 document.querySelectorAll("[data-quick-ml]").forEach((btn) => {
   btn.addEventListener("click", () => addEntry("water", { ml: Number(btn.dataset.quickMl) }));
 });
+
+// Live "X.Xh" preview as both time fields fill in, before submitting.
+const sleepForm = document.getElementById("form-sleep");
+if (sleepForm) {
+  const updateSleepPreview = () => {
+    const bedtime = sleepForm.bedtime.value;
+    const wake = sleepForm.wake.value;
+    const preview = document.getElementById("sleep-duration-preview");
+    preview.textContent = bedtime && wake ? `${sleepDurationHours(bedtime, wake)} hours` : "";
+  };
+  sleepForm.bedtime.addEventListener("input", updateSleepPreview);
+  sleepForm.wake.addEventListener("input", updateSleepPreview);
+}
 
 function renderTodayEntries() {
   const list = document.getElementById("today-entries");
@@ -1929,6 +1967,7 @@ function describeEntry(e) {
     case "activity": return `🚶 ${e.steps ? `${e.steps} steps` : ""}${e.steps && e.caloriesBurned ? ", " : ""}${e.caloriesBurned ? `${e.caloriesBurned} kcal burned` : ""}`;
     case "cardio": return `🏃 ${e.cardioType || "Cardio"} — ${e.durationMin || 0} min${e.distanceMi ? `, ${e.distanceMi} mi` : ""}${e.caloriesBurned ? `, ${e.caloriesBurned} kcal burned` : ""}`;
     case "vitamin": return `💊 ${e.name}`;
+    case "sleep": return `🌙 ${e.hours}h sleep${e.bedtime && e.wake ? ` (${e.bedtime} → ${e.wake})` : ""}`;
     default: return e.type;
   }
 }
@@ -2022,6 +2061,7 @@ function fillGoalsForm() {
   goalsForm.proteinGoal.value = goals.proteinGoal ?? "";
   goalsForm.waterGoal.value = goals.waterGoal ?? "";
   goalsForm.stepsGoal.value = goals.stepsGoal ?? "";
+  goalsForm.sleepGoal.value = goals.sleepGoal ?? "";
   goalsForm.weightGoal.value = goals.weightGoal ?? "";
   goalsForm.vitaminsList.value = (goals.vitaminsList || []).join(", ");
   goalsForm.goalType.value = goals.goalType || "both";
@@ -2110,6 +2150,7 @@ goalsForm.addEventListener("submit", async (e) => {
 
   await setDoc(doc(db, "users", currentUid, "meta", "goals"), {
     ...finalGoalValues,
+    sleepGoal: Number(data.get("sleepGoal")) || null,
     weightGoal: Number(data.get("weightGoal")) || null,
     vitaminsList,
     goalType,
