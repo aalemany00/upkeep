@@ -1110,19 +1110,21 @@ already had the fix (checked directly via `curl` against the live GitHub
 Pages URL) — this was a stale-browser-cache symptom, not a code bug;
 resolved with a hard refresh. While looking into it, he also asked for a
 12h/24h time-format setting (a real, separate ask, not related to the
-caching report) — added `goals.timeFormat` (`"12h"` default or `"24h"`),
-a Settings dropdown, and a shared `formatTime(hhmm)` helper applied
-everywhere a saved `"HH:MM"` string is shown back as text: sleep entries
-and calendar event times. Scope note worth remembering: this can't affect
-how the native `<input type="time">` *widgets* themselves display while
-typing — that follows the browser/OS locale, which a web page can't
-override; the setting only controls the app's own read-only text.
-Initially the setting didn't visibly update already-rendered text until a
-full reload — `goals.timeFormat` lives on the same Firestore doc as every
-other Goal, but the `meta/goals` `onSnapshot` handler didn't re-render
-`renderTodayEntries()`/`renderDashDayPanel()`, only the handful of
-goals-specific views. Fixed by adding both calls there, so flipping the
-toggle reflects immediately, the same session, with no reload needed.
+caching report) — **built, then reverted the same day**. Added
+`goals.timeFormat`, a Settings dropdown, and a `formatTime(hhmm)` helper
+applied everywhere a saved `"HH:MM"` string is shown back as text (sleep
+entries, calendar event times); flagged up front that this couldn't touch
+how the native `<input type="time">` *widgets* display while typing, since
+that follows the browser/OS locale, not the app. That limitation is exactly
+what made it confusing in practice: Adrian expected the Settings toggle to
+change the picker itself, and separately, changing his OS's clock format
+didn't make the browser's native picker switch to 24h either (a
+Windows/Chrome locale-caching quirk, not something either of us could fix
+from the app). Between the two, the feature caused more confusion than it
+resolved, so at his request it was fully removed — the dropdown,
+`goals.timeFormat`, and `formatTime()` are all gone; sleep/calendar times
+just show the raw `"HH:MM"` the `<input type="time">` itself produces, same
+as before this detour.
 
 **Second follow-up**: a specific entry in Adrian's real account showed
 "undefinedh sleep (22:35 → 06:30)" — not another cache issue this time, a
@@ -1142,6 +1144,16 @@ version of the code that didn't compute it yet (deploy propagation, an
 older cached client, etc.) — trusting "it was always set" is the real bug
 here, not the one-off deploy timing.
 
+**Third follow-up**: Adrian found decimal hours ("7.92h") an unnatural way
+to read a sleep duration — "7h 55m" is how a person actually says it.
+`formatSleepHours(hours)` converts decimal hours to that `"Xh Ym"` string
+(rounding to the nearest minute, dropping the minutes part entirely when
+it's a round number — "8h" not "8h 0m"), applied everywhere a sleep
+duration is shown: Today's Entries, the Dashboard stat card, and Daily
+Habits. The underlying stored value stays plain decimal hours — that's
+what `sumByType`/goal-percentage math needs, and nobody's asking to change
+how it's stored, only how it reads back.
+
 ---
 
 ## 5. Data model (Firestore, under `users/{uid}/...`)
@@ -1149,7 +1161,7 @@ here, not the one-off deploy timing.
 | Path | Shape | Notes |
 |---|---|---|
 | `profile/me` | `{age, sex, heightIn, startWeightLb, createdAt, updatedAt}` | `updatedAt` drives the coach-review banner |
-| `meta/goals` | `{goalType, activityLevel, daysPerWeek, preferredDays[], calorieGoal, proteinGoal, waterGoal, stepsGoal, sleepGoal, weightGoal, vitaminsList[], equipment[], equipmentByDay{}, minIncrementLb, timeFormat}` | daily goals + goal/availability/equipment all in one doc. `equipment`/`equipmentByDay`/`minIncrementLb` are Goals-only (not onboarding) — missing/empty means "no restriction." `equipmentByDay` is sparse: `{"1": [...]}` for a customized weekday only. `sleepGoal` is always manual (like `weightGoal`) — never computed, defaults to 8 via a UI fallback when unset. `timeFormat` is `"12h"` (default) or `"24h"` — a display preference for any saved `HH:MM` string (sleep times, calendar event times), not something that changes what an `<input type="time">` itself looks like |
+| `meta/goals` | `{goalType, activityLevel, daysPerWeek, preferredDays[], calorieGoal, proteinGoal, waterGoal, stepsGoal, sleepGoal, weightGoal, vitaminsList[], equipment[], equipmentByDay{}, minIncrementLb}` | daily goals + goal/availability/equipment all in one doc. `equipment`/`equipmentByDay`/`minIncrementLb` are Goals-only (not onboarding) — missing/empty means "no restriction." `equipmentByDay` is sparse: `{"1": [...]}` for a customized weekday only. `sleepGoal` is always manual (like `weightGoal`) — never computed, defaults to 8 via a UI fallback when unset. (A `timeFormat` field briefly existed here for a 12h/24h display setting — built and reverted same-day, see 4a) |
 | `split/current` | `gym.assignSplit()` output (`{name, daysPerWeek, days[]}`) | rebuilt on availability change, never touches history |
 | `entries/{id}` | `{type: food\|water\|weight\|activity\|vitamin\|cardio\|sleep, ...fields, dateKey, createdAt}` | the general log; gym does NOT live here. `sleep` entries carry `{bedtime, wake, hours}` — `hours` is computed client-side from the two time fields (handles the overnight wrap), not typed directly |
 | `workoutLogs/{dateKey}` | `{dateKey, dayType, entries[], notes, updatedAt}` | one doc per logged gym day; entries are slot-based (`slotLabel`) or free-form (`extra:true`); `notes` is one free-text field for the whole session |

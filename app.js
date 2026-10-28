@@ -573,12 +573,6 @@ function subscribeAll(uid) {
     maybeRebuildStaleSplit();
     drawSettingsAvatarPicker();
     renderCoachAvatarBadges();
-    // timeFormat lives on this doc too — re-render whatever's currently
-    // showing a saved time (sleep entries, the calendar day panel) so
-    // flipping the Settings toggle takes effect immediately, not just on
-    // the next unrelated re-render.
-    renderTodayEntries();
-    renderDashDayPanel();
   });
 
   const coachQuery = query(collection(db, "users", uid, "coachNotes"), orderBy("createdAt", "desc"), limit(20));
@@ -859,7 +853,14 @@ function renderDashboard() {
     { label: "Protein", iconName: "bicep", value: protein, goal: goals.proteinGoal, unit: "g" },
     { label: "Water", iconName: "droplet", value: water, goal: goals.waterGoal, unit: "ml" },
     { label: "Steps", iconName: "footprints", value: steps, goal: goals.stepsGoal, unit: "" },
-    { label: "Sleep", iconName: "moon", value: sleep, goal: goals.sleepGoal || 8, unit: "h" }
+    {
+      label: "Sleep", iconName: "moon", value: sleep, goal: goals.sleepGoal || 8, unit: "h",
+      // Raw decimal hours still drive the goal-percentage math below (pct,
+      // over) — only the TEXT shown swaps to "7h 55m", which nobody reads
+      // as a percentage of anything.
+      displayValue: formatSleepHours(sleep) || "0h",
+      displayGoal: formatSleepHours(goals.sleepGoal || 8)
+    }
   ];
 
   const container = document.getElementById("dashboard-stats");
@@ -868,6 +869,8 @@ function renderDashboard() {
       const hasGoal = !!s.goal;
       const pct = hasGoal ? barWidth(s.value, s.goal) : 0;
       const over = hasGoal && s.value > s.goal;
+      const valueText = s.displayValue ?? `${s.value}${s.unit}`;
+      const goalText = s.displayGoal ?? `${s.goal}${s.unit}`;
       return `
         <div class="stat-card">
           <div class="stat-card-top">
@@ -875,7 +878,7 @@ function renderDashboard() {
             ${hasGoal ? progressRingSvg(pct, { size: 44, stroke: 4 }) : ""}
           </div>
           <div class="stat-card-label">${s.label}</div>
-          <div class="stat-card-value">${s.value}${s.unit}${hasGoal ? `<span class="stat-goal"> / ${s.goal}${s.unit}</span>` : ""}</div>
+          <div class="stat-card-value">${valueText}${hasGoal ? `<span class="stat-goal"> / ${goalText}</span>` : ""}</div>
           ${hasGoal ? `<div class="bar-track"><div class="bar-fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>` : ""}
         </div>`;
     })
@@ -973,7 +976,7 @@ function renderDailyHabits() {
     {
       iconName: "moon",
       label: "Sleep",
-      detail: `${sleep || 0} / ${sleepGoal}h`,
+      detail: `${formatSleepHours(sleep) || "0h"} / ${formatSleepHours(sleepGoal)}`,
       met: sleep >= sleepGoal
     }
   ];
@@ -1451,7 +1454,7 @@ function renderDashDayPanel() {
   const listHtml = events.length
     ? `<ul class="entry-list">${events.map((e) => {
         const expired = !e.gym && isEventExpired(e, now);
-        const timeLabel = e.allDay ? "All day" : [e.startTime, e.endTime].filter(Boolean).map(formatTime).join(" – ") || "";
+        const timeLabel = e.allDay ? "All day" : [e.startTime, e.endTime].filter(Boolean).join(" – ") || "";
         return `
           <li class="entry-row ${expired ? "expired" : ""}">
             <span>
@@ -1666,22 +1669,6 @@ document.getElementById("goals-holiday-sync-btn")?.addEventListener("click", () 
   syncHolidays(document.getElementById("goals-holiday-country").value);
 });
 
-// Every stored time is a plain "HH:MM" 24h string (what <input type="time">
-// always gives/accepts, regardless of how the browser displays it) — this
-// is the one place that turns it into whatever the user picked in Settings
-// (goals.timeFormat), for every place a saved time is shown back as text
-// (sleep entries, calendar event times). The <input type="time"> widgets
-// themselves still follow the browser/OS locale — that's not something a
-// web app can override, only the app's own read-only text can.
-function formatTime(hhmm) {
-  if (!hhmm) return hhmm;
-  if ((goals.timeFormat || "12h") === "24h") return hhmm;
-  const [h, m] = hhmm.split(":").map(Number);
-  const period = h < 12 ? "AM" : "PM";
-  const h12 = h % 12 || 12;
-  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
-}
-
 // ---------------------------------------------------------------------
 // Log view
 // ---------------------------------------------------------------------
@@ -1694,6 +1681,18 @@ function sleepDurationHours(bedtime, wake) {
   let minutes = (wh * 60 + wm) - (bh * 60 + bm);
   if (minutes <= 0) minutes += 24 * 60;
   return Math.round((minutes / 60) * 100) / 100;
+}
+
+// Decimal hours (what's actually stored/summed, so goal-percentage math
+// stays simple) read as "7.92h" to a person — "7h 55m" is the natural way
+// to say a night's sleep out loud, so that's what every display of a sleep
+// duration uses; only the underlying number stays decimal.
+function formatSleepHours(hours) {
+  if (hours == null) return null;
+  const totalMinutes = Math.round(hours * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
 document.querySelectorAll(".log-form").forEach((form) => {
@@ -1997,7 +1996,8 @@ function describeEntry(e) {
       // didn't match, so the old submit handler ran without the hours
       // calculation it now has).
       const hours = e.hours ?? (e.bedtime && e.wake ? sleepDurationHours(e.bedtime, e.wake) : null);
-      return `🌙 ${hours != null ? `${hours}h ` : ""}sleep${e.bedtime && e.wake ? ` (${formatTime(e.bedtime)} → ${formatTime(e.wake)})` : ""}`;
+      const durationText = hours != null ? formatSleepHours(hours) : null;
+      return `🌙 ${durationText ? `${durationText} ` : ""}sleep${e.bedtime && e.wake ? ` (${e.bedtime} → ${e.wake})` : ""}`;
     }
     default: return e.type;
   }
@@ -2087,7 +2087,6 @@ function fillGoalsForm() {
   goalsForm.sex.value = profile?.sex || "male";
   goalsForm.heightIn.value = profile?.heightIn ?? "";
   goalsForm.startWeightLb.value = profile?.startWeightLb ?? "";
-  goalsForm.timeFormat.value = goals.timeFormat || "12h";
 
   goalsForm.calorieGoal.value = goals.calorieGoal ?? "";
   goalsForm.proteinGoal.value = goals.proteinGoal ?? "";
@@ -2183,7 +2182,6 @@ goalsForm.addEventListener("submit", async (e) => {
   await setDoc(doc(db, "users", currentUid, "meta", "goals"), {
     ...finalGoalValues,
     sleepGoal: Number(data.get("sleepGoal")) || null,
-    timeFormat: data.get("timeFormat") || "12h",
     weightGoal: Number(data.get("weightGoal")) || null,
     vitaminsList,
     goalType,
