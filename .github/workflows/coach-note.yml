@@ -7,7 +7,11 @@ name: Weekly coach note
 # scripts/README.md's "Automated weekly run" section for one-time setup.
 on:
   schedule:
-    - cron: "0 14 * * 0" # Sundays at 14:00 UTC — change to whatever day/time you want
+    # 10 PM Pacific on Sundays. GitHub Actions cron is fixed UTC and doesn't
+    # follow daylight saving, so this is exact during PST (roughly Nov-Mar)
+    # and runs an hour early (9 PM Pacific) during PDT (roughly Mar-Nov) —
+    # if that hour matters, change to "0 5 * * 1" for PDT months instead.
+    - cron: "0 6 * * 1" # Monday 06:00 UTC = Sunday 10 PM PST
   workflow_dispatch: {} # lets you trigger a run manually from the Actions tab, for testing
 
 permissions:
