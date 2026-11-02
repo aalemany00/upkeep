@@ -761,8 +761,9 @@ pack (it has 8 poses per character, only pose 1 had been used so far).
   rep-range/sets/weight-increment (`lo`/`hi`/`sets`/`inc`) based on a
   bodyweight-vs-compound-vs-isolation heuristic.
 - **Split assignment** (`gym.js`, `assignSplit`): plain code, not AI.
-  Days/week → a named template (1=Full Body, 2=Upper/Lower, 3=Push/Pull/
-  Legs, 4=Upper/Lower×2, 5=PPL+Upper/Lower, 6=PPL×2). Each day's slots are
+  Days/week → a named template (1=Full Body, 2=Full Body×2, 3=Full Body×3,
+  4=Upper/Lower×2, 5=PPL+Upper/Lower, 6=PPL×2 — see 3b below for why 2/3
+  days use Full Body rather than Upper/Lower or PPL). Each day's slots are
   filled from the catalog by target muscle group, excluding exercises
   already used earlier that same day. Recomputes instantly whenever
   availability changes in Goals — never touches logged history.
@@ -1032,6 +1033,40 @@ Follow-up feedback on the Gym day panel from more real-world use:
 - Spacing cleanup: `.gym-slot`/`.gym-slot-body`/`.sets-grid`/`.target-line`
   in `style.css` got consistent gaps (flex `gap` instead of ad hoc margins)
   so the card doesn't read as cramped once it's expanded.
+
+### 3b. Low-day-count splits switched from body-part to Full Body (2026-11-02)
+
+Adrian found (via his own research, matching standard exercise-science
+guidance — 2-3x/week per muscle for hypertrophy) that his 3-day/week split
+was Push/Pull/Legs, which only completes one cycle in 3 sessions — every
+muscle trained exactly once/week, not the 2-3x generally recommended. PPL
+is designed for schedules with enough sessions to repeat the cycle within
+the week (6 days, or paired with Upper/Lower at 5); running it on exactly
+3 days is a common real-world mismatch, and the app's own default was
+handing it out unconditionally for anyone with 3 days/week availability.
+
+- `SPLIT_TEMPLATES` in `gym.js`: 2 days/week changed from Upper/Lower to
+  Full Body×2, and 3 days/week from Push/Pull/Legs to Full Body×3 — both
+  previously delivered 1x/week per muscle; both now deliver true 2x or 3x.
+  4/5/6-day templates were already correct (each already hits every muscle
+  at least twice via Upper/Lower×2, PPL+Upper/Lower, or PPL×2) and are
+  unchanged.
+- Repeated Full Body days in the same week default to identical exercises
+  for every slot (`assignSplit`'s `usedToday` dedup only tracks *within*
+  one day, not across the week) — this isn't a bug to fix, it matches how
+  real full-body programs (StrongLifts 5x5, Starting Strength) are
+  actually written: same lifts every session, progression via
+  weight/reps, not exercise variety. Still swappable per day via the
+  existing exercise picker if someone wants variety anyway.
+- `SPLIT_ALGO_VERSION` bumped 3→4 so this reaches everyone with an
+  existing split already in Firestore (including Adrian's own account),
+  not just new signups — `maybeRebuildStaleSplit()` in `app.js` picks up
+  the version mismatch on next load and silently rebuilds (same
+  `daysPerWeek`, no AI call, logged history untouched), exactly the
+  mechanism this versioning exists for.
+- Verified live: a fresh 3-day account now gets "Full Body x3" covering
+  all 11 muscle groups each day; dropping to 2 days correctly switches to
+  "Full Body x2".
 
 ---
 

@@ -36,8 +36,11 @@ substantial lands — a new feature, a real bug fix, an architecture decision.
 ## Gym: split assignment and progression (plain code, not the model)
 
 - `gym.js` is pure functions, no DOM/Firebase: `assignSplit(daysPerWeek,
-  catalog)` deterministically maps availability to a standard split (1 day =
-  Full Body, 2 = Upper/Lower, 3 = Push/Pull/Legs, up to 6), filling each
+  catalog)` deterministically maps availability to a standard split (1-3
+  days = Full Body ×N, 4 = Upper/Lower ×2, 5 = PPL + Upper/Lower, 6 = PPL
+  ×2 — chosen so every day count actually hits each muscle 2-3x/week,
+  not just once; a body-part split like PPL only delivers that once there
+  are enough sessions to repeat the cycle within the week), filling each
   slot from the catalog by target muscle group. `targetFor(history,
   exerciseMeta)` is a double-progression engine (same shape as a standard
   lifting program: hit the top of your rep range on every set → add weight

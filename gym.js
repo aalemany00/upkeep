@@ -28,7 +28,7 @@ function musclesFor(...groups) {
 // user's stored split predates the current logic — otherwise a fix here
 // would only apply to the next person who re-onboards or changes
 // availability, not to anyone with an existing split already in Firestore.
-export const SPLIT_ALGO_VERSION = 3;
+export const SPLIT_ALGO_VERSION = 4;
 
 // Equipment a user can pick from in Goals (exercises.json's `equipment`
 // field, minus the two "no equipment needed" markers below, which are
@@ -169,10 +169,17 @@ const SLOT_TEMPLATES = {
 
 // Which day types a week of N days cycles through. Deliberately simple,
 // well-known splits rather than anything exotic.
+// 2 and 3 days/week use Full Body rather than a body-part split (Upper/
+// Lower, Push/Pull/Legs) — a body-part split only completes one cycle in
+// a week at these day counts, so each muscle gets trained once/week, not
+// the 2-3x/week frequency generally recommended for hypertrophy. PPL/
+// Upper-Lower only deliver that frequency once there are enough sessions
+// to repeat the cycle within the week (4+ days) — see 4/5/6 below, each of
+// which already hits every muscle at least twice.
 export const SPLIT_TEMPLATES = {
   1: { name: "Full Body", dayTypes: ["Full Body"] },
-  2: { name: "Upper / Lower", dayTypes: ["Upper", "Lower"] },
-  3: { name: "Push / Pull / Legs", dayTypes: ["Push", "Pull", "Legs"] },
+  2: { name: "Full Body x2", dayTypes: ["Full Body", "Full Body"] },
+  3: { name: "Full Body x3", dayTypes: ["Full Body", "Full Body", "Full Body"] },
   4: { name: "Upper / Lower x2", dayTypes: ["Upper", "Lower", "Upper", "Lower"] },
   5: { name: "Push / Pull / Legs + Upper / Lower", dayTypes: ["Push", "Pull", "Legs", "Upper", "Lower"] },
   6: { name: "Push / Pull / Legs x2", dayTypes: ["Push", "Pull", "Legs", "Push", "Pull", "Legs"] }
