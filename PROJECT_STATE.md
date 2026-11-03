@@ -53,32 +53,55 @@ flag to re-confirm scope before building, not assume it's fine.
 ## 2. What's built (current feature set)
 
 ### Tracking
+(See **2h** below for the 2026-11-02 information-architecture rework — this
+is the *current* layout, not the original one; 2h has the reasoning.)
+
 - **Food**: manual log (name/calories/protein) + a **diet suggestions**
   panel (curated 60-item catalog, `foods.json`: 15 each of breakfast/lunch/
   dinner/snack, varied across cuisines/diets, approximate macros) with
-  shuffle and one-tap logging. Per-device only (localStorage), not synced.
-- **Gym**: see section 3, it's the biggest piece.
-- **Water, weight, steps/calories-burned, vitamins**: quick-add forms in the
-  "Log" tab. Vitamins list is user-defined (comma-separated) in Goals.
-- **Dashboard**: today's totals vs. goals (progress bars), vitamins
-  checklist, latest coach note preview, and the everything-calendar (below).
-  The Weight tile shows a "last logged {date}" subtitle — it's intentionally
-  sticky (your latest weigh-in persists until you log a new one, it's not
-  meant to reset daily like calories/water/steps), and without that
-  subtitle that read as a bug ("stuck on 157 forever") rather than the
-  intended "this is your current weight."
-- **Backdating**: Food and Log both have a "Logging for" date picker (shares
-  `selectedDateKey` with the Dashboard/Gym calendar — see below), so
-  forgetting to log a day isn't a dead end; you pick that date and log it
-  whenever you remember. Food/Log/Cardio's "today's ___" lists actually
-  follow whichever date is selected (`entriesForSelectedDate()`), while the
-  Dashboard's own stat tiles stay pinned to literal today
-  (`todaysEntries()`) regardless — picking a past date to backdate an entry
-  must never make the Dashboard *look* like it's showing a past day's
-  totals. Vitamin chips exist in both places and had to split the same way:
-  the Dashboard's vitamin chip always marks today; the Log tab's follows the
-  selected date. `addEntry` takes an optional explicit date override for
-  exactly that dashboard-always-means-today case.
+  shuffle and one-tap logging (per-device only, localStorage, not synced) +
+  **Water** quick-add/manual logging (moved here from Log in 2h).
+- **Fitness** (renamed from "Gym" in 2h): see section 3 for the gym program
+  itself, it's the biggest piece. Also holds Cardio logging, **Activity**
+  (steps/calories burned, moved here from Log), and the **Daily stretch**
+  checklist (moved here from the Dashboard) — grouped this way because
+  Adrian wanted "the cardio/activity side" and "the gym side" visually
+  separated within one tab rather than spread across three.
+- **Dashboard**: goal-progress stat cards (Calories/Protein/Water/Steps —
+  read-only, ring + bar), a **Sleep** card and a **Weight** card that are
+  *both logging controls and displays* (see below), the vitamins/
+  supplements checklist (kept here per Adrian's request — "keep the
+  medication stuff on the dashboard"), the coach note preview, meals
+  preview, and workout-plan preview.
+- **Sleep/Weight tap-to-edit cards (2h)**: tapping either card swaps its
+  ring/value for an inline form (bedtime+wake for Sleep, a number field for
+  Weight) in the same grid slot; Save writes the entry and swaps back,
+  Cancel discards and swaps back without writing. Re-tappable afterward to
+  correct a mistake — there's no `updateEntry()` in this codebase, so
+  "editing" a day that already has an entry is delete-then-add
+  (`entryForSelectedDate(type)` finds the one entry for that day/type,
+  `removeEntry` then `addEntry`). State (`dashboardEditingCard`) is reset
+  whenever the viewed date changes, so flipping to another day never lands
+  you mid-edit on the wrong day's data.
+- **Log**: now the detailed, date-navigable *journal* of everything for the
+  selected day — food, water, weight, sleep, vitamins, stretches (all from
+  the `entries` collection) plus that day's gym sets and session notes (from
+  `workoutLogs`, read-only here — correcting a workout day happens on the
+  Fitness tab itself, since there's no per-set delete for `workoutLogs`).
+  It no longer has its own input forms; every category logs from its own
+  tab now; Log is purely the "see everything at once, more detail than the
+  Dashboard" view, same role the Dashboard's old "Today's entries" card used
+  to play, just bigger and its own tab.
+- **Backdating**: Food, Fitness, and Log all share one "logging for" date —
+  `selectedDateKey`, kept in sync with the Dashboard/Gym calendar — so
+  forgetting to log a day isn't a dead end. Since 2h, the **Dashboard
+  itself** is also date-navigable (‹/› around the greeting, or "Jump to
+  today"), which is new: before 2h its stat tiles were deliberately pinned
+  to literal today regardless of what was selected elsewhere; Adrian asked
+  to be able to "change the date on the dashboard so you can see the
+  previous days and their respective stats," which supersedes that old
+  design decision. Vitamin chips and the Daily Stretch checklist follow
+  `selectedDateKey` too now, for the same reason.
 
 ### Everything calendar (Dashboard) — `calendar.js` + the "Calendar" panel in `app.js`
 A general-purpose, fully editable calendar on the Dashboard — not just gym
@@ -748,6 +771,90 @@ pack (it has 8 poses per character, only pose 1 had been used so far).
   it's clean for all of them — AI-generated sprite packs can have
   per-frame, per-character defects that don't show up in a quick glance at
   a magnified screenshot.
+
+### 2h. Information-architecture rework — Log repurposed, Water/Activity/
+Stretch relocated, Dashboard date nav + Sleep/Weight tap-to-edit (2026-11-02)
+
+Adrian's own words for why: "the log section is very crowded with random
+things to track. The food, gym, and calendar are fine because they have
+specifics in them. But the log is like 'the rest'." The old Log tab was a
+grab-bag of Water/Weight/Activity/Sleep/Vitamin forms with no real theme in
+common beyond "didn't fit in Food or Gym." This reshuffles each of them into
+the tab it actually belongs to, and turns Log into something with its own
+clear job (the detailed journal) instead of a junk drawer.
+
+- **Moved**: Water → Food. Activity (steps/calories burned) → Fitness.
+  Weight → Dashboard (new tap-to-edit stat card). Sleep → Dashboard
+  (existing stat card, converted from "today's ring only" to tap-to-edit).
+  Daily Stretch checklist → Fitness (was on the Dashboard). Vitamins/
+  supplements control → stayed on the Dashboard per Adrian's explicit "keep
+  the medication stuff on the dashboard" (previously a form in Log; same
+  `#vitamin-quick-list` element and `renderVitaminChips()`, just a new
+  parent panel, so no JS change was needed for that one).
+- **Renamed**: "Gym" tab → "Fitness" (label only — `data-view="gym"` and
+  every function/element name internally still says "gym", to avoid a
+  pointless churn-only rename of working code).
+- **New**: Dashboard date navigation (‹/› + "Jump to today", next to the
+  greeting) — `renderDashboard()` and everything it calls
+  (`renderDailyHabits`, `renderMealsList`, `renderWorkoutPlanPanel`,
+  `renderDailyStretch`) switched from `todaysEntries()`/`todayKey()` to
+  `entriesForSelectedDate()`/`selectedDateKey`, reversing the 2a-era design
+  decision that the Dashboard always means literal today. `gymJumpToDate()`
+  now also calls `renderDashboard()`.
+- **New**: Sleep/Weight tap-to-edit stat cards. Tapping swaps the card's
+  ring/value for an inline form (`dashboardSleepEditHtml`/
+  `dashboardWeightEditHtml`); Save does delete-then-add via the new
+  `entryForSelectedDate(type)` helper (finds the one entry for that day,
+  since Sleep/Weight only ever have at most one per day, unlike Water/food)
+  then `removeEntry`+`addEntry`; Cancel just discards. `dashboardEditingCard`
+  (module state: `"sleep" | "weight" | null`) tracks which card (if any) is
+  in edit mode, survives `renderDashboard()` replacing `#dashboard-stats`'
+  innerHTML, and is reset to `null` on every date change (`gymJumpToDate`)
+  so you never land mid-edit on the wrong day. No ring on the Weight card —
+  unlike Calories/Water/Steps/Sleep, "closer to goal" can mean either up or
+  down depending on the goal, so a 0-100% fill would read backwards for half
+  of all users; it's just the number and, if set, the target.
+- **Log rebuilt as a journal**: `renderTodayEntries()` now shows *every*
+  entry type for the selected day (food included — it used to filter food
+  out, since Food had its own list) plus, new, that day's gym sets and
+  session notes pulled from `workoutLogs` via `logForDate()`
+  (`describeGymLogEntry()`). The gym rows have no delete button — there's no
+  per-set delete for `workoutLogs` (one doc per day, not one doc per set
+  like `entries`), so correcting a workout day stays a Fitness-tab action.
+  `renderTodayEntries()` is now also called from the `workoutLogs`
+  `onSnapshot` handler (previously only `entries`' snapshot triggered it),
+  so a just-saved gym day shows up in the journal without a reload.
+- **DST-safe sleep duration**: `sleepDurationHours(bedtime, wake,
+  wakeDateKey)` gained a third parameter and switched from naive "HH:MM"
+  string subtraction to building real `Date` objects (anchored to the wake
+  day, bedtime is always the night before) and subtracting their
+  timestamps — the browser's own timezone database then handles a
+  daylight-saving transition automatically. Verified directly: 23:00 on Oct
+  31 2026 → 07:15 on Nov 1 2026 (the real US fall-back night) correctly
+  computes 9h15m, not the naive 8h15m a clock-time subtraction would give.
+  No hardcoded DST dates/rules, so this works for whatever timezone the
+  browser is actually in (including none, for a country without DST).
+- **Fixed in passing**: `renderDailyHabits()`'s habit rows and
+  `renderMealsList()`'s meal rows had `data-switch-view="..."` attributes
+  that silently did nothing — the app's one-time, script-load-time
+  `querySelectorAll("[data-switch-view]")` wiring (`app.js`) never saw them,
+  since both lists are rebuilt via `innerHTML` well after that wiring ran.
+  Pre-existing bug, unrelated to this rework except that the new
+  Water→Food/Steps→Fitness row targets made it worth finally fixing: both
+  functions now also do their own `querySelectorAll("[data-switch-view]")`
+  re-wiring at the end of each render, matching the pattern the gym-day
+  panel's own calendar-link buttons already used.
+- Live-tested on the existing test account: Sleep card tap→fill→save (ring
+  updates, DST case double-checked via direct `Date` math in the console),
+  Weight card tap→save→tap-again→correct (confirmed no duplicate entry —
+  delete-then-add works), Dashboard ‹/› navigation (stats reset correctly
+  for a day with no entries, restore correctly going back to today), Water
+  quick-add from Food (Dashboard's Water stat updated), a full gym day save
+  (showed up in both the Workout Plan preview and the Log journal,
+  session notes included), Daily Stretch checkbox from its new Fitness-tab
+  location, and every relocated habit-row's click target (Water → Food,
+  Steps → Fitness, Sleep → its own Dashboard card, Supplements → the
+  Dashboard's vitamins panel, Stretching → Fitness).
 
 ---
 

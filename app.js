@@ -81,6 +81,7 @@ let dietPicks = {}; // { breakfast: id, lunch: id, dinner: id, snack1: id, snack
 let calViewDate = new Date();   // month currently shown on the Dashboard
 let selectedDateKey = null;     // date both the Dashboard and Gym day panels show
 let showingOnboardingReview = false; // gate: stay on onboarding screen to show the just-built plan
+let dashboardEditingCard = null; // "sleep" | "weight" | null — which Dashboard stat card (if any) shows its inline edit form instead of its normal ring/value; survives renderDashboard() replacing dashboard-stats' innerHTML, cleared on Save/Cancel
 
 async function fetchJsonWithRetry(url, attempts = 2) {
   for (let i = 0; i < attempts; i++) {
@@ -129,14 +130,24 @@ function todaysEntries() {
   return entries.filter((e) => e.dateKey === key);
 }
 
-// Food/Log/Cardio entries are logged against whatever date is currently
-// selected (shared with the Dashboard/Gym calendar — see selectedDateKey),
-// not always literally today, so you can back-log a day you forgot. The
-// Dashboard's own stat tiles stay on todaysEntries() above — those always
-// mean "today," regardless of what date you're backdating elsewhere.
+// Food/Log/Cardio/Dashboard entries are all logged against whatever date is
+// currently selected (shared across the Dashboard/Gym calendar — see
+// selectedDateKey), not always literally today, so you can back-log a day
+// you forgot or review a past day's stats from the Dashboard's own date
+// navigator.
 function entriesForSelectedDate() {
   const key = selectedDateKey || todayKey();
   return entries.filter((e) => e.dateKey === key);
+}
+
+// The one entry of `type` logged for the selected day, or null — used for
+// the Dashboard's Sleep/Weight cards, which only ever expect at most one
+// entry per day (unlike water/food, which can have many). `entries` is
+// ordered newest-created-first, so [0] is also "most recently edited" if
+// more than one somehow exists for the same day.
+function entryForSelectedDate(type) {
+  const key = selectedDateKey || todayKey();
+  return entries.find((e) => e.type === type && e.dateKey === key) || null;
 }
 
 function selectedDateLabel() {
@@ -153,18 +164,12 @@ function barWidth(value, goal) {
   return Math.max(0, Math.min(100, (value / goal) * 100));
 }
 
+// Still used for the onboarding/profile "starting weight" default — the
+// Dashboard's own Weight card now shows the selected day's entry instead
+// (see entryForSelectedDate), not this sticky "last known" reading.
 function latestWeightLb() {
   const weightEntries = entries.filter((e) => e.type === "weight");
   return weightEntries.length ? weightEntries[0].lb : null;
-}
-
-// Weight is intentionally "sticky" (it shows your last recorded weight
-// indefinitely, not reset to empty every day like calories/water/steps —
-// nobody weighs in daily). Without a date label that reads as a bug
-// ("it's stuck on 157"), so the Dashboard shows when it was actually logged.
-function latestWeightDateKey() {
-  const weightEntries = entries.filter((e) => e.type === "weight");
-  return weightEntries.length ? weightEntries[0].dateKey : null;
 }
 
 // ---------------------------------------------------------------------
@@ -614,6 +619,7 @@ function subscribeAll(uid) {
     renderDashCalendar();
     renderDashDayPanel();
     renderWorkoutPlanPanel();
+    renderTodayEntries(); // Log tab's journal includes the day's gym sets too
   });
 
   const eventsQuery = query(collection(db, "users", uid, "calendarEvents"), orderBy("dateKey", "desc"), limit(500));
@@ -830,41 +836,50 @@ function renderDashboardHeader() {
   const greetingText = document.getElementById("dash-greeting-text");
   const greetingIcon = document.getElementById("dash-greeting-icon");
   const dateText = document.getElementById("dash-date-text");
+  const subtitle = document.getElementById("dash-subtitle");
+  const viewingToday = (selectedDateKey || todayKey()) === todayKey();
   const hour = new Date().getHours();
-  if (greetingText) greetingText.textContent = timeOfDayGreeting();
-  if (greetingIcon) greetingIcon.innerHTML = icon(hour >= 6 && hour < 19 ? "sun" : "moon", { size: 22 });
-  if (dateText) dateText.textContent = new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  const shownDate = dateFromKey(selectedDateKey || todayKey());
+
+  if (greetingText) greetingText.textContent = viewingToday ? timeOfDayGreeting() : shownDate.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+  if (greetingIcon) greetingIcon.innerHTML = viewingToday ? icon(hour >= 6 && hour < 19 ? "sun" : "moon", { size: 22 }) : "";
+  if (dateText) dateText.textContent = shownDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  if (subtitle) {
+    subtitle.innerHTML = viewingToday
+      ? "Your daily overview"
+      : `<button type="button" class="link-btn" id="dash-day-today">Jump to today</button>`;
+  }
+  // dash-day-today is rebuilt into subtitle.innerHTML above, so it needs a
+  // fresh listener every render; dash-day-prev/next are static elements in
+  // index.html wired once below, not here (re-wiring them on every render
+  // would stack duplicate listeners).
+  document.getElementById("dash-day-today")?.addEventListener("click", () => gymJumpToDate(todayKey()));
 }
+document.getElementById("dash-day-prev")?.addEventListener("click", () => gymJumpDay(-1));
+document.getElementById("dash-day-next")?.addEventListener("click", () => gymJumpDay(1));
 
 function renderDashboard() {
   renderDashboardHeader();
 
-  const today = todaysEntries();
+  const today = entriesForSelectedDate();
   const calories = sumByType(today, "food", "calories");
   const protein = sumByType(today, "food", "protein");
   const water = sumByType(today, "water", "ml");
   const steps = sumByType(today, "activity", "steps");
   const sleep = sumByType(today, "sleep", "hours");
   const burned = sumByType(today, "activity", "caloriesBurned") + sumByType(today, "cardio", "caloriesBurned");
-  const latestWeight = latestWeightLb();
+  const sleepEntry = entryForSelectedDate("sleep");
+  const weightEntry = entryForSelectedDate("weight");
 
-  const stats = [
+  const ringStats = [
     { label: "Calories", iconName: "flame", value: calories, goal: goals.calorieGoal, unit: "" },
     { label: "Protein", iconName: "bicep", value: protein, goal: goals.proteinGoal, unit: "g" },
     { label: "Water", iconName: "droplet", value: water, goal: goals.waterGoal, unit: "ml" },
-    { label: "Steps", iconName: "footprints", value: steps, goal: goals.stepsGoal, unit: "" },
-    {
-      label: "Sleep", iconName: "moon", value: sleep, goal: goals.sleepGoal || 8, unit: "h",
-      // Raw decimal hours still drive the goal-percentage math below (pct,
-      // over) — only the TEXT shown swaps to "7h 55m", which nobody reads
-      // as a percentage of anything.
-      displayValue: formatSleepHours(sleep) || "0h",
-      displayGoal: formatSleepHours(goals.sleepGoal || 8)
-    }
+    { label: "Steps", iconName: "footprints", value: steps, goal: goals.stepsGoal, unit: "" }
   ];
 
   const container = document.getElementById("dashboard-stats");
-  container.innerHTML = stats
+  container.innerHTML = ringStats
     .map((s) => {
       const hasGoal = !!s.goal;
       const pct = hasGoal ? barWidth(s.value, s.goal) : 0;
@@ -882,12 +897,16 @@ function renderDashboard() {
           ${hasGoal ? `<div class="bar-track"><div class="bar-fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>` : ""}
         </div>`;
     })
-    .join("");
+    .join("")
+    + (dashboardEditingCard === "sleep" ? dashboardSleepEditHtml(sleepEntry) : dashboardSleepCardHtml(sleep))
+    + (dashboardEditingCard === "weight" ? dashboardWeightEditHtml(weightEntry) : dashboardWeightCardHtml(weightEntry));
+
+  wireDashboardStatEdits(container);
 
   const weightLine = document.getElementById("dashboard-weight-line");
-  if (weightLine) {
-    weightLine.innerHTML = `${burned} kcal burned today${latestWeight !== null ? ` &middot; last weight ${latestWeight} lb (${dateFromKey(latestWeightDateKey()).toLocaleDateString(undefined, { month: "short", day: "numeric" })}${latestWeightDateKey() === todayKey() ? ", today" : ""})` : ""}`;
-  }
+  if (weightLine) weightLine.textContent = `${burned} kcal burned`;
+  const activityHeading = document.getElementById("dashboard-activity-heading");
+  if (activityHeading) activityHeading.textContent = `${selectedDateLabel()}'s activity`;
 
   renderCoachPreview();
   renderWeeklyActivityChart();
@@ -895,6 +914,112 @@ function renderDashboard() {
   renderDailyStretch();
   renderMealsList();
   renderWorkoutPlanPanel();
+}
+
+function dashboardSleepCardHtml(sleepHours) {
+  const goal = goals.sleepGoal || 8;
+  const pct = barWidth(sleepHours, goal);
+  const over = sleepHours > goal;
+  return `
+    <button type="button" class="stat-card stat-card-editable" data-edit-card="sleep">
+      <div class="stat-card-top">
+        <span class="stat-card-icon">${icon("moon", { size: 18 })}</span>
+        ${progressRingSvg(pct, { size: 44, stroke: 4 })}
+      </div>
+      <div class="stat-card-label">Sleep</div>
+      <div class="stat-card-value">${formatSleepHours(sleepHours) || "0h"}<span class="stat-goal"> / ${formatSleepHours(goal)}</span></div>
+      <div class="bar-track"><div class="bar-fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>
+    </button>`;
+}
+
+// No progress ring here — unlike Calories/Water/Steps, "closer to goal" for
+// weight can mean either up or down depending on the goal, so a single 0-100%
+// fill would read backwards for half of all users. Just the number and,
+// if set, the target to aim for.
+function dashboardWeightCardHtml(weightEntry) {
+  const goalText = goals.weightGoal ? `<span class="stat-goal"> / ${goals.weightGoal} lb goal</span>` : "";
+  return `
+    <button type="button" class="stat-card stat-card-editable" data-edit-card="weight">
+      <div class="stat-card-top">
+        <span class="stat-card-icon">${icon("scale", { size: 18 })}</span>
+      </div>
+      <div class="stat-card-label">Weight</div>
+      <div class="stat-card-value">${weightEntry ? `${weightEntry.lb} lb` : "Not logged"}${goalText}</div>
+    </button>`;
+}
+
+function dashboardSleepEditHtml(existing) {
+  return `
+    <div class="stat-card stat-card-edit-form" data-edit-form="sleep">
+      <div class="stat-card-label">Sleep</div>
+      <label class="small">Bedtime<input type="time" id="dash-sleep-bedtime" value="${existing?.bedtime || ""}" /></label>
+      <label class="small">Wake time<input type="time" id="dash-sleep-wake" value="${existing?.wake || ""}" /></label>
+      <div class="row" style="margin-top:8px;gap:6px;">
+        <button type="button" class="btn primary small" id="dash-sleep-save">Save</button>
+        <button type="button" class="btn small" id="dash-sleep-cancel">Cancel</button>
+      </div>
+    </div>`;
+}
+
+function dashboardWeightEditHtml(existing) {
+  return `
+    <div class="stat-card stat-card-edit-form" data-edit-form="weight">
+      <div class="stat-card-label">Weight</div>
+      <label class="small">Weight (lb)<input type="number" id="dash-weight-input" min="0" step="0.1" value="${existing?.lb ?? ""}" /></label>
+      <div class="row" style="margin-top:8px;gap:6px;">
+        <button type="button" class="btn primary small" id="dash-weight-save">Save</button>
+        <button type="button" class="btn small" id="dash-weight-cancel">Cancel</button>
+      </div>
+    </div>`;
+}
+
+// Sleep/Weight only ever have at most one entry per day (see
+// entryForSelectedDate), so "editing" an already-logged day means delete the
+// old entry and add the corrected one — there's no updateEntry() in this
+// codebase, only addEntry()/removeEntry() (see CLAUDE.md/PROJECT_STATE.md).
+function wireDashboardStatEdits(container) {
+  container.querySelectorAll("[data-edit-card]").forEach((cardEl) => {
+    cardEl.addEventListener("click", () => {
+      dashboardEditingCard = cardEl.dataset.editCard;
+      renderDashboard();
+    });
+  });
+
+  if (container.querySelector('[data-edit-form="sleep"]')) {
+    document.getElementById("dash-sleep-cancel").addEventListener("click", () => {
+      dashboardEditingCard = null;
+      renderDashboard();
+    });
+    document.getElementById("dash-sleep-save").addEventListener("click", async () => {
+      const bedtime = document.getElementById("dash-sleep-bedtime").value;
+      const wake = document.getElementById("dash-sleep-wake").value;
+      if (!bedtime || !wake) return;
+      const wakeDateKey = selectedDateKey || todayKey();
+      const hours = sleepDurationHours(bedtime, wake, wakeDateKey);
+      const existing = entryForSelectedDate("sleep");
+      if (existing) await removeEntry(existing.id);
+      await addEntry("sleep", { bedtime, wake, hours }, wakeDateKey);
+      dashboardEditingCard = null;
+      renderDashboard();
+    });
+  }
+
+  if (container.querySelector('[data-edit-form="weight"]')) {
+    document.getElementById("dash-weight-cancel").addEventListener("click", () => {
+      dashboardEditingCard = null;
+      renderDashboard();
+    });
+    document.getElementById("dash-weight-save").addEventListener("click", async () => {
+      const lb = Number(document.getElementById("dash-weight-input").value);
+      if (!lb) return;
+      const dateKey = selectedDateKey || todayKey();
+      const existing = entryForSelectedDate("weight");
+      if (existing) await removeEntry(existing.id);
+      await addEntry("weight", { lb }, dateKey);
+      dashboardEditingCard = null;
+      renderDashboard();
+    });
+  }
 }
 
 async function applyCalorieChange(delta) {
@@ -926,11 +1051,12 @@ function renderCoachPreview() {
 function renderWorkoutPlanPanel() {
   const el = document.getElementById("dashboard-workout-plan");
   if (!el) return;
-  const scheduled = scheduledDayTypeFor(todayKey());
-  const loggedToday = workoutLogs.some((w) => w.dateKey === todayKey());
+  const dateKey = selectedDateKey || todayKey();
+  const scheduled = scheduledDayTypeFor(dateKey);
+  const loggedThatDay = workoutLogs.some((w) => w.dateKey === dateKey);
   const subtitle = !scheduled
     ? "Rest day"
-    : `${scheduled.dayType}${loggedToday ? " · Logged" : ""}`;
+    : `${scheduled.dayType}${loggedThatDay ? " · Logged" : ""}`;
   el.innerHTML = `
     <span class="workout-plan-icon">${icon("dumbbell", { size: 18 })}</span>
     <span class="workout-plan-text">
@@ -947,7 +1073,7 @@ function renderWorkoutPlanPanel() {
 function renderDailyHabits() {
   const el = document.getElementById("dashboard-habits");
   if (!el) return;
-  const today = todaysEntries();
+  const today = entriesForSelectedDate();
   const water = sumByType(today, "water", "ml");
   const steps = sumByType(today, "activity", "steps");
   const vitaminsList = goals.vitaminsList || [];
@@ -961,25 +1087,29 @@ function renderDailyHabits() {
       iconName: "droplet",
       label: "Water",
       detail: `${(water / 1000).toFixed(1)} / ${goals.waterGoal ? (goals.waterGoal / 1000).toFixed(1) : "—"} L`,
-      met: !!goals.waterGoal && water >= goals.waterGoal
+      met: !!goals.waterGoal && water >= goals.waterGoal,
+      switchView: "food" // logged on the Food tab now
     },
     {
       iconName: "pill",
       label: "Supplements",
       detail: vitaminsList.length ? `${vitaminsTaken} / ${vitaminsList.length}` : "none set up",
-      met: vitaminsList.length > 0 && vitaminsTaken >= vitaminsList.length
+      met: vitaminsList.length > 0 && vitaminsTaken >= vitaminsList.length,
+      action: "open-vitamins" // logged right on the Dashboard now, not the Log tab
     },
     {
       iconName: "footprints",
       label: "Steps",
       detail: `${steps.toLocaleString()} / ${goals.stepsGoal ? goals.stepsGoal.toLocaleString() : "—"}`,
-      met: !!goals.stepsGoal && steps >= goals.stepsGoal
+      met: !!goals.stepsGoal && steps >= goals.stepsGoal,
+      switchView: "gym" // logged on the Fitness tab now
     },
     {
       iconName: "moon",
       label: "Sleep",
       detail: `${formatSleepHours(sleep) || "0h"} / ${formatSleepHours(sleepGoal)}`,
-      met: sleep >= sleepGoal
+      met: sleep >= sleepGoal,
+      action: "open-sleep" // Sleep is logged right on the Dashboard's own stat card now, not the Log tab
     },
     {
       iconName: "lotus",
@@ -993,7 +1123,7 @@ function renderDailyHabits() {
   el.innerHTML = rows
     .map(
       (r) => `
-      <button type="button" class="habit-row${r.met ? " met" : ""}" ${r.action ? `data-habit-action="${r.action}"` : `data-switch-view="log"`}>
+      <button type="button" class="habit-row${r.met ? " met" : ""}" ${r.action ? `data-habit-action="${r.action}"` : `data-switch-view="${r.switchView}"`}>
         <span class="habit-row-icon">${icon(r.iconName, { size: 16 })}</span>
         <span class="habit-row-text">${r.label}<span class="subtle">${r.detail}</span></span>
         <span class="habit-row-check">${icon("check-circle", { size: 18 })}</span>
@@ -1002,18 +1132,33 @@ function renderDailyHabits() {
     .join("");
   el.querySelector('[data-habit-action="open-stretch"]')?.addEventListener("click", () => {
     dailyStretchOpen = true;
-    const panel = document.getElementById("dashboard-stretch");
+    switchView("gym");
+    const panel = document.getElementById("fitness-stretch");
     panel.querySelector("details")?.setAttribute("open", "");
     panel.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  el.querySelector('[data-habit-action="open-sleep"]')?.addEventListener("click", () => {
+    dashboardEditingCard = "sleep";
+    renderDashboard();
+    document.getElementById("dashboard-stats")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  el.querySelector('[data-habit-action="open-vitamins"]')?.addEventListener("click", () => {
+    document.getElementById("dashboard-vitamins-panel")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  // Rebuilt via innerHTML above, so any [data-switch-view] rows need their
+  // own listener here — the app-wide one-time querySelectorAll (wired at
+  // script load, before this ever renders) never sees these.
+  el.querySelectorAll("[data-switch-view]").forEach((btn) => {
+    btn.addEventListener("click", () => switchView(btn.dataset.switchView));
   });
 }
 
 function renderMealsList() {
   const el = document.getElementById("dashboard-meals");
   if (!el) return;
-  const meals = todaysEntries().filter((e) => e.type === "food");
+  const meals = entriesForSelectedDate().filter((e) => e.type === "food");
   if (!meals.length) {
-    el.innerHTML = `<p class="subtle small">Nothing logged yet today.</p>`;
+    el.innerHTML = `<p class="subtle small">Nothing logged yet${selectedDateKey && selectedDateKey !== todayKey() ? "" : " today"}.</p>`;
     return;
   }
   el.innerHTML = meals
@@ -1026,6 +1171,9 @@ function renderMealsList() {
       </button>`
     )
     .join("");
+  el.querySelectorAll("[data-switch-view]").forEach((btn) => {
+    btn.addEventListener("click", () => switchView(btn.dataset.switchView));
+  });
 }
 
 // ---------------------------------------------------------------------
@@ -1687,15 +1835,26 @@ document.getElementById("goals-holiday-sync-btn")?.addEventListener("click", () 
 // ---------------------------------------------------------------------
 // Log view
 // ---------------------------------------------------------------------
-// Bedtime → wake time, handling the overnight wrap (wake time-of-day is
-// numerically earlier than bedtime for any normal night's sleep) by adding
-// 24h whenever the raw difference comes out zero or negative.
-function sleepDurationHours(bedtime, wake) {
-  const [bh, bm] = bedtime.split(":").map(Number);
+// Bedtime → wake time. wakeDateKey is the day being logged for (bedtime is
+// always the night *before* it). Building real Date objects — not just
+// subtracting "HH:MM" clock times — means a daylight-saving transition
+// between those two timestamps is handled correctly by the browser's own
+// timezone rules, for whatever country/timezone the browser is in, with no
+// hardcoded DST dates: a spring-forward night is really one hour shorter on
+// the clock, and Date arithmetic reflects that automatically, where naive
+// minute subtraction would not.
+function sleepDurationHours(bedtime, wake, wakeDateKey) {
+  const wakeDay = dateFromKey(wakeDateKey || todayKey());
   const [wh, wm] = wake.split(":").map(Number);
-  let minutes = (wh * 60 + wm) - (bh * 60 + bm);
-  if (minutes <= 0) minutes += 24 * 60;
-  return Math.round((minutes / 60) * 100) / 100;
+  wakeDay.setHours(wh, wm, 0, 0);
+
+  const bedDay = new Date(wakeDay);
+  bedDay.setDate(bedDay.getDate() - 1);
+  const [bh, bm] = bedtime.split(":").map(Number);
+  bedDay.setHours(bh, bm, 0, 0);
+
+  const ms = wakeDay.getTime() - bedDay.getTime();
+  return Math.round((ms / 3600000) * 100) / 100;
 }
 
 // Decimal hours (what's actually stored/summed, so goal-percentage math
@@ -1720,12 +1879,8 @@ document.querySelectorAll(".log-form").forEach((form) => {
       if (value === "") continue;
       fields[key] = isNaN(Number(value)) ? value : Number(value);
     }
-    if (type === "sleep" && fields.bedtime && fields.wake) {
-      fields.hours = sleepDurationHours(fields.bedtime, fields.wake);
-    }
     await addEntry(type, fields);
     form.reset();
-    document.getElementById("sleep-duration-preview").textContent = "";
   });
 });
 
@@ -1733,35 +1888,47 @@ document.querySelectorAll("[data-quick-ml]").forEach((btn) => {
   btn.addEventListener("click", () => addEntry("water", { ml: Number(btn.dataset.quickMl) }));
 });
 
-// Live "X.Xh" preview as both time fields fill in, before submitting.
-const sleepForm = document.getElementById("form-sleep");
-if (sleepForm) {
-  const updateSleepPreview = () => {
-    const bedtime = sleepForm.bedtime.value;
-    const wake = sleepForm.wake.value;
-    const preview = document.getElementById("sleep-duration-preview");
-    preview.textContent = bedtime && wake ? `${sleepDurationHours(bedtime, wake)} hours` : "";
-  };
-  sleepForm.bedtime.addEventListener("input", updateSleepPreview);
-  sleepForm.wake.addEventListener("input", updateSleepPreview);
+// One row per set of an exercise logged that day. No delete button — gym
+// sets live in the separate workoutLogs collection (one doc per day, not
+// one doc per set like `entries`), and there's no updateEntry()/per-set
+// delete helper for it — correcting a workout day happens on the Fitness
+// tab itself, where the whole day's log is editable.
+function describeGymLogEntry(e) {
+  const setsText = e.sets.map((s) => `${s.w}×${s.r}`).join(", ");
+  return `🏋 ${e.exerciseName || "Exercise"} — ${setsText}`;
 }
 
+// The Log tab is the detailed, date-navigable journal of *everything* for
+// the selected day — food, gym sets, cardio, water, weight, sleep, vitamins,
+// stretches — unlike the Dashboard's read-only summary cards/rings, or the
+// Food/Fitness tabs' own single-category lists.
 function renderTodayEntries() {
   const list = document.getElementById("today-entries");
   const heading = document.getElementById("today-entries-heading");
   if (heading) heading.textContent = `${selectedDateLabel()}'s entries`;
-  const today = entriesForSelectedDate().filter((e) => e.type !== "food");
-  if (!today.length) {
+  const today = entriesForSelectedDate();
+  const gymLog = logForDate(selectedDateKey || todayKey());
+
+  if (!today.length && !gymLog) {
     list.innerHTML = `<li class="entry-row subtle">Nothing logged yet${selectedDateKey && selectedDateKey !== todayKey() ? "" : " today"}.</li>`;
     return;
   }
-  list.innerHTML = today
+
+  const entryRows = today
     .map((e) => `
       <li class="entry-row">
         <span>${describeEntry(e)}</span>
         <button class="remove-btn" data-remove-id="${e.id}" title="Delete">&times;</button>
       </li>`)
     .join("");
+
+  const gymRows = gymLog
+    ? gymLog.entries
+        .map((e) => `<li class="entry-row"><span>${describeGymLogEntry(e)}</span></li>`)
+        .join("") + (gymLog.notes ? `<li class="entry-row subtle">📝 ${gymLog.notes}</li>` : "")
+    : "";
+
+  list.innerHTML = entryRows + gymRows;
 
   list.querySelectorAll("[data-remove-id]").forEach((btn) => {
     btn.addEventListener("click", () => removeEntry(btn.dataset.removeId));
@@ -2011,7 +2178,7 @@ function describeEntry(e) {
       // deploy propagation window where index.html and app.js briefly
       // didn't match, so the old submit handler ran without the hours
       // calculation it now has).
-      const hours = e.hours ?? (e.bedtime && e.wake ? sleepDurationHours(e.bedtime, e.wake) : null);
+      const hours = e.hours ?? (e.bedtime && e.wake ? sleepDurationHours(e.bedtime, e.wake, e.dateKey) : null);
       const durationText = hours != null ? formatSleepHours(hours) : null;
       return `🌙 ${durationText ? `${durationText} ` : ""}sleep${e.bedtime && e.wake ? ` (${e.bedtime} → ${e.wake})` : ""}`;
     }
@@ -2048,20 +2215,22 @@ function renderVitaminChips() {
   });
 }
 
-// A daily stretch routine, shown on the Dashboard every day regardless of
+// A daily stretch routine, shown in the Fitness tab every day regardless of
 // whether it's a gym day — flexibility work is a general-health habit, not
-// a gym-performance one, same reasoning as why this isn't nested inside the
-// Gym tab. Firestore-backed (not the localStorage checklist pattern the
-// warm-up/cool-down lists use) specifically so it syncs across devices and
-// shows up in Daily Habits like the app's other real habits — mirrors how
-// vitamins are tracked (one entry per checked item, matched back by name),
-// just rendered as a checklist-with-why instead of compact chips, since the
-// "why" explanations are the point here (what prompted this feature).
+// a gym-performance one, so it's its own checklist rather than nested inside
+// a specific workout day. Firestore-backed (not the localStorage checklist
+// pattern the warm-up/cool-down lists use) specifically so it syncs across
+// devices and shows up in Daily Habits like the app's other real habits —
+// mirrors how vitamins are tracked (one entry per checked item, matched back
+// by name), just rendered as a checklist-with-why instead of compact chips,
+// since the "why" explanations are the point here (what prompted this
+// feature). Follows selectedDateKey like the rest of the Fitness tab, so you
+// can back-check a day you forgot.
 let dailyStretchOpen = false; // survives renderDailyStretch() replacing its own innerHTML on every checkbox toggle
 function renderDailyStretch() {
-  const el = document.getElementById("dashboard-stretch");
+  const el = document.getElementById("fitness-stretch");
   if (!el) return;
-  const today = todaysEntries().filter((e) => e.type === "stretch");
+  const today = entriesForSelectedDate().filter((e) => e.type === "stretch");
   const rows = DAILY_STRETCH_ROUTINE
     .map((s, i) => {
       const takenEntry = today.find((e) => e.name === s.step);
@@ -2093,7 +2262,7 @@ function renderDailyStretch() {
     box.addEventListener("change", async () => {
       const name = DAILY_STRETCH_ROUTINE[Number(box.dataset.stretchIndex)].step;
       if (box.dataset.entryId) await removeEntry(box.dataset.entryId);
-      else await addEntry("stretch", { name }, todayKey());
+      else await addEntry("stretch", { name });
       renderDailyStretch();
       renderDailyHabits();
     });
@@ -2616,12 +2785,14 @@ function renderGymSplitSummary() {
 
 function gymJumpToDate(newDateKey) {
   selectedDateKey = newDateKey;
+  dashboardEditingCard = null; // don't carry an open edit form from one day over to another
   syncLogDatePickers();
   renderGymDayPanel();
   renderDashCalendar();
   renderDashDayPanel();
   renderTodayEntries();
   renderFoodEntries();
+  renderDashboard();
 }
 
 function gymJumpDay(delta) {

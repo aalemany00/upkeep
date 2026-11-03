@@ -126,7 +126,7 @@
     <div class="sidebar-nav" id="tabs">
       <button class="tab active" data-view="dashboard"><span class="tab-icon" data-icon="home" aria-hidden="true"></span><span>Dashboard</span></button>
       <button class="tab" data-view="food"><span class="tab-icon" data-icon="utensils" aria-hidden="true"></span><span>Food</span></button>
-      <button class="tab" data-view="gym"><span class="tab-icon" data-icon="dumbbell" aria-hidden="true"></span><span>Gym</span></button>
+      <button class="tab" data-view="gym"><span class="tab-icon" data-icon="dumbbell" aria-hidden="true"></span><span>Fitness</span></button>
       <button class="tab" data-view="log"><span class="tab-icon" data-icon="list" aria-hidden="true"></span><span>Log</span></button>
       <button class="tab" data-view="calendar"><span class="tab-icon" data-icon="calendar" aria-hidden="true"></span><span>Calendar</span></button>
       <button class="tab" data-view="coach"><span class="tab-icon" data-icon="message-circle" aria-hidden="true"></span><span>Coach</span></button>
@@ -151,7 +151,7 @@
   <nav class="bottom-nav" id="bottom-tabs" aria-label="Main navigation">
     <button class="tab active" data-view="dashboard"><span class="tab-icon" data-icon="home" aria-hidden="true"></span><span>Home</span></button>
     <button class="tab" data-view="food"><span class="tab-icon" data-icon="utensils" aria-hidden="true"></span><span>Food</span></button>
-    <button class="tab" data-view="gym"><span class="tab-icon" data-icon="dumbbell" aria-hidden="true"></span><span>Gym</span></button>
+    <button class="tab" data-view="gym"><span class="tab-icon" data-icon="dumbbell" aria-hidden="true"></span><span>Fitness</span></button>
     <button class="tab" data-view="calendar"><span class="tab-icon" data-icon="calendar" aria-hidden="true"></span><span>Cal</span></button>
     <button class="tab" id="bottom-more-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="more-sheet"><span class="tab-icon" aria-hidden="true">&#8943;</span><span>More</span></button>
   </nav>
@@ -172,20 +172,28 @@
     <!-- Dashboard -->
     <section id="view-dashboard" class="view active">
       <div class="dash-header">
-        <div>
-          <h1 class="dash-greeting"><span id="dash-greeting-text">Good afternoon</span><span class="tab-icon" id="dash-greeting-icon"></span></h1>
-          <p class="subtle">Your daily overview</p>
+        <div class="row" style="align-items:center;gap:8px;">
+          <button type="button" class="btn small" id="dash-day-prev">&lsaquo;</button>
+          <div>
+            <h1 class="dash-greeting" id="dash-heading"><span id="dash-greeting-text">Good afternoon</span><span class="tab-icon" id="dash-greeting-icon"></span></h1>
+            <p class="subtle small" id="dash-subtitle">Your daily overview</p>
+          </div>
+          <button type="button" class="btn small" id="dash-day-next">&rsaquo;</button>
         </div>
         <div class="dash-date"><span class="tab-icon" data-icon="calendar" data-icon-size="16" aria-hidden="true"></span><span id="dash-date-text"></span></div>
       </div>
 
       <div class="card-grid" id="dashboard-stats"></div>
 
-      <div id="dashboard-stretch"></div>
+      <div class="panel" id="dashboard-vitamins-panel">
+        <h2 class="panel-title"><span class="tab-icon" data-icon="pill" aria-hidden="true"></span>Vitamins / supplements</h2>
+        <p class="subtle small">Mark the ones you took — manage the list in Settings.</p>
+        <div id="vitamin-quick-list" class="chip-row"></div>
+      </div>
 
       <div class="dash-grid-2col">
         <div class="panel">
-          <h2 class="panel-title"><span class="tab-icon" data-icon="bar-chart" aria-hidden="true"></span>Today's activity</h2>
+          <h2 class="panel-title"><span class="tab-icon" data-icon="bar-chart" aria-hidden="true"></span><span id="dashboard-activity-heading">Today's activity</span></h2>
           <p class="subtle small" id="dashboard-weight-line" style="margin:-6px 0 10px;"></p>
           <div id="dashboard-activity-chart"></div>
         </div>
@@ -284,6 +292,17 @@
         <button type="submit" class="btn primary small">Add</button>
       </form>
 
+      <form class="log-form" id="form-water" data-type="water" style="margin-bottom:16px;">
+        <h3>Water</h3>
+        <input type="number" name="ml" placeholder="Amount (ml)" min="0" required />
+        <div class="quick-row">
+          <button type="button" class="chip-btn" data-quick-ml="250">+250ml</button>
+          <button type="button" class="chip-btn" data-quick-ml="500">+500ml</button>
+          <button type="button" class="chip-btn" data-quick-ml="750">+750ml</button>
+        </div>
+        <button type="submit" class="btn primary small">Add</button>
+      </form>
+
       <div class="panel">
         <h2 id="food-entries-heading">Today's food</h2>
         <ul id="food-entries" class="entry-list"></ul>
@@ -321,65 +340,29 @@
         <ul id="gym-cardio-entries" class="entry-list"></ul>
       </div>
 
-      <div class="panel" id="gym-day-panel"></div>
-    </section>
-
-    <!-- Log (water, weight, activity, vitamins) -->
-    <section id="view-log" class="view">
-      <div class="panel" style="padding:10px 16px;">
-        <label class="small">Logging for
-          <input type="date" id="log-log-date" />
-        </label>
-        <button type="button" class="link-btn" id="log-log-date-today" style="margin-left:8px;">Today</button>
-      </div>
-      <div class="log-grid">
-
-        <form class="log-form" id="form-water" data-type="water">
-          <h3>Water</h3>
-          <input type="number" name="ml" placeholder="Amount (ml)" min="0" required />
-          <div class="quick-row">
-            <button type="button" class="chip-btn" data-quick-ml="250">+250ml</button>
-            <button type="button" class="chip-btn" data-quick-ml="500">+500ml</button>
-            <button type="button" class="chip-btn" data-quick-ml="750">+750ml</button>
-          </div>
-          <button type="submit" class="btn primary small">Add</button>
-        </form>
-
-        <form class="log-form" id="form-weight" data-type="weight">
-          <h3>Weight</h3>
-          <input type="number" name="lb" placeholder="Weight (lb)" min="0" step="0.1" required />
-          <button type="submit" class="btn primary small">Add</button>
-        </form>
-
-        <form class="log-form" id="form-activity" data-type="activity">
-          <h3>Activity</h3>
+      <div class="panel">
+        <h2 class="panel-title"><span class="tab-icon" data-icon="bar-chart" aria-hidden="true"></span>Activity</h2>
+        <form class="log-form" id="form-activity" data-type="activity" style="margin-bottom:0;">
           <div class="row">
             <input type="number" name="steps" placeholder="Steps" min="0" />
             <input type="number" name="caloriesBurned" placeholder="Calories burned" min="0" />
           </div>
           <button type="submit" class="btn primary small">Add</button>
         </form>
+      </div>
 
-        <form class="log-form" id="form-sleep" data-type="sleep">
-          <h3>Sleep</h3>
-          <div class="row">
-            <label class="small">Bedtime
-              <input type="time" name="bedtime" required />
-            </label>
-            <label class="small">Wake time
-              <input type="time" name="wake" required />
-            </label>
-          </div>
-          <p class="subtle small" id="sleep-duration-preview"></p>
-          <button type="submit" class="btn primary small">Add</button>
-        </form>
+      <div id="fitness-stretch"></div>
 
-        <form class="log-form" id="form-vitamin" data-type="vitamin">
-          <h3>Vitamins / supplements</h3>
-          <p class="subtle small">Mark the ones you took today — manage the list in Goals.</p>
-          <div id="vitamin-quick-list" class="chip-row"></div>
-        </form>
+      <div class="panel" id="gym-day-panel"></div>
+    </section>
 
+    <!-- Log (detailed, date-navigable journal of everything logged) -->
+    <section id="view-log" class="view">
+      <div class="panel" style="padding:10px 16px;">
+        <label class="small">Logging for
+          <input type="date" id="log-log-date" />
+        </label>
+        <button type="button" class="link-btn" id="log-log-date-today" style="margin-left:8px;">Today</button>
       </div>
 
       <div class="panel">

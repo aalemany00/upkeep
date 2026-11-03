@@ -400,6 +400,23 @@ textarea { font-family: inherit; resize: vertical; }
 .stat-card-value { font-size: 1.3em; font-weight: 700; margin-bottom: 10px; }
 .stat-card-value .stat-goal { font-size: 0.65em; font-weight: 400; color: var(--subtle); }
 
+/* Sleep/Weight stat cards double as buttons that swap to an inline edit
+   form in place of the ring/value — tap to correct a mistake, not just to
+   log once. */
+.stat-card-editable {
+  display: block;
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.stat-card-editable:hover { border-color: var(--accent); }
+.stat-card-edit-form { display: flex; flex-direction: column; gap: 8px; }
+.stat-card-edit-form label.small { display: flex; flex-direction: column; gap: 4px; font-size: 0.85em; color: var(--subtle); }
+
 /* Two-column Dashboard grid (chart+workout/habits, meals+coach) */
 .dash-grid-2col {
   display: grid;
