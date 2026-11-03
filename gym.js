@@ -388,13 +388,25 @@ export function assignSplit(daysPerWeek, catalog, equipmentInput) {
 // are loadable at all (inc > 0); it never forces a weight jump onto a
 // bodyweight-classified movement (inc === 0), since those progress by
 // reps/tempo, not plates.
+// Rest between sets, by rep range — not a researched-per-exercise value
+// (the catalog doesn't carry one), just the standard strength-vs-
+// hypertrophy guidance: heavier/lower-rep work needs longer recovery
+// between sets than lighter/higher-rep or isometric work.
+function restFor(lo, unit) {
+  if (unit === "sec") return "45-60 sec";
+  if (lo <= 6) return "2-3 min";
+  if (lo <= 10) return "90 sec-2 min";
+  return "60-90 sec";
+}
+
 export function targetFor(history, exerciseMeta, minIncrementLb = 0) {
   const { sets: targetSets, lo, hi, inc: exerciseInc, unit = "reps" } = exerciseMeta;
   const inc = exerciseInc > 0 ? Math.max(exerciseInc, minIncrementLb || 0) : exerciseInc;
   const unitWord = unit === "sec" ? "sec" : "reps";
+  const rest = restFor(lo, unit);
 
   if (!history.length) {
-    return { status: "new", weight: null, note: `First time — pick a weight where your first set lands in ${lo}-${hi} ${unitWord} with a couple left in the tank.` };
+    return { status: "new", weight: null, rest, note: `First time — pick a weight where your first set lands in ${lo}-${hi} ${unitWord} with a couple left in the tank.` };
   }
 
   const last = history[history.length - 1];
@@ -405,10 +417,10 @@ export function targetFor(history, exerciseMeta, minIncrementLb = 0) {
 
   if (allAtTop) {
     if (topWeight === 0) {
-      return { status: "up", weight: 0, note: `Hit ${hi} ${unitWord} on every set — make it harder (slower tempo${unit === "sec" ? "" : ", added weight if possible"}, or a tougher variation), then rebuild from ${lo}.` };
+      return { status: "up", weight: 0, rest, note: `Hit ${hi} ${unitWord} on every set — make it harder (slower tempo${unit === "sec" ? "" : ", added weight if possible"}, or a tougher variation), then rebuild from ${lo}.` };
     }
     const next = topWeight + inc;
-    return { status: "up", weight: next, note: `Hit ${hi} on every set last time — go up to ${next} and aim for ${lo}+ ${unitWord}.` };
+    return { status: "up", weight: next, rest, note: `Hit ${hi} on every set last time — go up to ${next} and aim for ${lo}+ ${unitWord}, pushing that last set close to failure (1-2 reps left, not zero).` };
   }
 
   if (history.length >= 3) {
@@ -416,15 +428,15 @@ export function targetFor(history, exerciseMeta, minIncrementLb = 0) {
     const weights = last3.map((h) => Math.max(...h.sets.map((s) => s.w || 0)));
     const totalReps = last3.map((h) => h.sets.reduce((a, s) => a + s.r, 0));
     if (weights[0] === weights[1] && weights[1] === weights[2] && totalReps[2] <= totalReps[0]) {
-      return { status: "stall", weight: topWeight, note: `Flat for 3 sessions at ${topWeight} — try a different exercise for this slot, or drop about 10% and rebuild.` };
+      return { status: "stall", weight: topWeight, rest, note: `Flat for 3 sessions at ${topWeight} — try a different exercise for this slot, or drop about 10% and rebuild.` };
     }
   }
 
   if (avgReps < lo - 0.5 && topWeight > 0) {
     const next = Math.max(0, topWeight - Math.max(inc, 2.5));
-    return { status: "down", weight: next, note: `${unit === "sec" ? "Hold time" : "Reps"} dropped below ${lo} last time — drop to ${next} and rebuild toward ${hi}.` };
+    return { status: "down", weight: next, rest, note: `${unit === "sec" ? "Hold time" : "Reps"} dropped below ${lo} last time — drop to ${next} and rebuild toward ${hi}.` };
   }
 
   const aim = lastSets.map((s) => Math.min(hi, s.r + 1));
-  return { status: "hold", weight: topWeight, aim, note: `Same weight (${topWeight}) — beat last time's ${lastSets.map((s) => s.r).join("/")} with ${aim.join("/")}.` };
+  return { status: "hold", weight: topWeight, aim, rest, note: `Same weight (${topWeight}) — beat last time's ${lastSets.map((s) => s.r).join("/")} with ${aim.join("/")}. If you can keep going past that on the last set, keep going — the target is a floor, not a ceiling.` };
 }

@@ -13,7 +13,7 @@ import { assignSplit, targetFor, MUSCLE_LABEL_BY_SLOT, SPLIT_ALGO_VERSION, EQUIP
 import { computeDailyGoals, GOAL_LABELS } from "./nutrition.js";
 import { parseICS, normalizeFeedUrl, occursOnDate, isEventExpired, generateRecurrenceDates, DEFAULT_EVENT_COLOR, DEFAULT_FEED_COLOR, GYM_EVENT_COLOR } from "./calendar.js";
 import { USDA_API_KEY } from "./usda-config.js";
-import { WARMUPS_BY_DAYTYPE, COOLDOWNS_BY_DAYTYPE, CARDIO_WARMUP, CARDIO_COOLDOWN } from "./warmups.js";
+import { WARMUPS_BY_DAYTYPE, COOLDOWNS_BY_DAYTYPE, CARDIO_WARMUP, CARDIO_COOLDOWN, DAILY_STRETCH_ROUTINE } from "./warmups.js";
 import { COACH_AVATARS, coachAvatarById } from "./coach-avatars.js";
 import { icon, progressRingSvg, mountainIllustrationSvg } from "./icons.js";
 
@@ -892,6 +892,7 @@ function renderDashboard() {
   renderCoachPreview();
   renderWeeklyActivityChart();
   renderDailyHabits();
+  renderDailyStretch();
   renderMealsList();
   renderWorkoutPlanPanel();
 }
@@ -953,6 +954,7 @@ function renderDailyHabits() {
   const vitaminsTaken = today.filter((e) => e.type === "vitamin").length;
   const sleep = sumByType(today, "sleep", "hours");
   const sleepGoal = goals.sleepGoal || 8;
+  const stretchesTaken = today.filter((e) => e.type === "stretch").length;
 
   const rows = [
     {
@@ -978,19 +980,32 @@ function renderDailyHabits() {
       label: "Sleep",
       detail: `${formatSleepHours(sleep) || "0h"} / ${formatSleepHours(sleepGoal)}`,
       met: sleep >= sleepGoal
+    },
+    {
+      iconName: "lotus",
+      label: "Stretching",
+      detail: `${stretchesTaken} / ${DAILY_STRETCH_ROUTINE.length}`,
+      met: stretchesTaken >= DAILY_STRETCH_ROUTINE.length,
+      action: "open-stretch" // managed right here on the Dashboard, not the Log tab
     }
   ];
 
   el.innerHTML = rows
     .map(
       (r) => `
-      <button type="button" class="habit-row${r.met ? " met" : ""}" data-switch-view="log">
+      <button type="button" class="habit-row${r.met ? " met" : ""}" ${r.action ? `data-habit-action="${r.action}"` : `data-switch-view="log"`}>
         <span class="habit-row-icon">${icon(r.iconName, { size: 16 })}</span>
         <span class="habit-row-text">${r.label}<span class="subtle">${r.detail}</span></span>
         <span class="habit-row-check">${icon("check-circle", { size: 18 })}</span>
       </button>`
     )
     .join("");
+  el.querySelector('[data-habit-action="open-stretch"]')?.addEventListener("click", () => {
+    dailyStretchOpen = true;
+    const panel = document.getElementById("dashboard-stretch");
+    panel.querySelector("details")?.setAttribute("open", "");
+    panel.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
 }
 
 function renderMealsList() {
@@ -1988,6 +2003,7 @@ function describeEntry(e) {
     case "activity": return `🚶 ${e.steps ? `${e.steps} steps` : ""}${e.steps && e.caloriesBurned ? ", " : ""}${e.caloriesBurned ? `${e.caloriesBurned} kcal burned` : ""}`;
     case "cardio": return `🏃 ${e.cardioType || "Cardio"} — ${e.durationMin || 0} min${e.distanceMi ? `, ${e.distanceMi} mi` : ""}${e.caloriesBurned ? `, ${e.caloriesBurned} kcal burned` : ""}`;
     case "vitamin": return `💊 ${e.name}`;
+    case "stretch": return `🧘 ${e.name}`;
     case "sleep": {
       // hours is normally computed and stored at log time, but recompute
       // from bedtime/wake here too — belt and suspenders against any entry
@@ -2028,6 +2044,58 @@ function renderVitaminChips() {
     btn.addEventListener("click", async () => {
       if (btn.dataset.entryId) await removeEntry(btn.dataset.entryId);
       else await addEntry("vitamin", { name: btn.dataset.vitamin });
+    });
+  });
+}
+
+// A daily stretch routine, shown on the Dashboard every day regardless of
+// whether it's a gym day — flexibility work is a general-health habit, not
+// a gym-performance one, same reasoning as why this isn't nested inside the
+// Gym tab. Firestore-backed (not the localStorage checklist pattern the
+// warm-up/cool-down lists use) specifically so it syncs across devices and
+// shows up in Daily Habits like the app's other real habits — mirrors how
+// vitamins are tracked (one entry per checked item, matched back by name),
+// just rendered as a checklist-with-why instead of compact chips, since the
+// "why" explanations are the point here (what prompted this feature).
+let dailyStretchOpen = false; // survives renderDailyStretch() replacing its own innerHTML on every checkbox toggle
+function renderDailyStretch() {
+  const el = document.getElementById("dashboard-stretch");
+  if (!el) return;
+  const today = todaysEntries().filter((e) => e.type === "stretch");
+  const rows = DAILY_STRETCH_ROUTINE
+    .map((s, i) => {
+      const takenEntry = today.find((e) => e.name === s.step);
+      return `
+        <li>
+          <label class="checklist-item">
+            <input type="checkbox" data-stretch-index="${i}" data-entry-id="${takenEntry ? takenEntry.id : ""}" ${takenEntry ? "checked" : ""} />
+            <span>
+              <span class="checklist-step">${s.step}</span>
+              <span class="subtle small checklist-why">${s.why}</span>
+            </span>
+          </label>
+        </li>`;
+    })
+    .join("");
+  const done = today.length;
+  el.innerHTML = `
+    <details class="panel checklist-panel"${dailyStretchOpen ? " open" : ""}>
+      <summary class="link-btn" style="display:inline;">
+        <span class="tab-icon" style="vertical-align:middle;">${icon("lotus", { size: 16 })}</span>
+        Daily stretch <span class="subtle small">(${done}/${DAILY_STRETCH_ROUTINE.length})</span>
+      </summary>
+      <p class="subtle small" style="margin-top:10px;">A few minutes a day for flexibility and injury prevention — not tied to a gym day, since this matters on rest days too.</p>
+      <ul class="checklist-list">${rows}</ul>
+    </details>`;
+  const detailsEl = el.querySelector("details");
+  detailsEl.addEventListener("toggle", () => { dailyStretchOpen = detailsEl.open; });
+  el.querySelectorAll("[data-stretch-index]").forEach((box) => {
+    box.addEventListener("change", async () => {
+      const name = DAILY_STRETCH_ROUTINE[Number(box.dataset.stretchIndex)].step;
+      if (box.dataset.entryId) await removeEntry(box.dataset.entryId);
+      else await addEntry("stretch", { name }, todayKey());
+      renderDailyStretch();
+      renderDailyHabits();
     });
   });
 }
@@ -2413,12 +2481,79 @@ function youtubeSearchLinkHtml(exerciseName) {
   return `<a class="link-btn" href="https://www.youtube.com/results?search_query=${q}" target="_blank" rel="noopener">Watch form video &#8599;</a>`;
 }
 
-function warmupCooldownHtml(steps, label) {
+// Per-device, per-day checklist state (same "not synced, just reflects what
+// you're doing right now" tradeoff as the Food tab's diet-suggestion
+// shuffle) — a warm-up you physically did doesn't need to follow you to
+// another device, and resets naturally each day since it's keyed by date.
+function checklistStorageKey(kind, dateKey) {
+  return `upkeep-checklist-${currentUid || "anon"}-${dateKey || todayKey()}-${kind}`;
+}
+function readChecklistState(kind, dateKey) {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(checklistStorageKey(kind, dateKey)) || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+function writeChecklistState(kind, dateKey, checkedSet) {
+  try {
+    localStorage.setItem(checklistStorageKey(kind, dateKey), JSON.stringify([...checkedSet]));
+  } catch {
+    // localStorage unavailable (private window, quota, etc.) — checklist
+    // just won't persist across a re-render; not worth surfacing an error
+    // for a per-device convenience feature.
+  }
+}
+
+// Shared by gym warm-up/cool-down, cardio warm-up/cool-down, and the daily
+// stretch routine — a checkable list (so "did I already do this" survives
+// a re-render) with each step's "why" shown underneath it, not just the
+// instruction alone.
+function checklistHtml(steps, label, kind, dateKey) {
   if (!steps || !steps.length) return "";
-  return `<details class="panel" style="margin-bottom:10px;">
-    <summary class="link-btn" style="display:inline;">${label}</summary>
-    <ul class="subtle small">${steps.map((s) => `<li>${s}</li>`).join("")}</ul>
+  const checked = readChecklistState(kind, dateKey);
+  const rows = steps
+    .map((s, i) => `
+      <li>
+        <label class="checklist-item">
+          <input type="checkbox" data-checklist-index="${i}" ${checked.has(i) ? "checked" : ""} />
+          <span>
+            <span class="checklist-step">${s.step}</span>
+            <span class="subtle small checklist-why">${s.why}</span>
+          </span>
+        </label>
+      </li>`)
+    .join("");
+  return `<details class="panel checklist-panel" style="margin-bottom:10px;" data-checklist-kind="${kind}" data-checklist-date="${dateKey || todayKey()}">
+    <summary class="link-btn" style="display:inline;">${label} <span class="subtle small checklist-count"></span></summary>
+    <ul class="checklist-list">${rows}</ul>
   </details>`;
+}
+
+// Wires every checklist rendered inside `container` — call after setting
+// .innerHTML, same pattern as the other wireX() helpers in this file.
+function wireChecklists(container) {
+  container.querySelectorAll("[data-checklist-kind]").forEach((panel) => {
+    const kind = panel.dataset.checklistKind;
+    const dateKey = panel.dataset.checklistDate;
+    const boxes = [...panel.querySelectorAll("[data-checklist-index]")];
+    const updateCount = () => {
+      const done = boxes.filter((b) => b.checked).length;
+      const countEl = panel.querySelector(".checklist-count");
+      if (countEl) countEl.textContent = done ? `(${done}/${boxes.length})` : "";
+    };
+    updateCount();
+    boxes.forEach((box) => {
+      box.addEventListener("change", () => {
+        const current = readChecklistState(kind, dateKey);
+        const i = Number(box.dataset.checklistIndex);
+        if (box.checked) current.add(i);
+        else current.delete(i);
+        writeChecklistState(kind, dateKey, current);
+        updateCount();
+      });
+    });
+  });
 }
 
 // Exercise cues come straight from wger's own description text (no length
@@ -2452,7 +2587,8 @@ function exerciseSlotCardHtml(ex, tgt, sets, rowAttrs) {
     <div class="sets-grid">
       <span class="hd">Set</span><span class="hd">Weight (lb${ex.inc === 0 ? ", optional" : ""})</span><span class="hd">${isHold ? "Hold (sec)" : "Reps"}</span>
       ${rows}
-    </div>`;
+    </div>
+    ${tgt.rest ? `<p class="subtle small gym-rest">Rest ${tgt.rest} between sets</p>` : ""}`;
 }
 
 // A click handler shared by every rendered gym-cue "Show more" toggle —
@@ -2614,9 +2750,9 @@ function renderGymDayPanel() {
       <select id="gym-daytype-select">${typeOptions}</select>
     </div>
     <p class="subtle small" style="margin-top:0;">${selectedDateKey === todayKey() ? "" : `<button type="button" class="link-btn" id="gym-day-today">Jump to today</button> — `}Pick any date on the <button type="button" class="link-btn" data-switch-view="calendar">Calendar</button> to come straight here.</p>
-    ${warmupCooldownHtml(WARMUPS_BY_DAYTYPE[dayType], "Warm-up")}
+    ${checklistHtml(WARMUPS_BY_DAYTYPE[dayType], "Warm-up", `warmup-${dayType}`, selectedDateKey)}
     ${slotsHtml}
-    ${warmupCooldownHtml(COOLDOWNS_BY_DAYTYPE[dayType], "Cool-down")}
+    ${checklistHtml(COOLDOWNS_BY_DAYTYPE[dayType], "Cool-down", `cooldown-${dayType}`, selectedDateKey)}
 
     <div class="panel" style="padding:0;background:transparent;border:none;margin:0;">
       <h3>Add any other exercise</h3>
@@ -2649,6 +2785,7 @@ function renderGymDayPanel() {
   document.getElementById("gym-day-next").addEventListener("click", () => gymJumpDay(1));
   document.getElementById("gym-day-today")?.addEventListener("click", () => gymJumpToDate(todayKey()));
   el.querySelector('[data-switch-view="calendar"]')?.addEventListener("click", () => switchView("calendar"));
+  wireChecklists(el);
 
   el.querySelectorAll("[data-slot-select]").forEach((sel) => {
     sel.addEventListener("change", (e) => {
@@ -2812,7 +2949,8 @@ function renderGymCardioEntries() {
   if (!list) return;
   const warmupEl = document.getElementById("gym-cardio-warmup");
   if (warmupEl && !warmupEl.dataset.rendered) {
-    warmupEl.innerHTML = warmupCooldownHtml(CARDIO_WARMUP, "Warm-up") + warmupCooldownHtml(CARDIO_COOLDOWN, "Cool-down");
+    warmupEl.innerHTML = checklistHtml(CARDIO_WARMUP, "Warm-up", "cardio-warmup", todayKey()) + checklistHtml(CARDIO_COOLDOWN, "Cool-down", "cardio-cooldown", todayKey());
+    wireChecklists(warmupEl);
     warmupEl.dataset.rendered = "1";
   }
   const upcomingEl = document.getElementById("gym-cardio-upcoming");

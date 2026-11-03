@@ -1189,6 +1189,77 @@ Habits. The underlying stored value stays plain decimal hours — that's
 what `sumByType`/goal-percentage math needs, and nobody's asking to change
 how it's stored, only how it reads back.
 
+### 4b. Push-to-failure guidance, rest times, warm-up/cool-down checklists, daily stretch (2026-11-02)
+
+Prompted by Adrian's own weekly coach note (he noticed the progression
+numbers weren't steering him toward real effort) plus four more asks in
+the same message: no rest-time guidance, no way to check off warm-up/
+cool-down steps already done, no explanation of *why* a warm-up/cool-down
+step matters (tying into a one-sided calf imbalance the coach note had
+flagged), and a request to incorporate general daily stretching since
+"this is about overall health" — flexibility isn't gym-specific.
+
+- **`targetFor()` (`gym.js`) now says *why*, not just *what*.** The "up"
+  note (reached the top of the rep range) now ends "...pushing that last
+  set close to failure (1-2 reps left, not zero)" instead of stopping at
+  the number. The "hold" note (still working up within the rep range) now
+  adds "If you can keep going past that on the last set, keep going — the
+  target is a floor, not a ceiling" — the actual bug Adrian was flagging:
+  the displayed numeric aim (`beat last time's X with X+1`) reads like a
+  hard stop, when it's meant as a minimum. The "new" (first-time) note is
+  unchanged on purpose — "a couple left in the tank" on an unfamiliar
+  weight is correct, standard advice, not the same conservatism problem.
+- **Rest-time guidance**: `restFor(lo, unit)` in `gym.js` returns a plain
+  rest-range string from the exercise's own rep range — no new catalog
+  data needed, since the rep-range bucket a `classify()`-assigned exercise
+  already falls into *is* a strength-vs-hypertrophy signal (lo≤6 → 2-3 min,
+  lo≤10 → 90 sec-2 min, else 60-90 sec; isometric holds → 45-60 sec).
+  `targetFor()`'s return value gained a `rest` field, shown as one line
+  under the sets grid in `exerciseSlotCardHtml()` — the one shared
+  renderer for both main slots and extras (from 2f's consolidation), so
+  this reached both in one change.
+- **Warm-up/cool-down become a checklist, not a read-only list.**
+  `warmups.js`'s `WARMUPS_BY_DAYTYPE`/`COOLDOWNS_BY_DAYTYPE`/
+  `CARDIO_WARMUP`/`CARDIO_COOLDOWN` changed from plain strings to
+  `{step, why}` objects — every existing step got a real, specific
+  explanation (not "warms you up" — e.g. "activates the glutes before a
+  hip hinge exercise asks them to do the real work, instead of the lower
+  back compensating"), directly answering "why might this cause pain."
+  `checklistHtml()`/`wireChecklists()` (`app.js`) replace the old
+  `warmupCooldownHtml()`: a checkbox per step, "why" shown underneath,
+  checked state in `localStorage` (same per-device, not-synced tradeoff as
+  the Food tab's diet-suggestion shuffle — a warm-up you physically did
+  doesn't need to follow you to another device), keyed by day+dayType+kind
+  so it resets naturally each new day. The count (`(2/5)`) shows in the
+  `<summary>` so progress is visible collapsed too.
+- **Daily Stretch**: a new always-visible Dashboard card (`#dashboard-
+  stretch`, `renderDailyStretch()`), not gated behind a gym day — "where
+  should this live" was left to Claude's judgment (Adrian had no strong
+  preference beyond "stretching is very important"); landed on the
+  Dashboard specifically so it shows on rest days too, since flexibility
+  is framed as a general-health habit here, not a gym-performance one.
+  Unlike the warm-up/cool-down checklist, this one is **Firestore-backed**
+  (new entry type `stretch`, `{name}`, matched back by name) — the same
+  mechanism vitamins already use — specifically so it syncs across devices
+  and can feed a real Daily Habits row (`Stretching: 3/8`), consistent with
+  every other habit tracked there being real synced data, not a per-device
+  convenience. `DAILY_STRETCH_ROUTINE` in `warmups.js`: 8 steps covering
+  the areas most affected by both sitting and lifting, each with a specific
+  "why" in the same style as the warm-up/cool-down steps.
+  - Caught during testing: re-rendering the stretch checklist on every
+    checkbox toggle (to update the Firestore-backed checked state) was
+    collapsing the `<details>` element back shut each time, the same
+    stale-re-render problem solved earlier for gym exercise slots (2g) —
+    fixed the same way, a module-level `dailyStretchOpen` boolean read/
+    written across renders instead of trusting the DOM to hold state
+    through an `innerHTML` replacement.
+- Live-tested all of it: rest-time text on a real exercise, the new
+  failure-oriented progression note on a logged set, the warm-up checklist
+  (checked state survives expanding an exercise slot below it), and the
+  Daily Stretch card (checking an item updates both its own count and the
+  Daily Habits row, and survives a page reload since it's real Firestore
+  data) — before cleaning up the test account.
+
 ---
 
 ## 5. Data model (Firestore, under `users/{uid}/...`)
@@ -1198,7 +1269,7 @@ how it's stored, only how it reads back.
 | `profile/me` | `{age, sex, heightIn, startWeightLb, createdAt, updatedAt}` | `updatedAt` drives the coach-review banner |
 | `meta/goals` | `{goalType, activityLevel, daysPerWeek, preferredDays[], calorieGoal, proteinGoal, waterGoal, stepsGoal, sleepGoal, weightGoal, vitaminsList[], equipment[], equipmentByDay{}, minIncrementLb}` | daily goals + goal/availability/equipment all in one doc. `equipment`/`equipmentByDay`/`minIncrementLb` are Goals-only (not onboarding) — missing/empty means "no restriction." `equipmentByDay` is sparse: `{"1": [...]}` for a customized weekday only. `sleepGoal` is always manual (like `weightGoal`) — never computed, defaults to 8 via a UI fallback when unset. (A `timeFormat` field briefly existed here for a 12h/24h display setting — built and reverted same-day, see 4a) |
 | `split/current` | `gym.assignSplit()` output (`{name, daysPerWeek, days[]}`) | rebuilt on availability change, never touches history |
-| `entries/{id}` | `{type: food\|water\|weight\|activity\|vitamin\|cardio\|sleep, ...fields, dateKey, createdAt}` | the general log; gym does NOT live here. `sleep` entries carry `{bedtime, wake, hours}` — `hours` is computed client-side from the two time fields (handles the overnight wrap), not typed directly |
+| `entries/{id}` | `{type: food\|water\|weight\|activity\|vitamin\|cardio\|sleep\|stretch, ...fields, dateKey, createdAt}` | the general log; gym does NOT live here. `sleep` entries carry `{bedtime, wake, hours}` — `hours` is computed client-side from the two time fields (handles the overnight wrap), not typed directly. `stretch` entries carry `{name}` — one per checked item in the Daily Stretch routine, matched back by name, same pattern as `vitamin` |
 | `workoutLogs/{dateKey}` | `{dateKey, dayType, entries[], notes, updatedAt}` | one doc per logged gym day; entries are slot-based (`slotLabel`) or free-form (`extra:true`); `notes` is one free-text field for the whole session |
 | `coachNotes/{id}` | `{summary, wins[], concerns[], suggestions[], flags[], exerciseNotes[], progressionTable[] ({exercise, thisWeek, nextTime}), calorieGoalChange, weekStart, weekEnd, createdAt}` | written only by `coach-note.js`, via the Admin SDK (bypasses security rules). `progressionTable` is plain-code computed, not part of what the model outputs. User-deletable from the client (Coach tab's "Delete this note") — the only coach-note write path the web app itself has |
 | `calendarEvents/{id}` | `{title, dateKey, endDateKey, allDay, startTime, endTime, color, category, notes, source: manual\|feed\|holiday, feedId?, holidayCountry?, externalUid?, userEdited?, recurring?, recurrenceGroupId?, createdAt}` | manual + feed-imported + holiday events; `endDateKey >= dateKey` for multi-day spans; `recurrenceGroupId` shared by every occurrence of one recurring-event submission; `category` drives the Gym tab's upcoming-Cardio banner |
