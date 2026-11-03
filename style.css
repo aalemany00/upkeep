@@ -138,7 +138,8 @@ input[type="password"],
 input[type="text"],
 input[type="number"],
 input[type="date"],
-input[type="time"] {
+input[type="time"],
+textarea {
   background: var(--bg);
   border: 1px solid var(--panel-border);
   color: var(--text);
@@ -147,6 +148,7 @@ input[type="time"] {
   font-size: 1em;
   width: 100%;
 }
+textarea { font-family: inherit; resize: vertical; }
 
 .error {
   color: var(--danger);
@@ -966,4 +968,5 @@ select {
   width: 100%;
 }
 #onboarding-form label.small,
-#form-sleep label.small { font-size: 0.85em; color: var(--subtle); display: flex; flex-direction: column; gap: 4px; }
+#form-sleep label.small,
+#gym-day-panel label.small { font-size: 0.85em; color: var(--subtle); display: flex; flex-direction: column; gap: 4px; }

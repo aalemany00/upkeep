@@ -2786,6 +2786,14 @@ function renderGymDayPanel() {
   document.getElementById("gym-day-today")?.addEventListener("click", () => gymJumpToDate(todayKey()));
   el.querySelector('[data-switch-view="calendar"]')?.addEventListener("click", () => switchView("calendar"));
   wireChecklists(el);
+  // Keep gymDraft.notes current as you type, same as every set's weight/rep
+  // input already does — otherwise any other interaction that re-renders
+  // this panel (adding a set, swapping an exercise, switching tabs away and
+  // back) redraws the textarea from stale state and silently discards
+  // whatever was typed but never explicitly saved yet.
+  document.getElementById("gym-day-notes")?.addEventListener("input", (e) => {
+    gymDraft.notes = e.target.value;
+  });
 
   el.querySelectorAll("[data-slot-select]").forEach((sel) => {
     sel.addEventListener("change", (e) => {

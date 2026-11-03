@@ -1260,6 +1260,28 @@ flagged), and a request to incorporate general daily stretching since
   Daily Habits row, and survives a page reload since it's real Firestore
   data) — before cleaning up the test account.
 
+### 4c. Two small Gym-panel bugs (2026-11-02)
+
+- **`<textarea>` had zero CSS anywhere in the stylesheet** — unlike every
+  `input[type=...]`, nobody had ever added it to the shared styling rule.
+  The gym day's "Notes for today's session" textarea rendered at browser-
+  default size/color, sitting oddly next to its label instead of stacking
+  below it (the wrapping `<label class="small">` wasn't flex-column either,
+  the same root cause as the `#form-sleep label.small` fix in 4a — just not
+  yet applied to `#gym-day-panel`). Fixed both: `textarea` added to the
+  shared input rule, `#gym-day-panel label.small` added alongside
+  `#form-sleep`'s flex-column rule.
+- **Typing a gym-day note could get silently discarded.** The notes
+  textarea only ever read its value once, at Save-day time — every other
+  interaction that re-renders the panel (adding a set, swapping an
+  exercise, even just switching to another tab and back) rebuilt it from
+  `gymDraft.notes`, which nothing had ever written the typed text into.
+  Fixed with the same pattern every other field in this panel already
+  uses: an `input` listener that writes straight into `gymDraft.notes` as
+  you type, so a re-render can't lose it. Verified both fixes together —
+  typed a note, triggered a re-render, switched tabs away and back, text
+  survived every time.
+
 ---
 
 ## 5. Data model (Firestore, under `users/{uid}/...`)
