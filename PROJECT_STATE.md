@@ -62,19 +62,19 @@ is the *current* layout, not the original one; 2h has the reasoning.)
   shuffle and one-tap logging (per-device only, localStorage, not synced) +
   **Water** quick-add/manual logging (moved here from Log in 2h).
 - **Fitness** (renamed from "Gym" in 2h): see section 3 for the gym program
-  itself, it's the biggest piece. Also holds Cardio logging, **Activity**
-  (steps/calories burned, moved here from Log), and the **Daily stretch**
-  checklist (moved here from the Dashboard) — grouped this way because
-  Adrian wanted "the cardio/activity side" and "the gym side" visually
-  separated within one tab rather than spread across three.
-- **Dashboard**: goal-progress stat cards (Calories/Protein/Water/Steps —
-  read-only, ring + bar), a **Sleep** card and a **Weight** card that are
-  *both logging controls and displays* (see below), the vitamins/
-  supplements checklist (kept here per Adrian's request — "keep the
-  medication stuff on the dashboard"), the coach note preview, meals
-  preview, and workout-plan preview.
-- **Sleep/Weight tap-to-edit cards (2h)**: tapping either card swaps its
-  ring/value for an inline form (bedtime+wake for Sleep, a number field for
+  itself, it's the biggest piece. Also holds Cardio logging and the **Daily
+  stretch** checklist (moved here from the Dashboard in 2h) — Activity
+  (steps/calories burned) lived here too in 2h but moved again to the
+  Dashboard in 3e (see below).
+- **Dashboard**: goal-progress stat cards (Calories/Protein/Water — read-
+  only, ring + bar), **Steps**, a **Sleep** card, and a **Weight** card that
+  are logging controls *and* displays (see below), the vitamins/supplements
+  checklist (kept here per Adrian's request — "keep the medication stuff on
+  the dashboard"), the coach note preview, meals preview, and workout-plan
+  preview.
+- **Steps/Sleep/Weight tap-to-edit cards (2h, Steps added in 3e)**: tapping
+  any of the three swaps its ring/value for an inline form (steps +
+  calories burned for Steps, bedtime+wake for Sleep, a number field for
   Weight) in the same grid slot; Save writes the entry and swaps back,
   Cancel discards and swaps back without writing. Re-tappable afterward to
   correct a mistake — there's no `updateEntry()` in this codebase, so
@@ -1341,6 +1341,40 @@ being the chest press machine)."
   (that exercise's actual `muscles` tag covers all three) — confirms the
   "count toward every matching muscle" logic, not just the slot's single
   nominal target muscle.
+
+### 3e. Steps moved from the Fitness tab to its own Dashboard tap-to-edit card (2026-11-16)
+
+Adrian: "I now want you to be able to change the steps on the dashboard
+rather than in the fitness section." Steps and calories-burned are logged
+together as one `activity` entry (same data model as before — this only
+moved *where* you log it, not the Firestore shape), so this is Steps'
+Activity form relocating wholesale from Fitness to the Dashboard, following
+the exact tap-to-edit pattern Sleep/Weight already established in 2h.
+
+- `renderDashboard()`'s `ringStats` array (the plain, read-only Calories/
+  Protein/Water/Steps row from 2h) lost Steps; it now gets the same
+  `dashboardEditingCard`-driven swap as Sleep/Weight —
+  `dashboardStepsCardHtml(steps)` (ring + value, tappable) or
+  `dashboardStepsEditHtml(existing)` (two fields: Steps, Calories burned) —
+  reusing `entryForSelectedDate("activity")` and the same delete-then-add
+  save path. Steps still shows a progress ring (unlike Weight) since more-
+  steps-toward-a-goal reads the same direction for everyone, no ambiguity
+  the way a weight-loss-vs-gain goal has.
+- Removed `#form-activity` from the Fitness tab (`index.html`) entirely —
+  no JS wiring needed to remove alongside it since the generic
+  `.log-form` submit handler just stops finding that element.
+- The Daily Habits "Steps" row's click target changed from
+  `switchView: "gym"` to a new `open-steps` action (mirrors `open-sleep`):
+  opens the Dashboard's Steps edit form and scrolls to it, instead of
+  switching tabs to a form that no longer exists there.
+- Live-tested: tapped the Steps card, entered 8500 steps / 320 kcal burned,
+  saved — ring/value updated (85%, 8500/10000), "Today's activity" kcal-
+  burned line updated to 320, Daily Habits' Steps row updated too. Re-tapped,
+  confirmed the form pre-filled with the saved values (not blank), changed
+  steps to 9200, saved again — confirmed it replaced the value rather than
+  adding to it (delete-then-add, no duplicate entry). Confirmed the Daily
+  Habits row's new click target opens the Dashboard form directly without
+  switching views. Confirmed the Fitness tab's Activity panel is gone.
 
 ---
 

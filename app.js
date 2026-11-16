@@ -81,7 +81,7 @@ let dietPicks = {}; // { breakfast: id, lunch: id, dinner: id, snack1: id, snack
 let calViewDate = new Date();   // month currently shown on the Dashboard
 let selectedDateKey = null;     // date both the Dashboard and Gym day panels show
 let showingOnboardingReview = false; // gate: stay on onboarding screen to show the just-built plan
-let dashboardEditingCard = null; // "sleep" | "weight" | null — which Dashboard stat card (if any) shows its inline edit form instead of its normal ring/value; survives renderDashboard() replacing dashboard-stats' innerHTML, cleared on Save/Cancel
+let dashboardEditingCard = null; // "steps" | "sleep" | "weight" | null — which Dashboard stat card (if any) shows its inline edit form instead of its normal ring/value; survives renderDashboard() replacing dashboard-stats' innerHTML, cleared on Save/Cancel
 
 async function fetchJsonWithRetry(url, attempts = 2) {
   for (let i = 0; i < attempts; i++) {
@@ -880,12 +880,12 @@ function renderDashboard() {
   const burned = sumByType(today, "activity", "caloriesBurned") + sumByType(today, "cardio", "caloriesBurned");
   const sleepEntry = entryForSelectedDate("sleep");
   const weightEntry = entryForSelectedDate("weight");
+  const activityEntry = entryForSelectedDate("activity");
 
   const ringStats = [
     { label: "Calories", iconName: "flame", value: calories, goal: goals.calorieGoal, unit: "" },
     { label: "Protein", iconName: "bicep", value: protein, goal: goals.proteinGoal, unit: "g" },
-    { label: "Water", iconName: "droplet", value: water, goal: goals.waterGoal, unit: "ml" },
-    { label: "Steps", iconName: "footprints", value: steps, goal: goals.stepsGoal, unit: "" }
+    { label: "Water", iconName: "droplet", value: water, goal: goals.waterGoal, unit: "ml" }
   ];
 
   const container = document.getElementById("dashboard-stats");
@@ -908,6 +908,7 @@ function renderDashboard() {
         </div>`;
     })
     .join("")
+    + (dashboardEditingCard === "steps" ? dashboardStepsEditHtml(activityEntry) : dashboardStepsCardHtml(steps))
     + (dashboardEditingCard === "sleep" ? dashboardSleepEditHtml(sleepEntry) : dashboardSleepCardHtml(sleep))
     + (dashboardEditingCard === "weight" ? dashboardWeightEditHtml(weightEntry) : dashboardWeightCardHtml(weightEntry));
 
@@ -924,6 +925,40 @@ function renderDashboard() {
   renderDailyStretch();
   renderMealsList();
   renderWorkoutPlanPanel();
+}
+
+// Steps/calories-burned are logged together as one "activity" entry
+// (matches the data model from when this lived in the Fitness tab's
+// Activity form — moved here per Adrian's ask so Steps follows the same
+// tap-to-edit pattern as Sleep/Weight instead of a separate-tab form).
+function dashboardStepsCardHtml(steps) {
+  const goal = goals.stepsGoal;
+  const hasGoal = !!goal;
+  const pct = hasGoal ? barWidth(steps, goal) : 0;
+  const over = hasGoal && steps > goal;
+  return `
+    <button type="button" class="stat-card stat-card-editable" data-edit-card="steps">
+      <div class="stat-card-top">
+        <span class="stat-card-icon">${icon("footprints", { size: 18 })}</span>
+        ${hasGoal ? progressRingSvg(pct, { size: 44, stroke: 4 }) : ""}
+      </div>
+      <div class="stat-card-label">Steps</div>
+      <div class="stat-card-value">${steps}${hasGoal ? `<span class="stat-goal"> / ${goal}</span>` : ""}</div>
+      ${hasGoal ? `<div class="bar-track"><div class="bar-fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>` : ""}
+    </button>`;
+}
+
+function dashboardStepsEditHtml(existing) {
+  return `
+    <div class="stat-card stat-card-edit-form" data-edit-form="steps">
+      <div class="stat-card-label">Steps</div>
+      <label class="small">Steps<input type="number" id="dash-steps-input" min="0" value="${existing?.steps ?? ""}" /></label>
+      <label class="small">Calories burned<input type="number" id="dash-steps-calories-input" min="0" value="${existing?.caloriesBurned ?? ""}" /></label>
+      <div class="row" style="margin-top:8px;gap:6px;">
+        <button type="button" class="btn primary small" id="dash-steps-save">Save</button>
+        <button type="button" class="btn small" id="dash-steps-cancel">Cancel</button>
+      </div>
+    </div>`;
 }
 
 function dashboardSleepCardHtml(sleepHours) {
@@ -983,7 +1018,7 @@ function dashboardWeightEditHtml(existing) {
     </div>`;
 }
 
-// Sleep/Weight only ever have at most one entry per day (see
+// Sleep/Weight/Steps only ever have at most one entry per day (see
 // entryForSelectedDate), so "editing" an already-logged day means delete the
 // old entry and add the corrected one — there's no updateEntry() in this
 // codebase, only addEntry()/removeEntry() (see CLAUDE.md/PROJECT_STATE.md).
@@ -994,6 +1029,27 @@ function wireDashboardStatEdits(container) {
       renderDashboard();
     });
   });
+
+  if (container.querySelector('[data-edit-form="steps"]')) {
+    document.getElementById("dash-steps-cancel").addEventListener("click", () => {
+      dashboardEditingCard = null;
+      renderDashboard();
+    });
+    document.getElementById("dash-steps-save").addEventListener("click", async () => {
+      const steps = document.getElementById("dash-steps-input").value;
+      const caloriesBurned = document.getElementById("dash-steps-calories-input").value;
+      if (!steps && !caloriesBurned) return;
+      const dateKey = selectedDateKey || todayKey();
+      const fields = {};
+      if (steps !== "") fields.steps = Number(steps);
+      if (caloriesBurned !== "") fields.caloriesBurned = Number(caloriesBurned);
+      const existing = entryForSelectedDate("activity");
+      if (existing) await removeEntry(existing.id);
+      await addEntry("activity", fields, dateKey);
+      dashboardEditingCard = null;
+      renderDashboard();
+    });
+  }
 
   if (container.querySelector('[data-edit-form="sleep"]')) {
     document.getElementById("dash-sleep-cancel").addEventListener("click", () => {
@@ -1112,7 +1168,7 @@ function renderDailyHabits() {
       label: "Steps",
       detail: `${steps.toLocaleString()} / ${goals.stepsGoal ? goals.stepsGoal.toLocaleString() : "—"}`,
       met: !!goals.stepsGoal && steps >= goals.stepsGoal,
-      switchView: "gym" // logged on the Fitness tab now
+      action: "open-steps" // logged right on the Dashboard's own stat card now, not the Fitness tab
     },
     {
       iconName: "moon",
@@ -1146,6 +1202,11 @@ function renderDailyHabits() {
     const panel = document.getElementById("fitness-stretch");
     panel.querySelector("details")?.setAttribute("open", "");
     panel.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  el.querySelector('[data-habit-action="open-steps"]')?.addEventListener("click", () => {
+    dashboardEditingCard = "steps";
+    renderDashboard();
+    document.getElementById("dashboard-stats")?.scrollIntoView({ behavior: "smooth", block: "center" });
   });
   el.querySelector('[data-habit-action="open-sleep"]')?.addEventListener("click", () => {
     dashboardEditingCard = "sleep";
