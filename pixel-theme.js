@@ -154,6 +154,15 @@
     weightSlot.replaceChildren(wt);
     updateNutrition();
   }
+  // Put mobile quick actions immediately below the art; restore desktop order
+  // on resize, preserving keyboard and screen-reader focus order.
+  const mobileQuery = window.matchMedia('(max-width:760px)');
+  function placeShortcuts() {
+    if (mobileQuery.matches) root.insertBefore(shortcuts, layout);
+    else root.insertBefore(shortcuts, layout.nextSibling);
+  }
+  placeShortcuts();
+  mobileQuery.addEventListener('change', placeShortcuts);
   new MutationObserver(moveLiveCards).observe(stats, { childList: true });
   moveLiveCards();
 })();
