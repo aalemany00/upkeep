@@ -102,7 +102,7 @@
     panel.classList.add('pixel-frame', className);
     layout.append(panel);
   }
-  root.insertBefore(room, header);
+  root.prepend(room);
   root.insertBefore(layout, grids[0]);
   layout.append(overview, nutrition, water, sleep);
   addPanel(workout, 'pixel-workout');
