@@ -1,0 +1,212 @@
+/* Upkeep pixel-art theme. Existing app.js, Firebase state, and forms stay intact. */
+@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&display=swap');
+:root,:root[data-theme="light"] {
+ --bg:#f1d1ae;--panel:#fff0d8;--panel-border:#603d38;--text:#27201d;
+ --subtle:#64534b;--accent:#386747;--accent-dark:#294d38;--accent-light:#a9c896;
+ --accent-contrast:#fff6da;--ring-track:#e1ccb3;--success-bg:#deebca;--danger:#b54d46;
+ --radius:9px;--radius-sm:7px;--shadow:0 4px 0 #b98c77;
+ --pixel-ink:#4c322f;--pixel-parchment:#fff0d8;--pixel-fg:#24201d;
+ --font:'Pixelify Sans','Trebuchet MS',sans-serif;color-scheme:light;
+}
+:root[data-theme="dark"] {
+ --bg:#1e322c;--panel:#344e3e;--panel-border:#172a24;--text:#f8efd9;
+ --subtle:#d7cbb4;--accent:#9ec68d;--accent-dark:#7eaa72;--accent-light:#d9e9b5;
+ --accent-contrast:#193426;--ring-track:#223a2e;--success-bg:#49684c;--danger:#e08076;
+ --shadow:0 4px 0 #0d201b;--pixel-ink:#172921;--pixel-parchment:#344e3e;
+ --pixel-fg:#fff3dc;color-scheme:dark;
+}
+body {font-family:var(--font);font-size:18px;background:var(--bg)}
+button,input,select,textarea {font-family:inherit;font-size:inherit}
+#app {background:var(--bg);color:var(--text)}
+#app .panel,#app .stat-card,#app .coach-note-card {box-shadow:none}
+#app .panel {background:var(--panel);border:2px solid var(--panel-border);border-radius:var(--radius)}
+#app .panel-title {font-size:1.16em;letter-spacing:0}
+#app .btn,#app .chip-btn,#app .subtab {border-radius:7px}
+#app .btn.primary{background:var(--accent);color:var(--accent-contrast)}
+#app .bar-track{background:var(--ring-track);border:2px solid #bba78f;border-radius:5px;height:15px}
+#app .bar-fill{border-radius:2px;background:#67985a}
+#app .bar-fill.over{background:var(--danger)}
+#app .sidebar{flex-basis:258px;width:258px;background:linear-gradient(125deg,#28483c,#1c3930);border-right:4px solid #172e29;padding:20px 15px 0;color:#fff0d4}
+#app .sidebar-brand{color:#ffebc9;align-items:center;justify-content:center;padding:0 0 11px}
+#app .sidebar-title{font-size:2.25em;line-height:1.05;letter-spacing:.2px;color:#fff0d7;text-shadow:2px 2px #305147}
+#app .sidebar-brand .brand-icon{color:#f4be63}
+#app .sidebar-avatar-wrap{margin-bottom:14px;min-height:78px}
+#app .sidebar-avatar-face img{border:3px solid #e2c797;border-radius:9px;background:#38634b;image-rendering:pixelated}
+#app .coach-bubble:not(.coach-bubble-topbar){border:2px solid #806446;border-radius:8px;background:#fff2d9;color:#312a24}
+#app .sidebar-nav{gap:5px}
+#app .sidebar-nav .tab{color:#fff0d4;font-size:1.25em;padding:9px 12px;border:2px solid transparent;border-radius:10px;gap:12px}
+#app .sidebar-nav .tab svg{width:23px;height:23px}
+#app .sidebar-nav .tab:hover{background:#345b47;color:#fffce9}
+#app .sidebar-nav .tab.active{color:#fff4d9;background:#456e4b;border-color:#a9c68c;box-shadow:inset 0 0 0 1px #183e30}
+#app .sidebar-tagline{margin:0 -15px;border:0;height:225px;min-height:225px;padding:0;background:url('pixel-assets/sidebar-landscape.webp') center bottom / cover no-repeat;image-rendering:pixelated}
+#app .sidebar-tagline p,#app .sidebar-illustration{display:none}
+#views{padding:24px 24px 50px;max-width:none;width:100%;margin:0;min-width:0}
+#app .view:not(#view-dashboard){max-width:1180px;margin:auto}
+#app .view:not(#view-dashboard) > h1{font-size:1.9em}
+#app .view:not(#view-dashboard) .panel{box-shadow:var(--shadow);padding:18px 20px}
+#app .view:not(#view-dashboard) input,#app .view:not(#view-dashboard) select,#app .view:not(#view-dashboard) textarea{border:2px solid #aa947b;background:var(--panel);color:var(--text)}
+#app .view:not(#view-dashboard) .tab-icon{color:var(--accent)}
+/* The illustrated room and independent text/hotspot are the only image-backed area. */
+#view-dashboard[data-pixel-layout="ready"]{margin:-24px -24px 0;width:calc(100% + 48px)}
+.pixel-room-hero{width:100%;position:relative;aspect-ratio:1411/316;background:url('pixel-assets/room-desktop.webp') center / 100% 100% no-repeat;image-rendering:pixelated;border-bottom:4px solid #92645c;overflow:hidden}
+.pixel-room-message{position:absolute;z-index:1;top:8.1%;left:53.3%;width:23%;height:34%;background:#fff0d8;color:#211b1a;font-size:clamp(12px,1.5vw,24px);line-height:1.04;font-weight:600;padding:0 1.2%;display:flex;align-items:center;border:0;border-radius:5px}
+.pixel-coach-hotspot{position:absolute;top:27%;left:43%;width:12%;height:68%;background:transparent;border:none;cursor:pointer}
+.pixel-coach-hotspot:focus-visible{outline:3px solid #ffcf6d;outline-offset:-5px}
+.pixel-dashboard-layout{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:13px;padding:13px 17px 20px;align-items:stretch}
+#app .pixel-dashboard-layout > .pixel-frame{margin:0;min-width:0;border:3px solid var(--pixel-ink);border-radius:10px;background:var(--pixel-parchment);color:var(--pixel-fg);box-shadow:var(--shadow);padding:15px 18px;min-height:0}
+#app .pixel-dashboard-layout > .pixel-frame > .pixel-section-heading{font-size:1.5em;font-weight:700;line-height:1.12;margin:0 0 11px;color:var(--pixel-fg);display:flex;align-items:center;gap:9px;letter-spacing:-.2px}
+.pixel-heading-glyph{color:#5b9357;display:inline-flex;width:26px;font-size:24px;justify-content:center}
+.pixel-overview,.pixel-nutrition,.pixel-habits,.pixel-week,.pixel-meals,.pixel-coach-notes{grid-column:span 6}
+.pixel-water,.pixel-sleep{grid-column:span 3}
+.pixel-workout{grid-column:span 6}
+.pixel-vitamins{grid-column:span 9}
+.pixel-weight{grid-column:span 3}
+/* Reuse the real dashboard date stepper so past-day logging stays possible. */
+#app .pixel-dashboard-header{margin:0 0 10px;gap:4px;font-size:.83em;align-items:center}
+#app .pixel-dashboard-header .dash-greeting{font-size:1em;white-space:normal}
+#app .pixel-dashboard-header .dash-date{color:var(--subtle);white-space:nowrap;font-size:.95em;padding:0}
+#app .pixel-dashboard-header .btn{padding:1px 9px;min-width:28px;height:30px;border:2px solid #b79f87;border-radius:6px}
+#app .pixel-dashboard-header .subtle{margin:0}
+/* Compact horizontal real-data Calories / Protein / Steps rows. */
+#app .pixel-overview #dashboard-stats{display:flex;flex-direction:column;gap:7px;margin:0}
+#app .pixel-overview #dashboard-stats > .stat-card{display:grid;grid-template-columns:30px 83px minmax(118px,1fr) minmax(55px,1.1fr);gap:7px;align-items:center;background:none;border:0;border-radius:4px;padding:5px 0;color:var(--pixel-fg);font-size:1em;min-width:0}
+#app .pixel-overview .stat-card-top{margin:0;grid-column:1;align-items:center;justify-content:center}
+#app .pixel-overview .stat-card-top > svg{display:none}
+#app .pixel-overview .stat-card-icon{width:28px;height:28px;border-radius:4px;color:#376b41;background:#e0eac8}
+#app .pixel-overview .stat-card-label{grid-column:2;margin:0;color:var(--pixel-fg);font-weight:600;font-size:1em}
+#app .pixel-overview .stat-card-value{grid-column:3;font-size:.96em;font-weight:700;margin:0;white-space:nowrap}
+#app .pixel-overview .stat-goal{font-size:.9em;color:var(--subtle)}
+#app .pixel-overview .stat-card > .bar-track{grid-column:4;height:16px}
+#app .pixel-overview .stat-card-editable:hover{background:var(--success-bg);border-radius:4px}
+#app .pixel-overview #dashboard-stats > .stat-card-edit-form{display:flex;flex-wrap:wrap;gap:7px;padding:10px;border:2px dashed #bc9a78}
+#app .pixel-overview .stat-card-edit-form label{min-width:130px;flex:1}
+#app .pixel-overview .stat-card-edit-form .row{width:100%}
+#app .pixel-overview .stat-card-edit-form .stat-card-label{width:100%}
+/* The nutrition donut shows calorie goal completion, not untracked macros. */
+.pixel-nutrition-body{display:flex;align-items:center;gap:18px;justify-content:space-between;min-height:125px}
+.pixel-nutrition-stats{flex:1;min-width:0;background:rgba(220,190,150,.15);border:2px solid #e7d3b9;border-radius:10px;padding:9px 12px}
+.pixel-nutrition-stats > div{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:7px 0;border-bottom:1px solid #e3ceb5}
+.pixel-nutrition-stats > div strong{text-align:right;font-weight:700;white-space:nowrap}
+.pixel-nutrition-stats small{display:block;color:var(--subtle);font-size:.75em;margin-top:9px}
+.pixel-nutrition-donut{--pixel-progress-pct:0%;flex:0 0 126px;width:126px;height:126px;border-radius:50%;background:conic-gradient(#f7b950 var(--pixel-progress-pct),#9d87c7 var(--pixel-progress-pct) 100%);border:2px solid #ba9879;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;isolation:isolate}
+.pixel-nutrition-donut::before{content:"";position:absolute;inset:17px;background:var(--pixel-parchment);border-radius:50%;z-index:-1}
+.pixel-nutrition-donut strong{font-size:1.45em;line-height:1.1}
+.pixel-nutrition-donut small{font-size:.77em}
+/* Water, sleep, weight are original cards with all their original edit forms. */
+#app .pixel-live-slot .stat-card{border:0;background:none;padding:0;width:100%;box-shadow:none;color:var(--pixel-fg)}
+#app .pixel-live-slot .stat-card-top{display:none}
+#app .pixel-live-slot .stat-card-label{display:none}
+#app .pixel-live-slot .stat-card-value{font-size:1.42em;font-weight:700;margin:18px 0 12px;text-align:center;line-height:1}
+#app .pixel-live-slot .stat-goal{color:var(--subtle);font-size:.65em}
+#app .pixel-live-slot .bar-track{height:19px;margin-bottom:4px}
+#app .pixel-water .bar-fill{background:#70a9df}
+#app .pixel-sleep .bar-fill{background:#947bc2}
+#app .pixel-live-slot .stat-card-editable:hover{background:var(--success-bg)}
+#app .pixel-live-slot .stat-card-edit-form{display:flex;flex-direction:column;gap:6px}
+#app .pixel-live-slot .stat-card-edit-form .stat-card-label{display:block}
+#app .pixel-live-slot .stat-card-edit-form label{font-size:.82em}
+#app .pixel-live-slot .stat-card-edit-form .row{flex-wrap:wrap}
+.pixel-mini-link{border:0;background:transparent;color:var(--accent-dark);font-weight:700;font-size:.84em;text-decoration:underline;cursor:pointer;margin-top:6px;padding:2px}
+#app .pixel-workout{display:flex;flex-direction:column}
+#app .pixel-workout .workout-plan-card{background:#dfe9c8;border:0;border-radius:8px;padding:14px 13px;flex:1;align-items:center;min-height:92px}
+#app .pixel-workout .workout-plan-icon{background:#f4c46e;border:2px solid #a4865e;width:54px;height:54px;border-radius:8px;color:#365e3d}
+#app .pixel-workout .workout-plan-text .panel-title{font-size:1.25em;margin:0}
+#app .pixel-workout .workout-plan-text .subtle{font-size:1em;color:#48614b}
+#app .pixel-workout .workout-plan-card:hover{background:#cfe3af}
+#app .pixel-workout .tab-icon:last-child{color:#3f6645}
+#app .pixel-habits .habit-row{padding:8px 0;border-color:#ead5b9;gap:11px}
+#app .pixel-habits .habit-row-icon{border-radius:4px;background:#dce7bb;color:#45683d}
+#app .pixel-habits .habit-row-text{font-size:1.05em;color:var(--pixel-fg)}
+#app .pixel-habits .habit-row-text .subtle{color:var(--subtle)}
+#app .pixel-habits .habit-row-check{color:#ab9880}
+#app .pixel-habits .habit-row.met .habit-row-check{color:#5c9e56}
+#app .pixel-week #dashboard-activity-chart svg{display:block;max-width:100%;height:auto}
+#app .pixel-week #dashboard-weight-line{font-size:.87em;color:var(--subtle)}
+#app .pixel-meals .meal-item{color:var(--pixel-fg);border-color:#e8d5be}
+#app .pixel-meals .meal-icon{border-radius:5px;background:#f5dcaa;color:#446b3e}
+#app .pixel-coach-notes .coach-note{color:var(--pixel-fg);font-size:1em}
+#app .pixel-vitamins .chip-btn{font-size:1em}
+.pixel-shortcuts{display:flex;gap:10px;padding:0 17px 18px;flex-wrap:wrap}
+.pixel-shortcut{background:#e0e9ce;color:#34543d;border:2px solid #759673;border-radius:8px;padding:8px 15px;box-shadow:0 2px #ad997d;font-size:1.05em;cursor:pointer}
+.pixel-shortcut:hover{background:#cadfb8}
+#app .more-sheet-card{background:var(--panel);border:3px solid var(--pixel-ink);border-radius:12px}
+#app .more-sheet-item{font-size:1.25em}
+@media(max-width:1450px) and (min-width:761px){
+ #app .sidebar{flex-basis:222px;width:222px;padding-left:12px;padding-right:12px}
+ #app .sidebar-title{font-size:1.9em}
+ #app .sidebar-nav .tab{font-size:1.05em}
+ #app .sidebar-tagline{margin-left:-12px;margin-right:-12px}
+ .pixel-dashboard-layout{gap:11px;padding:11px}
+ #app .pixel-dashboard-layout > .pixel-frame{padding:12px}
+ #app .pixel-dashboard-layout .pixel-section-heading{font-size:1.3em}
+ #app .pixel-overview #dashboard-stats > .stat-card{grid-template-columns:28px 65px minmax(99px,1fr) minmax(38px,1fr);gap:4px;font-size:.91em}
+ .pixel-nutrition-donut{width:103px;height:103px;flex-basis:103px}
+ .pixel-nutrition-donut::before{inset:13px}
+ .pixel-nutrition-body{gap:10px}
+}
+@media(max-width:1100px) and (min-width:761px){
+ .pixel-overview,.pixel-nutrition,.pixel-habits,.pixel-week,.pixel-meals,.pixel-coach-notes{grid-column:span 12}
+ .pixel-water,.pixel-sleep,.pixel-weight{grid-column:span 6}
+ .pixel-workout,.pixel-vitamins{grid-column:span 12}
+ #app .pixel-overview #dashboard-stats > .stat-card{grid-template-columns:28px minmax(75px,1fr) minmax(110px,1fr) minmax(70px,1fr)}
+}
+@media(max-width:760px){
+ #app .sidebar{display:none}
+ #app .topbar{background:#203e33;color:#fff2d6;border-bottom:3px solid #142c24;padding:0 14px;height:59px}
+ #app .topbar-brand{font-size:1.75em;color:#fff2d6;font-weight:700}
+ #app .topbar .sidebar-avatar-face img{width:40px;height:40px;border:2px solid #b7c39e}
+ #app .bottom-nav{background:#203e33;border-top:3px solid #a8bb8c;padding-bottom:env(safe-area-inset-bottom);height:calc(65px + env(safe-area-inset-bottom));z-index:30}
+ #app .bottom-nav .tab{color:#fff1d8;border-radius:7px;font-size:.82em;gap:2px;padding:5px 0;min-height:48px}
+ #app .bottom-nav .tab.active{background:#496d4b;color:#fff1d8}
+ #app .bottom-nav .tab svg{width:22px;height:22px}
+ #views{padding:0 10px calc(88px + env(safe-area-inset-bottom));max-width:100%}
+ #app .view:not(#view-dashboard){padding-top:14px}
+ #view-dashboard[data-pixel-layout="ready"]{margin:0 -10px;width:calc(100% + 20px)}
+ .pixel-room-hero{aspect-ratio:582/316;background-image:url('pixel-assets/room-mobile.webp');max-height:320px}
+ .pixel-room-message{left:40%;top:8%;width:52%;height:34%;font-size:clamp(13px,3.4vw,23px);padding:1px 2.5%;line-height:1.04}
+ .pixel-coach-hotspot{left:19%;top:26%;width:24%;height:68%}
+ .pixel-dashboard-layout{padding:10px;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}
+ #app .pixel-dashboard-layout > .pixel-frame{border-width:3px;border-radius:9px;padding:12px 14px;min-width:0}
+ .pixel-overview,.pixel-nutrition,.pixel-workout,.pixel-habits,.pixel-week,.pixel-meals,.pixel-coach-notes,.pixel-vitamins{grid-column:span 2}
+ .pixel-water,.pixel-sleep{grid-column:span 1}
+ .pixel-weight{grid-column:span 2}
+ #app .pixel-overview #dashboard-stats > .stat-card{grid-template-columns:28px minmax(62px,1fr) minmax(116px,1.4fr) minmax(42px,1.4fr);gap:5px;font-size:.93em}
+ #app .pixel-dashboard-layout > .pixel-frame > .pixel-section-heading{font-size:1.4em}
+ #app .pixel-dashboard-header{font-size:.82em}
+ #app .pixel-live-slot .stat-card-value{font-size:1.1em;margin:15px 0 10px}
+ .pixel-nutrition-body{min-height:107px}
+ .pixel-nutrition-donut{width:108px;height:108px;flex-basis:108px}
+ .pixel-nutrition-donut::before{inset:14px}
+ .pixel-shortcuts{padding:2px 10px 17px;overflow-x:auto;flex-wrap:nowrap}
+ .pixel-shortcut{white-space:nowrap;font-size:.96em}
+}
+@media(max-width:440px){
+ .pixel-dashboard-layout{gap:9px;padding:9px}
+ #app .pixel-dashboard-layout > .pixel-frame{padding:10px}
+ #app .pixel-dashboard-layout > .pixel-frame > .pixel-section-heading{font-size:1.28em;margin-bottom:8px}
+ #app .pixel-overview #dashboard-stats > .stat-card{grid-template-columns:23px 61px minmax(101px,1fr) minmax(35px,.9fr);gap:3px;font-size:.82em}
+ #app .pixel-overview .stat-card-top .stat-card-icon{width:22px;height:22px}
+ #app .pixel-overview .stat-card-icon svg{width:17px;height:17px}
+ #app .pixel-overview .stat-card > .bar-track{height:14px}
+ #app .pixel-dashboard-header .dash-date{font-size:.82em}
+ .pixel-nutrition-stats{padding:7px 8px;font-size:.91em}
+ .pixel-nutrition-stats > div{gap:6px}
+ .pixel-nutrition-body{gap:7px}
+ .pixel-nutrition-donut{width:88px;height:88px;flex-basis:88px}
+ .pixel-nutrition-donut::before{inset:12px}
+ .pixel-nutrition-donut strong{font-size:1.2em}
+ #app .pixel-live-slot .stat-card-value{font-size:.92em;white-space:normal}
+ #app .pixel-water,#app .pixel-sleep{padding:9px}
+ #app .pixel-workout .workout-plan-card{padding:10px;min-height:80px}
+ #app .pixel-workout .workout-plan-icon{width:42px;height:42px;flex-basis:42px}
+ #app .pixel-workout .workout-plan-text .panel-title{font-size:1.12em}
+ #app .pixel-habits .habit-row-text{font-size:.95em}
+}
+@media(max-width:355px){
+ #app .pixel-overview #dashboard-stats > .stat-card{grid-template-columns:20px 52px minmax(82px,1fr) minmax(28px,.8fr);font-size:.74em}
+ #app .pixel-dashboard-header{font-size:.73em}
+ .pixel-nutrition-donut{width:72px;height:72px;flex-basis:72px}
+ .pixel-nutrition-donut::before{inset:9px}
+ .pixel-nutrition-donut strong{font-size:1.02em}
+}
+@media(prefers-reduced-motion:reduce){.pixel-shortcut{transition:none}}
