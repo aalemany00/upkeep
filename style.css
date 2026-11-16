@@ -413,7 +413,7 @@ textarea { font-family: inherit; resize: vertical; }
   font: inherit;
   color: inherit;
 }
-.stat-card-editable:hover { border-color: var(--accent); }
+@media (hover: hover) { .stat-card-editable:hover { border-color: var(--accent); } }
 .stat-card-edit-form { display: flex; flex-direction: column; gap: 8px; }
 .stat-card-edit-form label.small { display: flex; flex-direction: column; gap: 4px; font-size: 0.85em; color: var(--subtle); }
 
@@ -486,7 +486,7 @@ textarea { font-family: inherit; resize: vertical; }
   font: inherit;
 }
 .habit-row:first-child { border-top: none; padding-top: 0; }
-.habit-row:hover { background: var(--bg); }
+@media (hover: hover) { .habit-row:hover { background: var(--bg); } }
 .habit-row-icon {
   width: 32px;
   height: 32px;
@@ -518,7 +518,8 @@ textarea { font-family: inherit; resize: vertical; }
   font: inherit;
 }
 .meal-item:first-child { border-top: none; padding-top: 0; }
-.meal-item:hover { background: var(--bg); cursor: pointer; }
+@media (hover: hover) { .meal-item:hover { background: var(--bg); } }
+.meal-item { cursor: pointer; }
 .meal-icon {
   width: 38px;
   height: 38px;
@@ -550,7 +551,7 @@ textarea { font-family: inherit; resize: vertical; }
   font: inherit;
 }
 .settings-row:first-child { border-top: none; padding-top: 0; }
-.settings-row:hover { background: var(--bg); }
+@media (hover: hover) { .settings-row:hover { background: var(--bg); } }
 .settings-row-icon {
   width: 34px;
   height: 34px;
@@ -644,7 +645,7 @@ textarea { font-family: inherit; resize: vertical; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast); font-weight: 600; }
 .btn.small { padding: 6px 12px; font-size: 0.85em; }
 .btn.danger { background: transparent; border-color: var(--danger); color: var(--danger); }
-.btn.danger:hover { background: var(--danger); color: #fff; }
+@media (hover: hover) { .btn.danger:hover { background: var(--danger); color: #fff; } }
 
 .danger-zone { border-color: var(--danger); }
 .danger-zone #delete-account-form { margin-top: 12px; display: flex; flex-direction: column; gap: 4px; }
@@ -699,7 +700,7 @@ textarea { font-family: inherit; resize: vertical; }
   list-style: none;
 }
 .coach-note-summary::-webkit-details-marker { display: none; }
-.coach-note-summary:hover { background: var(--bg); }
+@media (hover: hover) { .coach-note-summary:hover { background: var(--bg); } }
 .coach-note-chevron { color: var(--subtle); transition: transform 0.15s ease; flex: 0 0 auto; }
 .coach-note-card[open] .coach-note-chevron { transform: rotate(90deg); }
 .coach-note-body { padding: 0 14px 14px; border-top: 1px solid var(--panel-border); }
@@ -724,7 +725,7 @@ textarea { font-family: inherit; resize: vertical; }
   cursor: pointer;
   text-align: center;
 }
-.avatar-option:hover { border-color: var(--accent); }
+@media (hover: hover) { .avatar-option:hover { border-color: var(--accent); } }
 .avatar-option.selected { border-color: var(--accent); background: var(--success-bg); }
 .avatar-option .avatar-thumb { width: 64px; height: 64px; border-radius: 50%; overflow: hidden; background: var(--panel); margin-bottom: 2px; }
 .avatar-option .avatar-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; image-rendering: pixelated; }
@@ -845,7 +846,7 @@ textarea { font-family: inherit; resize: vertical; }
     cursor: pointer;
     border-radius: var(--radius-sm);
   }
-  .more-sheet-item:hover { background: var(--bg); }
+  @media (hover: hover) { .more-sheet-item:hover { background: var(--bg); } }
   .more-sheet-close { color: var(--subtle); justify-content: center; margin-top: 6px; }
 }
 
@@ -922,7 +923,7 @@ textarea { font-family: inherit; resize: vertical; }
   list-style: none;
 }
 .gym-slot-summary::-webkit-details-marker { display: none; }
-.gym-slot-summary:hover { background: var(--panel-border); }
+@media (hover: hover) { .gym-slot-summary:hover { background: var(--panel-border); } }
 .gym-slot-summary > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .gym-slot-summary strong { line-height: 1.3; }
 .gym-slot-chevron { color: var(--subtle); transition: transform 0.15s ease; flex: 0 0 auto; }

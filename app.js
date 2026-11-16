@@ -1445,7 +1445,7 @@ function eventFormHtml(prefix, ev = {}) {
         <button type="button" class="btn ghost small" data-save-category>Save category</button>
       </div>
       <input type="text" name="notes" placeholder="Notes (optional)" value="${ev.notes ? ev.notes.replace(/"/g, "&quot;") : ""}" />
-      ${ev.category === "Cardio" || !ev.id ? `<p class="subtle small">Tagging this "Cardio" makes it show up as an upcoming reminder in the Gym tab.</p>` : ""}
+      ${ev.category === "Cardio" || !ev.id ? `<p class="subtle small">Tagging this "Cardio" makes it show up as an upcoming reminder in the Fitness tab.</p>` : ""}
       ${ev.id ? "" : `
         <label class="small">Repeats
           <select name="repeat">
@@ -1629,7 +1629,7 @@ function renderDashDayPanel() {
               ${e.gym
                 ? e.logged
                   ? `<br/>${gymLogDetailsHtml(dateKey)}`
-                  : `<br/><span class="subtle small">Scheduled — go log it in the Gym tab.</span>`
+                  : `<br/><span class="subtle small">Scheduled — go log it in the Fitness tab.</span>`
                 : ""}
             </span>
             ${e.gym ? "" : `
@@ -2912,13 +2912,13 @@ function renderGymDayPanel() {
     .join("");
 
   el.innerHTML = `
-    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:4px;">
-      <div class="row" style="align-items:center;gap:8px;">
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:4px;flex-wrap:wrap;gap:8px;">
+      <div class="row" style="align-items:center;gap:8px;flex:1 1 auto;min-width:0;">
         <button type="button" class="btn small" id="gym-day-prev">&lsaquo;</button>
-        <h2 style="margin:0;">${dateLabel}</h2>
+        <h2 style="margin:0;white-space:nowrap;">${dateLabel}</h2>
         <button type="button" class="btn small" id="gym-day-next">&rsaquo;</button>
       </div>
-      <select id="gym-daytype-select">${typeOptions}</select>
+      <select id="gym-daytype-select" style="flex:1 1 auto;min-width:140px;">${typeOptions}</select>
     </div>
     <p class="subtle small" style="margin-top:0;">${selectedDateKey === todayKey() ? "" : `<button type="button" class="link-btn" id="gym-day-today">Jump to today</button> — `}Pick any date on the <button type="button" class="link-btn" data-switch-view="calendar">Calendar</button> to come straight here.</p>
     ${checklistHtml(WARMUPS_BY_DAYTYPE[dayType], "Warm-up", `warmup-${dayType}`, selectedDateKey)}
