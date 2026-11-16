@@ -28,7 +28,7 @@ function musclesFor(...groups) {
 // user's stored split predates the current logic — otherwise a fix here
 // would only apply to the next person who re-onboards or changes
 // availability, not to anyone with an existing split already in Firestore.
-export const SPLIT_ALGO_VERSION = 4;
+export const SPLIT_ALGO_VERSION = 5;
 
 // Equipment a user can pick from in Goals (exercises.json's `equipment`
 // field, minus the two "no equipment needed" markers below, which are
@@ -342,11 +342,25 @@ export function assignSplit(daysPerWeek, catalog, equipmentInput) {
     ? equipmentInput
     : null; // flat list (or nothing) — same equipment set broadcast to every day below
 
+  // How many times this dayType has already appeared earlier in the
+  // template, e.g. for "Full Body x3" the 2nd and 3rd "Full Body" entries
+  // get occurrence 1 and 2. Used below to default each repeat of the same
+  // day type to a *different* exercise per slot (options[1], options[2], ...
+  // instead of always options[0]) — without this, every "Full Body" day in
+  // the week defaulted to the exact same exercise for every slot, since
+  // candidatesForSlot() is deterministic given the same inputs. This is
+  // what gives a Full Body x3 week actual exercise variety across Mon/Wed/
+  // Fri instead of three identical copies of the same workout, while still
+  // letting the user manually override any slot regardless.
+  const occurrenceSoFar = {};
+
   return {
     name: template.name,
     daysPerWeek: days,
     algoVersion: SPLIT_ALGO_VERSION,
     days: template.dayTypes.map((dayType, i) => {
+      const occurrence = occurrenceSoFar[dayType] || 0;
+      occurrenceSoFar[dayType] = occurrence + 1;
       const usedToday = new Set();
       const dayEquipmentList = perDayEquipment ? perDayEquipment[i] : equipmentInput;
       const availableEquipment = dayEquipmentList && dayEquipmentList.length ? new Set(dayEquipmentList) : null;
@@ -361,11 +375,16 @@ export function assignSplit(daysPerWeek, catalog, equipmentInput) {
           // twice, but the pools overlap, which is the same practical
           // problem: picking it for one slot quietly narrows another).
           options.forEach((o) => usedToday.add(o.id));
+          // Wraps around if a slot has fewer candidates than this day type
+          // has weekly occurrences (e.g. only 2 real options but trained
+          // 3x/week) — degrades to alternating between what's actually
+          // available rather than forcing a 3rd, worse-fitting exercise.
+          const defaultIndex = options.length ? occurrence % options.length : 0;
           return {
             label: slot.label,
             muscleLabel: MUSCLE_LABEL_BY_SLOT[slot.label] ?? "",
             options: options.map((o) => o.id),
-            defaultId: options[0]?.id ?? null
+            defaultId: options[defaultIndex]?.id ?? null
           };
         })
       };

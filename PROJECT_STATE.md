@@ -1185,6 +1185,87 @@ handing it out unconditionally for anyone with 3 days/week availability.
   all 11 muscle groups each day; dropping to 2 days correctly switches to
   "Full Body x2".
 
+### 3c. Exercise variety across repeated same-type days — Full Body x3 no longer picks the identical workout three times a week (2026-11-16)
+
+Came out of a conversation with Adrian about general fitness advice (not a
+bug report) — he asked why a split would suggest the same exercise every
+single session instead of varying the angle/pattern across the week like a
+real A/B/C program, and separately worried that rotating exercises would
+make progressive overload impossible to track. Both turned out to be real
+gaps/questions worth answering in the app itself, not just in chat.
+
+- **Root cause**: `assignSplit()` (`gym.js`) builds `template.dayTypes.map(...)`
+  once per day-template entry, and `candidatesForSlot()` is a pure function
+  of (catalog, muscles, equipment, pattern) — given the same inputs, it
+  returns the same sorted candidate list every time, and `defaultId` was
+  always `options[0]`. So for "Full Body x3" (`SPLIT_TEMPLATES[3]`, three
+  "Full Body" entries), every slot's default exercise came out byte-for-byte
+  identical across all three days — Monday/Wednesday/Friday weren't
+  thematically similar, they were the exact same workout, forever, until
+  manually swapped.
+  `slotsForDayType(dayType)` in `app.js` made this worse independently:
+  looked up by day-type *string*, it always returned `split.days.find(d =>
+  d.dayType === dayType)` — the *first* matching entry — so even if the
+  three "Full Body" entries in `split.days` had ended up with different
+  data by some other means, every caller (`buildGymDraft`,
+  `renderGymDayPanel`, `saveGymDay`) would've collapsed back onto the first
+  one regardless of which weekday was actually being viewed.
+- **Fix**: `assignSplit()` now tracks how many times each dayType has
+  already appeared earlier in the template (`occurrenceSoFar`) and defaults
+  each slot to `options[occurrence % options.length]` instead of always
+  `options[0]` — so repeat #2 of "Full Body" defaults to a different
+  exercise per slot than repeat #1, wrapping around if a slot has fewer
+  real candidates than weekly occurrences (graceful degrade, not a 3rd
+  worse-fitting option forced in). `slotsForDayType()` gained an optional
+  `dateKey` param: when given, it resolves through `scheduledDayTypeFor(dateKey)`
+  to that *specific* day's own slots first, falling back to the old
+  first-match behavior only when the date's scheduled type doesn't match
+  `dayType` (e.g. a rest day manually swapped to a different type). All
+  three call sites (`buildGymDraft`, `renderGymDayPanel`, `saveGymDay`) now
+  pass the relevant dateKey through. `SPLIT_ALGO_VERSION` bumped 4→5 so
+  existing accounts (including Adrian's real one) get this silently
+  rebuilt via `maybeRebuildStaleSplit()`, same as any other algo change —
+  no AI call, logged history untouched.
+- **Progression isn't broken by this** — this was Adrian's other question,
+  and the answer is structural, not a new mechanism: `targetFor()` has
+  always computed its target from `historyForExercise(exerciseId, ...)`,
+  keyed by the *specific* exercise id, not by slot or day type. Rotating
+  which exercise defaults into a slot doesn't erase or reset anything —
+  Monday's "Barbell Full Squat" and Wednesday's "Box Squat" each keep
+  their own independent history and their own progression curve in
+  parallel; coming back to either one after a week away still picks up
+  exactly where that specific exercise's log left off. Confirmed by
+  design, not just assumption: `historyForExercise` already excludes
+  nothing based on which slot/day logged it, only exercise id.
+- **Fixed in passing**: found while testing this feature, not caused by
+  it — `gymDraft` is cached per `(dateKey, dayType)` and only ever rebuilt
+  in `renderGymDayPanel()` when one of those two changes; if the
+  *underlying* split data changes instead (equipment or availability
+  edited in Goals while the Fitness tab is already open on today), neither
+  guard fires, so stale picks kept showing until a reload. The `split`
+  collection's `onSnapshot` handler now resets `gymDraft = null` on every
+  update, forcing the next render to rebuild from whatever `split` just
+  became — same reset `workoutLogsReady` already does for its equivalent
+  first-load case.
+- **Observed, not fixed**: "Shoulder Press, on Machine" is tagged
+  `equipment: ["Bodyweight"]` in `exercises.json` — clearly wrong (it needs
+  a machine), a pre-existing wger-sourced data quality issue, not something
+  this change introduced or something equipment filtering can route around.
+  Surfaced here because the rotation made it more likely to appear as a
+  *default* rather than buried in a slot's swap dropdown. Worth a pass with
+  `scripts/reclassify-exercises.js` at some point; out of scope for this fix.
+- Live-tested on a fresh 3-day/week account with Adrian's actual home-gym
+  equipment (Barbell, Dumbbell, Kettlebell, Bench, Pull-up bar, Resistance
+  band — no SZ-Bar/Cable machine/Swiss Ball): Monday, Wednesday, and Friday
+  now show three genuinely different Full Body workouts (confirmed every
+  slot differs, e.g. Barbell Full Squat / Box Squat / Dumbbell Front Squat
+  for the Quads slot); jumped forward exactly one week and confirmed the
+  *following* Monday repeats the identical variant Monday had the week
+  before — rotation is stable per weekday, not re-randomized daily, so each
+  variant stays trackable across weeks. Also confirmed the equipment fix
+  above by toggling equipment in Goals mid-session and confirming the
+  Fitness tab picked it up without a reload.
+
 ---
 
 ## 4. Nutrition math (`nutrition.js`) — plain code, not AI

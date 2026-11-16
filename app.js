@@ -598,6 +598,16 @@ function subscribeAll(uid) {
   const splitRef = doc(db, "users", uid, "split", "current");
   unsubSplit = onSnapshot(splitRef, (snap) => {
     split = snap.exists() ? snap.data() : null;
+    // gymDraft caches picks/sets built from whatever `split` was at the time
+    // — if availability/equipment changes (or the per-weekday exercise
+    // rotation below picks something new) rebuild split/current while the
+    // Fitness tab is already open on today's date/dayType, the dateKey/
+    // dayType guard in renderGymDayPanel() never notices the *data behind*
+    // that dayType changed, so it kept showing stale picks until a reload.
+    // Dropping gymDraft here forces the next render to rebuild it from the
+    // fresh split (matches the same reset `workoutLogsReady` already does
+    // for the equivalent first-load case).
+    gymDraft = null;
     renderGym();
     renderDashCalendar(); // the dashboard calendar overlays scheduled gym days too
     maybeRebuildStaleSplit();
@@ -2528,7 +2538,22 @@ function distinctDayTypes() {
   return [...new Set(split.days.map((d) => d.dayType))];
 }
 
-function slotsForDayType(dayType) {
+// `dateKey`, when given, resolves to that specific day's own slots (via
+// scheduledDayTypeFor) rather than just the first split day matching
+// `dayType` — Full Body x3 has 3 separate "Full Body" entries in split.days,
+// one per scheduled weekday, each now defaulting to a different exercise
+// per slot (see assignSplit's occurrence rotation in gym.js) specifically
+// so Monday/Wednesday/Friday aren't three copies of the same workout.
+// Without threading dateKey through, every caller would collapse back onto
+// split.days[0] regardless of which weekday is actually being viewed.
+// Falls back to the old "first match" behavior when dateKey is omitted, or
+// doesn't resolve to this dayType (e.g. a rest day manually swapped to a
+// type other than what's scheduled that weekday) — same fallback as before.
+function slotsForDayType(dayType, dateKey) {
+  if (dateKey) {
+    const scheduled = scheduledDayTypeFor(dateKey);
+    if (scheduled?.dayType === dayType) return scheduled.slots;
+  }
   const day = split?.days.find((d) => d.dayType === dayType);
   return day ? day.slots : [];
 }
@@ -2615,7 +2640,7 @@ function gymSlotSummaryLine(ex, sets) {
 // Template-slot entries are matched by slotLabel (not array position) so a
 // day that skipped a slot, or has extras mixed in, doesn't misalign.
 function buildGymDraft(dateKey, dayType) {
-  const slots = slotsForDayType(dayType);
+  const slots = slotsForDayType(dayType, dateKey);
   const existing = logForDate(dateKey);
   const existingBySlotLabel = new Map((existing?.entries || []).filter((e) => !e.extra).map((e) => [e.slotLabel, e]));
 
@@ -2856,7 +2881,7 @@ function renderGymDayPanel() {
 
   const typeOptions = distinctDayTypes().map((t) => `<option value="${t}" ${t === dayType ? "selected" : ""}>${t}</option>`).join("");
 
-  const slots = slotsForDayType(dayType);
+  const slots = slotsForDayType(dayType, selectedDateKey);
   const slotsHtml = slots
     .map((slot, i) => {
       const exId = gymDraft.picks[i];
@@ -3066,7 +3091,7 @@ function renderGymDayPanel() {
 
 async function saveGymDay() {
   if (!currentUid || !gymDraft) return;
-  const slots = slotsForDayType(gymDraft.dayType);
+  const slots = slotsForDayType(gymDraft.dayType, gymDraft.dateKey);
   const slotEntries = slots
     .map((slot, i) => {
       const exId = gymDraft.picks[i];
