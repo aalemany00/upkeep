@@ -3,7 +3,7 @@
 
 // wger.de's muscle names (Latin, matching exercises.json's `muscles` field)
 // grouped into the labels our slot templates use.
-const MUSCLE_GROUPS = {
+export const MUSCLE_GROUPS = {
   chest: ["Pectoralis major"],
   lats: ["Latissimus dorsi"],
   upperBack: ["Trapezius"],

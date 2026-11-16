@@ -9,7 +9,7 @@ import {
   getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc,
   query, orderBy, limit, onSnapshot, writeBatch, Timestamp
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
-import { assignSplit, targetFor, MUSCLE_LABEL_BY_SLOT, SPLIT_ALGO_VERSION, EQUIPMENT_OPTIONS, searchExercises } from "./gym.js";
+import { assignSplit, targetFor, MUSCLE_LABEL_BY_SLOT, MUSCLE_GROUPS, SPLIT_ALGO_VERSION, EQUIPMENT_OPTIONS, searchExercises } from "./gym.js";
 import { computeDailyGoals, GOAL_LABELS } from "./nutrition.js";
 import { parseICS, normalizeFeedUrl, occursOnDate, isEventExpired, generateRecurrenceDates, DEFAULT_EVENT_COLOR, DEFAULT_FEED_COLOR, GYM_EVENT_COLOR } from "./calendar.js";
 import { USDA_API_KEY } from "./usda-config.js";
@@ -3188,8 +3188,88 @@ function renderGymCardioEntries() {
 function renderGym() {
   if (!document.getElementById("view-gym")) return;
   renderGymSplitSummary();
+  renderWeeklyVolume();
   renderGymCardioEntries();
   renderGymDayPanel();
+}
+
+// Reverse of gym.js's MUSCLE_GROUPS (key -> Latin names) so a logged
+// exercise's `muscles` array (Latin names, from exercises.json) can be
+// folded back into the same friendly groups the split-assignment slots
+// already use. Built once at module load, not per render.
+const MUSCLE_NAME_TO_GROUP = new Map();
+for (const [group, names] of Object.entries(MUSCLE_GROUPS)) {
+  for (const name of names) MUSCLE_NAME_TO_GROUP.set(name, group);
+}
+const MUSCLE_GROUP_DISPLAY_NAME = {
+  chest: "Chest", lats: "Lats", upperBack: "Upper back", shoulders: "Shoulders",
+  biceps: "Biceps", triceps: "Triceps", quads: "Quads", hamstrings: "Hamstrings",
+  glutes: "Glutes", calves: "Calves", abs: "Abs"
+};
+
+// Weekly training volume (sets/muscle, trailing 7 days) — one well-evidenced
+// piece of program design this app didn't surface anywhere before: Schoenfeld,
+// Ogborn & Krieger's 2017 dose-response meta-analysis (Journal of Sports
+// Sciences) found hypertrophy keeps scaling with weekly sets per muscle,
+// roughly through 10-20 sets/week for a natural lifter, with real but
+// smaller (and eventually fatigue-driven negative) returns past that.
+// Frequency (full body already hits everything 2-3x/week), rest periods,
+// and rep ranges by lift type were already baked into gym.js/nutrition.js
+// before this — this is the one number nothing in the app computed or
+// showed, so there was no way to tell whether a given week's total sets per
+// muscle actually landed in a sensible range.
+const VOLUME_TARGET_LOW = 10;
+const VOLUME_TARGET_HIGH = 20;
+
+// Counts a logged set toward *every* muscle group the exercise actually
+// trains (e.g. a squat set counts for both quads and glutes), matching how
+// volume is counted in the research this is based on — not split evenly
+// across muscles, and not just the "primary" one.
+function weeklySetsByMuscle() {
+  const week = new Set(last7DateKeys());
+  const totals = {};
+  for (const log of workoutLogs) {
+    if (!week.has(log.dateKey)) continue;
+    for (const entry of log.entries) {
+      const ex = exerciseById.get(entry.exerciseId);
+      const setCount = (entry.sets || []).length;
+      if (!ex || !setCount) continue;
+      const groups = new Set(ex.muscles.map((m) => MUSCLE_NAME_TO_GROUP.get(m)).filter(Boolean));
+      groups.forEach((g) => { totals[g] = (totals[g] || 0) + setCount; });
+    }
+  }
+  return totals;
+}
+
+let volumePanelOpen = false; // survives renderWeeklyVolume() replacing its own innerHTML, same pattern as dailyStretchOpen
+function renderWeeklyVolume() {
+  const el = document.getElementById("fitness-volume");
+  if (!el) return;
+  const totals = weeklySetsByMuscle();
+  const rows = Object.entries(MUSCLE_GROUP_DISPLAY_NAME)
+    .map(([group, label]) => {
+      const sets = totals[group] || 0;
+      const over = sets > VOLUME_TARGET_HIGH;
+      const pct = Math.min(100, (sets / VOLUME_TARGET_HIGH) * 100);
+      return `
+        <li class="volume-row">
+          <span class="volume-row-label">${label}</span>
+          <div class="bar-track"><div class="bar-fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>
+          <span class="volume-row-count subtle small">${sets} set${sets === 1 ? "" : "s"}</span>
+        </li>`;
+    })
+    .join("");
+  el.innerHTML = `
+    <details class="panel checklist-panel"${volumePanelOpen ? " open" : ""}>
+      <summary class="link-btn" style="display:inline;">
+        <span class="tab-icon" style="vertical-align:middle;">${icon("bar-chart", { size: 16 })}</span>
+        Weekly volume by muscle
+      </summary>
+      <p class="subtle small" style="margin-top:10px;">Sets logged in the last 7 days per muscle group. Research (Schoenfeld, Ogborn &amp; Krieger, 2017) found hypertrophy keeps scaling with weekly volume roughly through ${VOLUME_TARGET_LOW}-${VOLUME_TARGET_HIGH} sets/muscle/week for a natural lifter, with diminishing returns past that — a guideline to aim near, not a hard rule.</p>
+      <ul class="volume-list">${rows}</ul>
+    </details>`;
+  const detailsEl = el.querySelector("details");
+  detailsEl.addEventListener("toggle", () => { volumePanelOpen = detailsEl.open; });
 }
 
 // ---------------------------------------------------------------------

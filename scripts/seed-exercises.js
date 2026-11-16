@@ -28,6 +28,53 @@ const COMPOUND_CATEGORIES = new Set(["Chest", "Back", "Legs", "Shoulders"]);
 // double progression, just measured in time instead of reps.
 const ISOMETRIC_RE = /\bplank\b|wall sit|hollow (body )?hold|\bl-?sit\b|dead ?hang|isometric|static hold|glute bridge hold|wall squat hold/i;
 
+// wger leaves `equipment` empty for a chunk of machine/cable exercises
+// (confirmed against the live catalog, not a parsing bug on our end — the
+// raw API response itself has no equipment tags for these). toEntry()
+// below falls back to ["Bodyweight"] whenever equipment comes back empty,
+// which is right for an actual bodyweight movement but wrong here: it
+// means these show up as always-available regardless of someone's actual
+// equipment (reported by a user whose home gym has no chest press machine,
+// but got suggested "Chest Press" anyway). Checked against the name so the
+// fallback becomes "Cable machine" — the closest EQUIPMENT_OPTIONS entry —
+// instead, for exactly the exercises this would otherwise mislabel.
+export const UNTAGGED_MACHINE_NAME_RE = /machine|cable|leg press|smith|pec deck|lat pulldown/i;
+
+// A second, hand-reviewed batch: exercises whose *name* doesn't say
+// "machine" (so UNTAGGED_MACHINE_NAME_RE above misses them — "Chest
+// Press," not "Chest Press Machine") but whose own wger description makes
+// clear they're only performable on a specific machine (seat height,
+// weight stack, named commercial machine lines like Hammerstrength/
+// Legend). Deliberately NOT a broader description-text regex — tried one
+// (matching on "seat"/"pad"/"machine" in the cue) and it false-positived on
+// genuinely bodyweight/TRX/plate exercises whose cue text happens to
+// mention a machine in passing (e.g. "Reverse Nordic Curl" explicitly says
+// "alternative to Leg Extension machine with no equipment," "Rack
+// Deadlift"/"Hack Squats" can be done on a free rack OR a machine, so
+// forcing either to Cable-machine-only would wrongly exclude a barbell-only
+// user). Checked each of these individually against its own wger
+// description before adding it here. Keyed by wger's own exercise id
+// (`raw.id` below), which is stable across re-seeds.
+export const KNOWN_UNTAGGED_MACHINE_IDS = new Set([
+  378, // Leg Raises, Standing — leg raise machine
+  1280, // Biceps Close Grip Pull Down — lat pull down machine
+  1737, // Assisted chin-ups — machine-assisted (counterweights)
+  1143, // Back extensión — seat/back pad adjustment, hyperextension machine
+  622, // Standing Calf Raises — calf raise machine
+  135, // Butterfly — pec deck/butterfly machine
+  137, // Butterfly Narrow Grip — same machine, narrow grip
+  129, // Chest Press — seated chest press machine (confirmed: cue mentions seat height/foot pedal)
+  1831, // Hammerstrength Decline Chest Press — named commercial machine
+  1918, // Legend Chest Press — named commercial machine, plate-loaded
+  1773, // Legend Incline Bench Press — Legend Fitness LeverEdge machine, despite the "Bench Press" name
+  1935, // Belt Squat — needs a belt squat machine/rig
+  369, // Leg Extension — leg extension machine
+  1521, // Pendular hack — pendulum hack machine
+  2620, // Reverse V-Squat — V-squat machine
+  12, // Seated Hip Adduction — hip adduction machine
+  1449 // ClimbMill — stair-climber cardio machine
+]);
+
 function stripHtml(html) {
   return (html || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -103,7 +150,9 @@ function toEntry(raw) {
     name,
     category,
     muscles: muscleNames,
-    equipment: equipmentNames.length ? equipmentNames : ["Bodyweight"],
+    equipment: equipmentNames.length
+      ? equipmentNames
+      : [UNTAGGED_MACHINE_NAME_RE.test(name) || KNOWN_UNTAGGED_MACHINE_IDS.has(raw.id) ? "Cable machine" : "Bodyweight"],
     image,
     cue,
     sets, lo, hi, inc, unit

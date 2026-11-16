@@ -1266,6 +1266,82 @@ gaps/questions worth answering in the app itself, not just in chat.
   above by toggling equipment in Goals mid-session and confirming the
   Fitness tab picked it up without a reload.
 
+### 3d. Fixed a real equipment-tagging bug (not hypothetical — Adrian hit it) + added weekly volume-per-muscle, the one research-backed metric nothing in the app surfaced (2026-11-16)
+
+Two separate asks in one message: "incorporate research-backed recommendations
+in the app" (following the sourced fitness-advice conversation — see the
+chat log context, not reproduced here), and "some exercises recommended I
+don't have the equipment even though I mentioned not having it (example
+being the chest press machine)."
+
+- **Root cause of the equipment bug**: `scripts/seed-exercises.js`'s
+  `toEntry()` fell back to `equipment: ["Bodyweight"]` whenever wger's raw
+  API response had an empty `equipment` array for that exercise — true for
+  a genuine bodyweight movement, wrong for the ~56 machine/cable exercises
+  wger just never tagged with equipment at all (confirmed against the live
+  catalog, not a parsing bug on our end). `"Bodyweight"`/`"none (bodyweight
+  exercise)"` are in `NO_EQUIPMENT_NEEDED` (`gym.js`), so these showed up as
+  always-available to everyone regardless of selected equipment — including
+  "Chest Press" (id 129), whose own wger description literally says "Adjust
+  the seat height... use your legs to push the foot pedal," clearly a
+  machine, with no "machine" in the *name* for a name-pattern check to catch.
+- **Fix, two layers**: `seed-exercises.js` now has `UNTAGGED_MACHINE_NAME_RE`
+  (name contains machine/cable/leg press/smith/pec deck/lat pulldown — 39
+  exercises) plus a hand-reviewed `KNOWN_UNTAGGED_MACHINE_IDS` set (17 more,
+  generically-named ones like "Chest Press," "Leg Extension," "Butterfly,"
+  checked individually against their own wger description before adding —
+  a broader description-text regex was tried and rejected, since it
+  false-positived on genuinely bodyweight/TRX exercises whose cue text
+  mentions a machine only to say "no equipment needed, unlike the machine
+  version," e.g. "Reverse Nordic Curl," and on dual-mode exercises like
+  "Rack Deadlift"/"Hack Squats" that can be done on *either* a machine or a
+  free rack+barbell, where forcing a machine-only tag would wrongly exclude
+  a barbell-only user). Both default an untagged exercise to `"Cable
+  machine"` — the closest `EQUIPMENT_OPTIONS` entry — instead of
+  `"Bodyweight"`. A new one-off migration script,
+  `scripts/fix-untagged-machine-equipment.js` (same pattern as
+  `reclassify-exercises.js`: re-applies the same rule to the *existing*
+  `exercises.json` in place, no live wger fetch), retagged 56 exercises
+  total. Same ids/names/images/cues/sets/rep-ranges — only `equipment`
+  changed for these 56 rows.
+- **New feature: weekly volume by muscle group** (Fitness tab, collapsible
+  panel above Cardio). The fitness-advice conversation surfaced several
+  research findings; most were already reflected in the app before this
+  (frequency — full body already trains everything 2-3x/week; rest periods
+  — `restFor()`; rep ranges by lift type — `classify()`'s 6 buckets;
+  protein — `nutrition.js`'s per-goal-type targets; progressive overload —
+  `targetFor()`). The one real gap: weekly training *volume* per muscle
+  wasn't computed or shown anywhere, despite being well-evidenced
+  (Schoenfeld, Ogborn & Krieger, 2017, *Journal of Sports Sciences* —
+  dose-response meta-analysis, hypertrophy scales with weekly sets per
+  muscle roughly through 10-20 sets/week for a natural lifter, smaller
+  returns past that). `renderWeeklyVolume()` (`app.js`) sums sets per
+  muscle group across `workoutLogs` for the trailing 7 days (`last7DateKeys()`,
+  same rolling-window convention the Dashboard's calorie chart already
+  uses), via a new `weeklySetsByMuscle()` that maps each logged exercise's
+  `muscles` (Latin names) back to gym.js's 11 friendly groups (newly
+  exported `MUSCLE_GROUPS`, reversed into a lookup built once at module
+  load). A set counts toward *every* muscle group the exercise actually
+  trains, not split evenly or counted toward just one "primary" muscle —
+  matching how the cited research itself counts volume (e.g. one logged
+  squat set counts as 1 set for quads *and* 1 set for glutes). Each row
+  shows a bar + set count against the 10-20 target range, with the citation
+  and the "guideline, not a hard rule" framing directly in the panel's own
+  copy — this is the one place in the app that cites a specific study by
+  name, since it's the one feature built directly from that conversation's
+  sourced research rather than already-existing logic.
+- Live-tested on a fresh account with Adrian's real equipment unchecked
+  (no Cable machine/SZ-Bar/Swiss Ball): confirmed "Chest Press" no longer
+  appears anywhere across Monday/Wednesday/Friday's rotated variants
+  (replaced by Clap Push-Up, Decline Bench Press Barbell, etc.), confirmed
+  "Shoulder Press, on Machine" and "Calf Press Using Leg Press Machine"
+  (both flagged but left unfixed in 3c) are now also correctly excluded.
+  Logged one real set of Barbell Full Squat and confirmed the volume panel
+  correctly counted it toward Quads, Hamstrings, *and* Glutes simultaneously
+  (that exercise's actual `muscles` tag covers all three) — confirms the
+  "count toward every matching muscle" logic, not just the slot's single
+  nominal target muscle.
+
 ---
 
 ## 4. Nutrition math (`nutrition.js`) — plain code, not AI
