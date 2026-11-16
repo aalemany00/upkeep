@@ -40,6 +40,7 @@
   coachLink.dataset.switchView = 'coach';
   room.append(speech, coachLink);
 
+  header.classList.add('pixel-dashboard-header');
   const layout = element('div', 'pixel-dashboard-layout');
   const overview = section('Daily Overview', 'pixel-overview', '▣');
   overview.append(header, stats);
