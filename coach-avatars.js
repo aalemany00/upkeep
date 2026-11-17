@@ -88,7 +88,7 @@ export const COACH_AVATARS = [
     title: "Movement & Progress",
     tagline: "A little progress every day adds up.",
     subtitle: "Find your pace and enjoy the work.",
-    badgeIcon: "bicep",
+    badgeIcon: "dumbbell",
     accent: "#b96658",
     face: "pixel-assets/cutouts/red-hoodie-coach-portrait.png",
     full: "pixel-assets/cutouts/red-hoodie-coach-atlas.png",
