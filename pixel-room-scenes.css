@@ -523,3 +523,55 @@
     animation:none!important;
   }
 }
+
+
+/* Coach animation alignment v3.
+   Exercise frames contain a DIFFERENT drawing with feet higher in its
+   native 251px cell. Move ONLY that artwork down by the exact difference
+   between the standing and exercise foot baselines. The floor-level
+   button never moves, so the character bends DOWN to squat instead of
+   lifting their legs off the floor.
+   Values were measured from the original transparent sprite frames. */
+#app .pixel-room-character[data-coach-id="atlas"] { --exercise-baseline:9.2%; }
+#app .pixel-room-character[data-coach-id="pixel"] { --exercise-baseline:10.4%; }
+#app .pixel-room-character[data-coach-id="mira"]  { --exercise-baseline:9.6%; }
+#app .pixel-room-character[data-coach-id="rex"]   { --exercise-baseline:18.3%; }
+#app .pixel-room-character[data-coach-id="luna"]  { --exercise-baseline:14.7%; }
+
+/* Animations use the real source frames. Previously a rotation was
+   applied during stretching AND walking, making characters spin.
+   Disable those legacy transforms but keep the independent facing
+   wrapper's horizontal mirror. */
+#app .pixel-room-character .pixel-room-facing > .pixel-coach-art {
+  animation:none !important;
+  transform:none !important;
+  transform-origin:50% 100%;
+}
+#app .pixel-room-character[data-pose="exercise"] .pixel-room-facing > .pixel-coach-art {
+  transform:translateY(var(--exercise-baseline, 9%)) !important;
+}
+#app .pixel-room-character.is-stretching .pixel-room-facing > .pixel-coach-art {
+  animation:none !important;
+}
+#app .pixel-room-character.is-walking .pixel-room-facing > .pixel-coach-art,
+#app .pixel-room-character.is-talking .pixel-room-facing > .pixel-coach-art {
+  animation:none !important;
+}
+/* Individual portraits are actual clean RGBA crops; show the whole
+   head and upper shoulders without the old 345%-width sprite zoom. */
+#app .sidebar-avatar-face img.pixel-coach-portrait,
+#app .topbar-avatar-face img.pixel-coach-portrait,
+#app .coach-avatar-sm img.pixel-coach-portrait {
+  position:static !important;
+  display:block;
+  width:100% !important;
+  height:100% !important;
+  max-width:none !important;
+  object-fit:cover;
+  object-position:center center;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  transform:none !important;
+  image-rendering:auto;
+}
