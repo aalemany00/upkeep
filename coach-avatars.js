@@ -1,13 +1,9 @@
-// Upkeep coach roster. These IDs are stored in users/{uid}/meta/goals,
-// so existing selections must keep their stable names.
-//
-// All eight characters are gym, movement, mindset or recovery coaches.
-// Full-body graphics and poses are created by pixel-coach-sprites.js,
-// and reused in the dashboard bedroom, Settings and Coach tab.
-// The historical PNG paths below are fallback assets only if JavaScript
-// sprite rendering is unavailable; standard views render matching SVG art.
-//
-// Pose names: idle, blink, walk1, walk2, exercise, talk.
+// Upkeep coach selection metadata. IDs are persisted in Firebase, so
+// existing choices remain stable. The displayed portraits, full-body
+// coaches and dashboard actor all use the SAME original raster artwork
+// from pixel-assets/coaches-original.png via pixel-coach-sprites.js.
+// Legacy avatars/*.png paths are fallback only, not the active design.
+// Animated movement is CSS applied to those original image pixels.
 
 export const COACH_AVATARS = [
   {
