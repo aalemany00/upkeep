@@ -56,7 +56,10 @@
   if(!art.roster.some(x=>x.id===id))id='atlas';
   const changed=id!==current;
   current=id;
-  actor.classList.toggle('pixel-room-poses',art.coreIds.includes(id));
+  const hasPoseArt=art.coreIds.includes(id);
+  actor.classList.toggle('pixel-room-poses',hasPoseArt);
+  actor.classList.toggle('pixel-room-still',!hasPoseArt);
+  actor.dataset.coachId=id;
   actor.innerHTML=art.markup(current,'pixel-room-art');
   actor.setAttribute('aria-label','Talk to '+coach().name+', your fitness coach');
   if(speech&&(changed||!speech.dataset.personalized)){speech.textContent=coach().tagline;speech.dataset.personalized='true'}
