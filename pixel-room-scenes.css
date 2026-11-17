@@ -328,3 +328,39 @@
     --coach-pose-y:0%!important;
   }
 }
+
+/* Full-size transparent originals for the three additional wellness coaches. */
+.pixel-coach-art[data-coach-format="hires-still"] {
+ background-size:100% 100%;
+ background-position:center;
+ aspect-ratio:var(--coach-ratio, 3 / 5);
+ image-rendering:auto;
+}
+#app .avatar-thumb .pixel-coach-full[data-coach-format="hires-still"] {
+ width:58%;
+ height:auto;
+ aspect-ratio:var(--coach-ratio, 3 / 5);
+}
+#view-coach .coach-hero-figure .pixel-coach-full[data-coach-format="hires-still"] {
+ width:55%;
+ height:auto;
+ aspect-ratio:var(--coach-ratio, 3 / 5);
+}
+#app .pixel-room-character.pixel-room-still {
+ width:min(10.5%,140px);
+ aspect-ratio:3 / 5;
+}
+#app .pixel-room-character.pixel-room-still[data-coach-id="nova"] { aspect-ratio:215 / 357; }
+#app .pixel-room-character.pixel-room-still[data-coach-id="sage"] { aspect-ratio:200 / 360; }
+#app .pixel-room-character.pixel-room-still[data-coach-id="pace"] { aspect-ratio:229 / 385; }
+#app .coach-avatar-sm .pixel-coach-face[data-coach-format="hires-still"],
+#app .sidebar-avatar-face .pixel-coach-face[data-coach-format="hires-still"],
+#app .topbar-avatar-face .pixel-coach-face[data-coach-format="hires-still"] {
+ width:230%;
+ height:auto;
+ aspect-ratio:var(--coach-ratio, 3 / 5);
+ top:-11%;
+}
+@media(max-width:760px) {
+ #app .pixel-room-character.pixel-room-still { width:min(23%,94px); }
+}
