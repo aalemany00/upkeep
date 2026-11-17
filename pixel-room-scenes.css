@@ -266,3 +266,65 @@
  #app .pixel-room-character .pixel-coach-art,
  #app .coach-hero-figure .pixel-coach-art {animation:none!important;}
 }
+
+/* Lossless source-art pose strips (primary five coaches). */
+.pixel-coach-art {
+  background-image:var(--coach-source, url("pixel-assets/coaches-original.png"));
+}
+/* Each coach has a single 251x1254 transparent WebP with five real
+   251px-high artwork frames. The background MUST be five times taller
+   than its square viewport. No vector reinterpretation or quality loss. */
+.pixel-coach-art[data-coach-format="poses"] {
+  aspect-ratio:1 / 1;
+  background-size:100% 500%;
+  background-position:0 var(--coach-pose-y, 0%);
+  image-rendering:auto;
+}
+.pixel-room-character[data-pose="idle"] .pixel-coach-art[data-coach-format="poses"] {--coach-pose-y:0%}
+.pixel-room-character[data-pose="walk1"] .pixel-coach-art[data-coach-format="poses"] {--coach-pose-y:25%}
+.pixel-room-character[data-pose="walk2"] .pixel-coach-art[data-coach-format="poses"] {--coach-pose-y:50%}
+.pixel-room-character[data-pose="exercise"] .pixel-coach-art[data-coach-format="poses"] {--coach-pose-y:75%}
+.pixel-room-character[data-pose="talk"] .pixel-coach-art[data-coach-format="poses"] {--coach-pose-y:100%}
+#view-coach .coach-hero-figure.is-talking .pixel-coach-art[data-coach-format="poses"] {--coach-pose-y:100%}
+/* Original pose art has a square cell while the earlier simplified
+   atlas used 80x110 cells. Keep native proportions for both. */
+#app .pixel-room-character.pixel-room-poses {
+  width:min(15.3%,190px);
+  aspect-ratio:1 / 1;
+}
+#app .avatar-thumb .pixel-coach-full[data-coach-format="poses"] {
+  width:100%;
+  max-width:108px;
+  aspect-ratio:1 / 1;
+}
+#app #settings-avatar-picker .avatar-thumb,
+#app #onboarding-avatar-picker .avatar-thumb {
+  width:min(100%,108px);
+  height:114px;
+}
+#view-coach .coach-hero-figure .pixel-coach-full[data-coach-format="poses"] {
+  width:min(100%,190px);
+  height:auto;
+  aspect-ratio:1 / 1;
+}
+/* The native face is near the top of each source frame, so crop a
+   generous head region of the SAME art file for compact badges. */
+#app .coach-avatar-sm .pixel-coach-face[data-coach-format="poses"],
+#app .sidebar-avatar-face .pixel-coach-face[data-coach-format="poses"],
+#app .topbar-avatar-face .pixel-coach-face[data-coach-format="poses"] {
+  width:345%;
+  height:auto;
+  aspect-ratio:1 / 1;
+  top:-12%;
+}
+@media (max-width:760px) {
+  #app .pixel-room-character.pixel-room-poses {
+    width:min(33%,120px);
+    aspect-ratio:1 / 1;
+  }
+}
+@media (prefers-reduced-motion:reduce) {
+  #app .pixel-room-character .pixel-coach-art[data-coach-format="poses"] {
+    --coach-pose-y:0%!important;
+  }
+}
