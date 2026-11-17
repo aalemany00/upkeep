@@ -306,19 +306,19 @@ function maybeRebuildStaleSplit() {
 // shown next to coach notes. Picking one is cosmetic only (see
 // coach-avatars.js); it never changes what the coach says.
 // ---------------------------------------------------------------------
-function pixelCoachUrl(avatar, pose = "idle", face = false) {
+function pixelCoachMarkup(avatar, face = false) {
   const art = window.UpkeepCoachSprites;
-  if (!art) return face ? avatar.face : (avatar.full || avatar.face);
-  const raw = art.svg(avatar.id, pose);
-  const scene = face ? raw.replace('viewBox="0 0 64 80"', 'viewBox="12 5 42 34"') : raw;
-  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(scene);
+  // Use the exact same original PNG sprite strip everywhere, with no
+  // hand-coded SVG substitutions. The fallback is only for blocked JS.
+  if (!art) return `<img src="${face ? avatar.face : avatar.full}" alt="${avatar.name}" />`;
+  return art.markup(avatar.id, face ? "pixel-coach-face" : "pixel-coach-full");
 }
 
 function renderAvatarPicker(container, selectedId, onPick) {
   if (!container) return;
   container.innerHTML = COACH_AVATARS.map((a) => `
     <button type="button" class="avatar-option${a.id === selectedId ? " selected" : ""}" data-avatar-id="${a.id}" title="${a.tagline}" aria-pressed="${a.id === selectedId}">
-      <span class="avatar-thumb"><img src="${pixelCoachUrl(a)}" alt="${a.name} full-body pixel-art coach" /></span>
+      <span class="avatar-thumb">${pixelCoachMarkup(a)}</span>
       <span class="avatar-name"><span class="avatar-badge-icon" style="color:${a.accent}">${icon(a.badgeIcon, { size: 13 })}</span>${a.name}</span>
       <span class="avatar-title subtle small">${a.title}</span>
     </button>
@@ -333,7 +333,7 @@ function renderAvatarPicker(container, selectedId, onPick) {
 // is reserved for the one hero panel at the top of the Coach tab.
 function renderCoachAvatarBadges() {
   const avatar = coachAvatarById(goals.coachAvatar);
-  const faceImg = `<img src="${pixelCoachUrl(avatar, "idle", true)}" alt="${avatar.name}" />`;
+  const faceImg = pixelCoachMarkup(avatar, true);
   const dashBadge = document.getElementById("dashboard-coach-avatar");
   const coachBadge = document.getElementById("coach-view-avatar");
   const sidebarAvatar = document.getElementById("sidebar-avatar");
@@ -363,7 +363,7 @@ function renderCoachHero() {
   const avatar = coachAvatarById(goals.coachAvatar);
   el.innerHTML = `
     <button type="button" class="coach-hero-figure" id="coach-hero-figure" aria-label="Get a note from ${avatar.name}">
-      <img src="${pixelCoachUrl(avatar)}" alt="${avatar.name}, ${avatar.title}" />
+      ${pixelCoachMarkup(avatar)}
     </button>
     <div class="coach-hero-text">
       <h3><span class="avatar-badge-icon" style="color:${avatar.accent}">${icon(avatar.badgeIcon, { size: 16 })}</span>${avatar.name} <span class="subtle">· ${avatar.title}</span></h3>
@@ -371,17 +371,15 @@ function renderCoachHero() {
       <p class="subtle small">${avatar.subtitle}</p>
     </div>
   `;
-  const heroImg = el.querySelector("#coach-hero-figure img");
-  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    let idleFrame = 0;
-    coachIdleTimer = setInterval(() => {
-      if (!heroImg.isConnected) { clearInterval(coachIdleTimer); return; }
-      idleFrame = (idleFrame + 1) % avatar.idle.length;
-      heroImg.src = pixelCoachUrl(avatar, idleFrame === 0 ? "idle" : "blink");
-    }, 2200);
-  }
-  document.getElementById("coach-hero-figure")?.addEventListener("click", () => {
-    triggerCoachTalk("coach-hero-figure", "coach-bubble-hero", pixelCoachUrl(avatar, "talk"), pixelCoachUrl(avatar));
+  // Animate this EXACT sprite with CSS, rather than swapping to an unrelated
+  // blocky SVG drawing. Same imagery as Dashboard and Settings.
+  const figure = el.querySelector("#coach-hero-figure");
+  figure?.addEventListener("click", () => {
+    triggerCoachTalk("coach-hero-figure", "coach-bubble-hero");
+    figure.classList.remove("is-talking");
+    void figure.offsetWidth;
+    figure.classList.add("is-talking");
+    setTimeout(() => figure.classList.remove("is-talking"), 1700);
   });
 }
 
