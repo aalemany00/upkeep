@@ -396,8 +396,8 @@
   top:13%;
   left:56%;
   width:37%;
-  height:29%;
-  font-size:clamp(10px,2.6vw,14px)!important;
+  height:32%;
+  font-size:clamp(11px,2.9vw,15px)!important;
   line-height:1.09;
  }
 }
