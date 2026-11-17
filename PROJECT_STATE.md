@@ -59,9 +59,10 @@ is the *current* layout, not the original one; 2h has the reasoning.)
 - **Food**: manual log (name/calories/protein) + a **diet suggestions**
   panel (curated 60-item catalog, `foods.json`: 15 each of breakfast/lunch/
   dinner/snack, varied across cuisines/diets, approximate macros) with
-  shuffle and one-tap logging (per-device only, localStorage, not synced) +
-  **Water** quick-add/manual logging (moved here from Log in 2h; also
-  logged from the Dashboard since 3f — see below, not an either/or move).
+  shuffle and one-tap logging (per-device only, localStorage, not synced).
+  Water lived here too in 2h, then also on the Dashboard since 3f, then
+  removed from here entirely in 3g once the Dashboard card covered the
+  same ground — see below.
 - **Fitness** (renamed from "Gym" in 2h): see section 3 for the gym program
   itself, it's the biggest piece. Also holds Cardio logging and the **Daily
   stretch** checklist (moved here from the Dashboard in 2h) — Activity
@@ -1487,6 +1488,20 @@ silently discarded every other glass logged that day.
   proving both entry points write to the same cumulative total without
   conflicting). Confirmed the Daily Habits row opens the Dashboard card
   directly rather than switching to Food.
+
+### 3g. Water's Food-tab form removed — Dashboard is now the only place to log it (2026-11-16)
+
+3f deliberately kept both (Adrian's phrasing then was "add... as well," not
+"instead of"). Once the Dashboard card existed and covered the exact same
+ground — quick-add chips, manual amount, same `addEntry("water", ...)` — he
+asked to drop the Food-tab copy, since there was no longer a reason to
+maintain the same control in two places. Removed `#form-water` from
+`index.html`'s Food section entirely. No `app.js` changes needed: nothing
+looked it up by that id specifically, and the generic `.log-form`/
+`[data-quick-ml]` wiring (set up once at script load, same pattern noted
+in 2i) just finds nothing there now — harmless, not worth deleting those
+generic selectors just because one of the elements they used to match is
+gone. The Dashboard's Water card (3f) is the sole place to log water now.
 
 ---
 
