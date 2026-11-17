@@ -40,7 +40,15 @@
   const choice = () => art.roster.find(item => item.id === selected) || art.roster[0];
   const waypoints = () => mobile.matches ? [21, 30, 43, 54, 65] : [30, 37, 46, 53, 61, 67];
   const isVisible = () => !document.hidden && room.isConnected && room.getClientRects().length > 0;
-  const setPose = name => { actor.dataset.pose = name; };
+  // Every pose is an ORIGINAL frame from the user's 4x4 PNG atlas.
+  // No CSS scaling/rotation is used to fake squats, walking or stretching.
+  const sprite = () => actor.querySelector('.pixel-room-art');
+  const poseFrame = (action, index = 0) => {
+    actor.dataset.pose = action;
+    const frames = art.frameSequence(selected || 'atlas', action);
+    art.setFrame(sprite(), frames[index % frames.length]);
+  };
+  const setPose = name => poseFrame(name === 'walk1' || name === 'walk2' ? 'walk' : name);
   const schedule = (callback, delay) => {
     const token = motionEpoch;
     const t = setTimeout(() => {
@@ -97,8 +105,8 @@
     actor.classList.add('is-walking');
     isWalking = true;
     let phase = 0;
-    setPose('walk1');
-    poseTimer = setInterval(() => setPose(++phase % 2 ? 'walk2' : 'walk1'), 210);
+    poseFrame('walk', phase);
+    poseTimer = setInterval(() => poseFrame('walk', ++phase), 190);
     // Force one layout read so removing the frozen class starts a real
     // CSS transition even immediately after previous animations.
     void actor.offsetWidth;
@@ -123,10 +131,10 @@
     actor.classList.add(stretching ? 'is-stretching' : 'is-exercising');
     previousActivity = kind;
     let n = 0;
-    setPose('exercise');
-    // Only swap the original artwork frames. No downward translate or
-    // vertical scaling: the soles stay anchored to the room floor.
-    poseTimer = setInterval(() => setPose(++n % 2 ? 'idle' : 'exercise'), stretching ? 900 : 700);
+    const action = stretching ? 'stretch' : 'exercise';
+    poseFrame(action, n);
+    // Play the actual distinct frames for THIS coach's movement.
+    poseTimer = setInterval(() => poseFrame(action, ++n), stretching ? 430 : 310);
     schedule(() => {
       clearInterval(poseTimer);
       poseTimer = null;
@@ -147,8 +155,11 @@
       doActivity('stretch');
     } else {
       previousActivity = 'idle';
-      setPose('idle');
-      schedule(nextActivity, randomBetween(650, 1800));
+      let phase = 0;
+      poseFrame('idle', 0);
+      clearInterval(poseTimer);
+      poseTimer = setInterval(() => poseFrame('idle', ++phase), 390);
+      schedule(() => { clearInterval(poseTimer); poseTimer = null; nextActivity(); }, randomBetween(850, 1900));
     }
   }
   function startAutonomous(delay = 350) {
@@ -170,6 +181,8 @@
     actor.classList.toggle('pixel-room-poses', hasFrames);
     actor.classList.toggle('pixel-room-still', !hasFrames);
     actor.dataset.coachId = id;
+    const dimensions = art.dimensions?.[id];
+    if (dimensions) actor.style.aspectRatio = dimensions[0] + ' / ' + dimensions[1];
     // Keep the left/right facing transform on a separate wrapper so it
     // cannot be overridden by the sprite's walk, talk or stretch animation.
     actor.innerHTML = '<span class="pixel-room-facing">' +
@@ -209,10 +222,10 @@
       speech.classList.add('show');
       positionSpeech();
     }
-    setPose('talk');
+    poseFrame('talk', 0);
     if (!reduce.matches) {
       let frame = 0;
-      poseTimer = setInterval(() => setPose(++frame % 2 ? 'idle' : 'talk'), 230);
+      poseTimer = setInterval(() => poseFrame('talk', ++frame), 250);
     }
     schedule(() => {
       clearInterval(poseTimer);
