@@ -363,11 +363,14 @@ function renderCoachAvatarBadges() {
 // CSS sway/wobble (style.css) still runs on the container underneath this,
 // so the two layer together rather than replacing each other.
 let coachIdleTimer = null;
+let coachHeroReactTimer = null;
 function renderCoachHero() {
   const el = document.getElementById("coach-hero");
   if (!el) return;
   clearInterval(coachIdleTimer);
+  clearInterval(coachHeroReactTimer);
   const avatar = coachAvatarById(goals.coachAvatar);
+  const art = window.UpkeepCoachSprites;
   el.innerHTML = `
     <button type="button" class="coach-hero-figure" id="coach-hero-figure" aria-label="Get a note from ${avatar.name}">
       ${pixelCoachMarkup(avatar)}
@@ -378,15 +381,40 @@ function renderCoachHero() {
       <p class="subtle small">${avatar.subtitle}</p>
     </div>
   `;
-  // Animate this EXACT sprite with CSS, rather than swapping to an unrelated
-  // blocky SVG drawing. Same imagery as Dashboard and Settings.
   const figure = el.querySelector("#coach-hero-figure");
+  const sprite = figure?.querySelector(".pixel-coach-art");
+  if (sprite && art) {
+    let idleIndex = 0;
+    const idleFrames = art.frameSequence(avatar.id, "idle");
+    art.setFrame(sprite, idleFrames[0]);
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      coachIdleTimer = setInterval(() => {
+        if (!sprite.isConnected) { clearInterval(coachIdleTimer); return; }
+        art.setFrame(sprite, idleFrames[++idleIndex % idleFrames.length]);
+      }, 700);
+    }
+  }
   figure?.addEventListener("click", () => {
     triggerCoachTalk("coach-hero-figure", "coach-bubble-hero");
-    figure.classList.remove("is-talking");
-    void figure.offsetWidth;
+    if (!sprite || !art) return;
+    clearInterval(coachIdleTimer);
+    clearInterval(coachHeroReactTimer);
+    const talkFrames = art.frameSequence(avatar.id, "talk");
+    let step = 0;
     figure.classList.add("is-talking");
-    setTimeout(() => figure.classList.remove("is-talking"), 1700);
+    art.setFrame(sprite, talkFrames[0]);
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      coachHeroReactTimer = setInterval(() => {
+        if (!sprite.isConnected) { clearInterval(coachHeroReactTimer); return; }
+        art.setFrame(sprite, talkFrames[++step % talkFrames.length]);
+      }, 280);
+    }
+    setTimeout(() => {
+      if (!figure.isConnected) return;
+      clearInterval(coachHeroReactTimer);
+      figure.classList.remove("is-talking");
+      if (sprite.isConnected) art.setFrame(sprite, art.frameSequence(avatar.id,"idle")[0]);
+    }, 1700);
   });
 }
 
