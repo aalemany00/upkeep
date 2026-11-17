@@ -1,19 +1,13 @@
-// Coach characters — eight fitness and wellness personalities, each
-// cropped from an AI-generated sprite pack Adrian supplied. Pure data, no
-// DOM/Firebase — same boundary as gym.js/nutrition.js/calendar.js.
+// Upkeep coach roster. These IDs are stored in users/{uid}/meta/goals,
+// so existing selections must keep their stable names.
 //
-// `face`/`full` are the static poses (avatar picker thumbnail, and the
-// first frame the Coach hero paints before animation kicks in). `idle`
-// is a 2-frame full-body loop (same pose, blink/alt-idle variant) the
-// Coach hero cycles through continuously; `react` is a third full-body
-// celebratory frame swapped in briefly when the coach is clicked — a
-// thumbs-up for Atlas/Pixel, an arms-up cheer for Mira/Rex/Luna (their
-// pack's own thumbs-up pose had a source-art defect — a disconnected
-// hand/arm for Luna, a paw clipped by the sprite sheet's own cell edge
-// for Rex — so the cheer pose was used instead; same crop pipeline, just
-// a different source frame). Actual cycling/swapping is plain JS + CSS
-// (see app.js/style.css); this module only describes who each coach is
-// and where their art lives.
+// All eight characters are gym, movement, mindset or recovery coaches.
+// Full-body graphics and poses are created by pixel-coach-sprites.js,
+// and reused in the dashboard bedroom, Settings and Coach tab.
+// The historical PNG paths below are fallback assets only if JavaScript
+// sprite rendering is unavailable; standard views render matching SVG art.
+//
+// Pose names: idle, blink, walk1, walk2, exercise, talk.
 
 export const COACH_AVATARS = [
   {
