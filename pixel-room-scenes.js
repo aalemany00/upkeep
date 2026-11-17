@@ -68,7 +68,12 @@
  }
  function talk(text){
   clearRoutine();talking=true;
-  if(speech)speech.textContent=String(text||coach().tagline).slice(0,180);
+  // Keep room dialogue readable on small phones. The complete text is
+  // still available in the normal Coach tab and its larger speech bubble.
+  const raw=String(text||coach().tagline).trim();
+  if(speech)speech.textContent=raw.length>75
+    ?raw.slice(0,72).replace(/\\s+\\S*$/,'')+'…'
+    :raw;
   actor.classList.add('is-talking');
   let n=0;setPose('talk');
   loopTimer=setInterval(()=>setPose(++n%2?'talk':'idle'),170);
