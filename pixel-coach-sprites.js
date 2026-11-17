@@ -11,22 +11,27 @@
  {id:'pace',name:'Pace',title:'The Movement Coach',tagline:'Consistency is built in small moves.',subtitle:'Find what keeps you moving.',badgeIcon:'bicep',accent:'#b98332',primary:'#e5ba58',dark:'#8b6b39',skin:'#a57556',hair:'#41342a',light:'#e9e0c9',kind:'cardio'}
  ];
 
- // Use the actual hand-rendered pixel characters in the repository.
- // The source is an eight-cell TRANSPARENT raster strip, 80x110 each.
- // It is not recreated with SVG rects. CSS displays a single cell with
- // image-rendering:pixelated, preserving every pixel of the supplied art.
+ // Five primary coaches use original, lossless 5-pose raster strips:
+ // idle / walk1 / walk2 / exercise / talk, 251x1254 pixels each.
+ // Three additional fitness/wellness choices retain original still art.
+ // NOTHING is redrawn as large vector rectangles.
  const SOURCE='pixel-assets/coaches-original.png';
+ const CORE_IDS=new Set(['atlas','pixel','mira','rex','luna']);
  function coach(id){return ROSTER.find(x=>x.id===id)||ROSTER[0]}
  function markup(id,extraClass=''){
    const who=coach(id);
    const idx=ROSTER.findIndex(x=>x.id===who.id);
-   // With background-size:800% 100%, positions at idx/7*100%
-   // align exact 80px source cells independent of displayed dimensions.
-   const position=(idx/7*100).toFixed(6)+'%';
+   const animated=CORE_IDS.has(who.id);
+   const format=animated?'poses':'atlas';
+   const source=animated?'pixel-assets/'+who.id+'-poses.webp':SOURCE;
+   // The still-image strip has eight cells; the primary sprites are
+   // single columns containing five actual frames, top to bottom.
+   const position=animated?'0%':(idx/7*100).toFixed(6)+'%';
+   const style='--coach-source:url('+source+');--coach-sprite-x:'+position;
    return '<span class="pixel-coach-art '+extraClass+
+      '" data-coach-format="'+format+
       '" data-coach-art="'+who.id+'" role="img" aria-label="'+
-      who.name+' pixel-art coach" style="--coach-sprite-x:'+position+
-      '"></span>';
+      who.name+' pixel-art coach" style="'+style+'"></span>';
  }
- window.UpkeepCoachSprites=Object.freeze({roster:ROSTER,markup,coach,source:SOURCE});
+ window.UpkeepCoachSprites=Object.freeze({roster:ROSTER,markup,coach,source:SOURCE,coreIds:[...CORE_IDS]});
 })();
