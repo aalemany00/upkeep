@@ -268,6 +268,136 @@ own repo, as required.
   tried a few automated fixes, one of them visibly broke the crop, so I had
   Claude revert and leave it for later rather than risk the art.
 
+## 2026-11-16 — Mobile audit, Dashboard quick-add moves, pixel-art theme merged, Food tab cleanup
+
+- Asked for a mobile-view pass. Fixed a sticky-hover CSS bug, a cramped
+  Fitness header, a clipped placeholder, and leftover "Gym tab" copy that
+  never got updated when that tab was renamed.
+- Asked to move Steps from the Fitness tab's Activity form onto its own
+  tap-to-edit card on the Dashboard, matching how Water/Sleep/Weight
+  already worked there. Then asked for the same treatment for Water
+  specifically ("as well" — so it's a Dashboard quick-add card *alongside*
+  the Food tab's existing water form, not a replacement at that point).
+- Had ChatGPT build a full pixel-art visual redesign on its own branch
+  (cozy bedroom theme, warm/forest palettes, a pixel coach standing in a
+  bedroom scene). Asked Claude to review it, decide whether it was worth
+  merging, fix anything real, then merge.
+  - Found one real issue before merging: Pixelify Sans's digits (5
+    especially) were genuinely hard to tell apart from 8/S — got "5000
+    steps" misread as "8000" multiple times during testing. Fixed by
+    making the legible system font the default everywhere a number can
+    appear, keeping Pixelify Sans only for decorative headings/nav.
+  - Verified sign-up, onboarding, every stat card's edit form, every tab,
+    light/dark mode, and mobile with a throwaway account before merging.
+    Merged clean (fast-forward, no conflicts).
+- Once Water had its own Dashboard card, asked to remove the now-redundant
+  water form from the Food tab — Dashboard is the only place to log it now.
+
+## 2026-11-16 — Reviewed the animated-coaches branch (not merged yet)
+
+- Asked Claude to check out a second ChatGPT branch adding 3 new coach
+  personalities (8 total) and replacing the static pixel-art coach with a
+  live animated character (walks, exercises, talks) inside the bedroom
+  scene from the theme merge above.
+- Reviewed the code (no unsafe patterns) and tested it live: onboarding
+  picker, Dashboard room animation + talk interaction, Settings
+  coach-switching, Coach tab hero, mobile viewport, dark mode — all
+  working, one pre-existing benign console-noise pattern investigated and
+  ruled out as unrelated.
+- Decision: told Claude not yet to merge. Sitting on its own branch for
+  now, reviewed and ready whenever I say go.
+
+## 2026-11-17 — Mobile overflow bugs: took two tries to actually fix
+
+- Reported two spots where a box ran past its panel's right edge on
+  mobile: the Dashboard's Sleep edit card, and the date picker at the top
+  of the Food tab.
+- First fix (didn't actually work): Claude traced the Food/Log date
+  input's overflow to a real CSS bug (a `width:100%` date input inside a
+  plain inline `<label>`, resolving its percentage width against the
+  whole panel instead of the label) and fixed that, plus made the Sleep
+  card expand to full width while its edit form is open. Verified in the
+  dev browser — looked right there.
+- I sent screenshots from my actual iPhone right after that shipped: the
+  Food date row was still broken, and the Calendar event form's
+  Starts/Ends row (never even touched by the first fix) was too. Told
+  Claude which device this was on, which turned out to matter.
+- Real fix: iOS Safari's native date/time picker controls have their own
+  minimum rendering width that just doesn't shrink to fit a CSS box the
+  way the dev browser's did — no amount of `min-width`/flex tweaking
+  changes that. The actual fix was to stop asking a date/time field to
+  share a row with anything else: the Food/Log date row and both Calendar
+  rows (Starts/Ends, Start time/End time) now stack into full-width rows
+  on mobile instead of trying to resize. Checked on the live site and
+  localhost this time, not just the dev pane.
+- Still need to confirm the second fix looks right on my actual phone
+  once GitHub Pages redeploys — that's on me to check.
+
+## 2026-11-17 — Session gap: found a duplicate project folder + a stray credential, fixed the Sleep card sizing
+
+- New Claude session, no memory of the ~70 commits of work done since the
+  last one (sleep tracking, the everything-calendar, a full pixel-art
+  redesign, GitHub Actions automation, USDA food API, and more). Caught up
+  by reading `LOG.md`/`PROJECT_STATE.md`, but those were in a stale local
+  clone — a second, abandoned `artifact-3/` folder sitting next to the
+  real `upkeep/` one, both pointing at the same GitHub repo but the local
+  one many commits behind. Pulled it up to date, confirmed `upkeep/` is
+  the one `.claude/launch.json` actually serves, and stopped touching
+  `artifact-3/` (reverted one stray edit I'd made there before noticing).
+  Worth deleting that folder at some point to stop this happening again.
+- Also noticed a loose Firebase service account key
+  (`health-coach-36a28-firebase-adminsdk-fbsvc-7d380ac963.json`) sitting
+  in the shared `TCSS_490_Artifacts` root, outside any repo/gitignore
+  protection. Not committed anywhere, but worth moving into
+  `upkeep/scripts/` (where it's actually gitignored) or deleting if it's a
+  leftover duplicate of the one already in place.
+- Reported two mobile issues: the Food/Log date box still overflowing
+  despite the 2l fix, and specifically asked that the Sleep edit card go
+  back to its original half-width size instead of expanding (2k's fix) —
+  "I liked it better when the box stayed the same size and you just put
+  in the time."
+- **Sleep**: removed the `grid-column:span 2`-on-edit override in
+  `pixel-theme.css`. The two time fields already stack vertically inside
+  `.stat-card-edit-form`, so the card didn't actually need the extra room —
+  verified at 375px width, no page overflow, card stays half-width.
+- **Food date box**: re-checked the actual deployed code (not just the
+  local dev pane) — the 2l stacking fix for `.log-date-row` genuinely is
+  live on GitHub Pages, and `sw.js` is network-first, not cache-first, so
+  a stale PWA cache shouldn't be the explanation either. Couldn't find a
+  code-level reason it would still be broken. Given this project's own
+  established lesson about dev-pane vs. real-iPhone-Safari rendering,
+  didn't want to guess a third time — asked for a fresh screenshot from
+  the actual phone instead of changing code with no new evidence.
+- Bumped `sw.js`'s `CACHE_NAME` (v3→v4) as cheap insurance alongside the
+  Sleep fix, even though the network-first fetch handler shouldn't need it.
+
+## 2026-11-17 — Food tab: date row replaced with a Dashboard-style header
+
+- Asked to drop the plain "Logging for" date-input row at the top of the
+  Food tab (the thing the overflow fix above never fully resolved on real
+  phones) and replace it with a header like the Dashboard's — a day label,
+  prev/next arrows, a "jump to today" link when not on today, and the full
+  date on the right — placed at the top of the Diet suggestions panel
+  instead of its own separate row.
+- Removed `#food-log-date`/`#food-log-date-today` from `index.html`
+  entirely; the Log tab keeps its own separate date row (`#log-log-date`),
+  unaffected.
+- Added `renderFoodDateHeader()` (`app.js`), mirroring
+  `renderDashboardHeader()`: "Today"/weekday+date heading, "Logging for
+  today" vs. a "Jump to today" link, full date on the right. Wired to the
+  same `selectedDateKey` the Dashboard/Gym/Log tabs already share, via the
+  existing `gymJumpDay`/`gymJumpToDate` functions — no new date-state
+  logic, just a new view of the same state. Called from `renderDashboard()`
+  (so every existing date-navigation path already refreshes it for free)
+  and from `setSelectedDate()` (the Log tab's picker and the calendar).
+- Verified at 375px width via the dev pane: no horizontal overflow
+  (`scrollWidth === innerWidth`), all header elements measured well within
+  the viewport via `getBoundingClientRect`, and prev/today navigation both
+  update the heading/subtitle correctly. This sidesteps the native
+  `<input type="date">` entirely — it was that control's own intrinsic
+  mobile-Safari width that the 2l/2m fixes couldn't pin down — so there's
+  nothing left for iOS Safari to render differently.
+
 ## Open items
 
 - Delete the `test-coach@example.com` test account and its food entry from
@@ -294,3 +424,10 @@ own repo, as required.
   wanted. I wanted pure convenience (tracking health stuff is already a
   hassle); the fix was one shared, free mechanism (the coach script loops
   over every signed-up user) instead of pushing setup or cost onto them.
+- The first mobile date/time overflow fix (2026-11-17) got called "fixed,
+  verified" after only checking it in Claude's own dev browser pane —
+  which, it turned out, doesn't reproduce how iOS Safari actually renders
+  native date/time pickers. It took me sending real phone screenshots for
+  Claude to realize the dev-pane check wasn't good enough and find the
+  real cause. Lesson for next time: "verified" on a mobile CSS fix should
+  mean an actual phone, not just a resized browser window.

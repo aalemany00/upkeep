@@ -19,6 +19,18 @@ means: clone the repo, read this file + `CLAUDE.md`, and everything else
 needed (service account key aside — see Secrets below) is either in the repo
 or in this document.
 
+**⚠️ Working directory trap (hit 2026-11-17):** the real, actively-used
+clone of this repo is `TCSS_490_Artifacts/upkeep/` — NOT
+`TCSS_490_Artifacts/artifact-3/`. An old `artifact-3/` clone of the exact
+same GitHub repo still exists alongside it, many commits behind, and is
+easy to start editing by habit/old memory (this project started life as
+"artifact-3" before the `upkeep/` folder existed). **Before editing
+anything, confirm which folder `.claude/launch.json`'s `"upkeep"` server
+config actually points at** (`runtimeArgs` second element) — that's the
+real one. Any edit made in the wrong folder silently does nothing (wrong
+files get served, `git push` fails to reflect it, hours can be lost before
+noticing). `artifact-3/` should probably just be deleted at some point.
+
 ---
 
 ## 1. What this is
@@ -933,6 +945,102 @@ three happened in this session.
 - Merged via fast-forward (`git merge --ff-only`) straight onto `master`
   and pushed — no merge commit, no divergent history, since the rebase
   already put the branch directly on top of master's tip.
+
+### 2k. Two mobile overflow bugs: the Dashboard Sleep edit card and the Food/Log date picker (2026-11-17)
+
+Adrian reported on his phone (not reproducible pixel-for-pixel in the dev
+browser pane, but confirmed by measuring actual element bounding boxes via
+JS rather than trusting screenshots) that two boxes ran past their
+background panel's right edge on mobile.
+
+- **Food/Log "Logging for" date row** — the real bug, confirmed directly:
+  `<input type="date" style="width:100%">` sits inside a plain `<label>`
+  with no `display` override, so it's inline — and an inline element
+  doesn't establish a containing block for its child's percentage width.
+  The 100% resolved against the whole `.panel` instead of the label, so
+  the date input tried to fill the panel while sitting next to the
+  "Today" button, landing right at (and on narrower renders, past) the
+  panel's edge. Fix: wrapped both instances (`index.html`, Food and Log
+  tabs) in a new `.log-date-row` flex container; the label is now a flex
+  column (same pattern `.stat-card-edit-form label.small` already used
+  elsewhere) with `flex: 1 1 160px; min-width: 0`, so the 100% now
+  resolves against the label's own box. Verified via `getBoundingClientRect`
+  at 375px width: input and "Today" button both sit cleanly inside the
+  panel with room to spare, on both tabs.
+- **Dashboard Sleep edit card** — couldn't reproduce actual overflow in
+  this Chromium test pane (the two `<input type="time">` fields measured
+  as fitting their 140px-wide half-card exactly), but the underlying risk
+  is real: Water/Sleep are squeezed into half the mobile grid width
+  normally, and the edit form (two time inputs + Save/Cancel) has very
+  little room there — native time-picker controls render wider on real
+  phones (locale-dependent AM/PM formatting, Safari's own minimum width)
+  than this pane's. Fix, in `pixel-theme.css`'s mobile breakpoint: added
+  `.pixel-water:has(.stat-card-edit-form),.pixel-sleep:has(.stat-card-edit-form)
+  {grid-column:span 2}` so either card expands to the full row the moment
+  its edit form is open, rather than trying to fit two time pickers into
+  half a phone screen. Verified live: clicking the Sleep card's edit
+  button flips its grid column from `span 1` to `span 2` and the form
+  measures well within the now-full-width frame.
+- Both fixes checked at mobile (375px) and desktop (1024px) — no
+  regressions, same console-error baseline (pre-existing, unrelated
+  Firestore reconnection noise) before and after.
+
+### 2l. 2k's fix wasn't enough — real iPhone Safari screenshots showed it was still broken, plus a third spot (2026-11-17)
+
+Adrian sent screenshots from his actual iPhone (Safari) right after 2k
+shipped: the Food date row still showed "Today" overlapping the date
+box, and the Calendar event form's Starts/Ends row was broken too — a
+spot 2k never touched. None of this reproduced in the dev browser pane
+(same as 2k), confirmed by asking Adrian directly which device/browser.
+
+- **Root cause, now actually identified**: iOS Safari's native
+  `<input type="date">`/`<input type="time">` controls have their own
+  minimum rendering width that doesn't shrink to fit a CSS box the way
+  Chromium's does in this dev pane — `min-width: 0` (2k's fix) only
+  changes the flex *layout math*, it can't make the native control's own
+  paint stay inside a box smaller than its real minimum. Any row that
+  asks a date/time input to share horizontal space with something else
+  (a button, a second date input) is at risk on an actual iPhone,
+  independent of how much room the numbers say it should have.
+- **The actual fix: stop sharing rows, not resize them.** In `style.css`'s
+  mobile breakpoint (`@media (max-width: 760px)`):
+  - `.log-date-row { flex-direction: column; align-items: stretch; }` —
+    the date input and "Today" button now stack, each full-width, instead
+    of sitting side by side.
+  - `.row:has(> label.grow input[type="date"]), .row:has(> label.grow
+    input[type="time"]) { flex-direction: column; }` — catches the
+    Calendar event form's Starts/Ends row and its Start time/End time row
+    (both `app.js`'s `eventFormHtml()`, lines ~1547 and ~1556) without
+    touching any other `.row` usage elsewhere (checked: no other `.row` in
+    the codebase pairs a date/time input with another field).
+  - Sleep's card from 2k wasn't touched again — its edit form is already
+    full-card-width there, comfortably inside typical native-control
+    widths, and Adrian's third screenshot didn't flag it as still broken.
+- **Verified by direct measurement** (`getBoundingClientRect`, not
+  screenshots — this pane's own narrow-crop rendering quirk makes
+  screenshots unreliable for this kind of check) on both `localhost` and
+  the live `aalemany00.github.io/upkeep` deploy at 375px: all three spots
+  now stack into full-width rows with no shared horizontal space, and at
+  1024px desktop they're confirmed still side-by-side (`flex-direction:
+  row`) — no regression.
+- Used two throwaway accounts this round — one local, one on the live
+  site (to rule out a stale-cache explanation before concluding it was a
+  real rendering gap) — both deleted via the in-app flow before finishing.
+
+**2026-11-17 update — the Food tab's date row doesn't exist anymore.**
+Despite the above, Adrian kept seeing the Food date box run off the right
+edge on his actual phone. Rather than chase the native `<input
+type="date">` control's iOS-Safari rendering quirk a fourth time, removed
+it from the Food tab entirely: `#food-log-date`/`#food-log-date-today` are
+gone from `index.html`, replaced by a Dashboard-style day-nav header
+(`renderFoodDateHeader()` in `app.js` — day label, prev/next arrows,
+"jump to today" link, date on the right) at the top of the Diet
+suggestions panel, driven by the same `selectedDateKey` via
+`gymJumpDay`/`gymJumpToDate`. No native date input left on that tab, so
+there's nothing left for iOS Safari to size differently than the dev
+pane. The **Log tab still has its own separate `#log-log-date` date-input
+row** (untouched, same `.log-date-row` styling/mobile-stacking fix
+described above still applies there).
 
 ---
 
