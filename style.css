@@ -417,6 +417,14 @@ textarea { font-family: inherit; resize: vertical; }
 .stat-card-edit-form { display: flex; flex-direction: column; gap: 8px; }
 .stat-card-edit-form label.small { display: flex; flex-direction: column; gap: 4px; font-size: 0.85em; color: var(--subtle); }
 
+/* Food/Log "Logging for" date row. The date input is declared width:100%;
+   without this, its inline <label> doesn't establish a containing block,
+   so the 100% resolves against the whole panel instead of the label and
+   the input can run past the panel's edge next to the Today button. */
+.log-date-row { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 10px 16px; }
+.log-date-row label.small { display: flex; flex-direction: column; gap: 4px; flex: 1 1 160px; min-width: 0; }
+.log-date-row label.small input[type="date"] { min-width: 0; }
+
 /* Two-column Dashboard grid (chart+workout/habits, meals+coach) */
 .dash-grid-2col {
   display: grid;

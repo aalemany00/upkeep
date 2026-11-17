@@ -934,6 +934,45 @@ three happened in this session.
   and pushed — no merge commit, no divergent history, since the rebase
   already put the branch directly on top of master's tip.
 
+### 2k. Two mobile overflow bugs: the Dashboard Sleep edit card and the Food/Log date picker (2026-11-17)
+
+Adrian reported on his phone (not reproducible pixel-for-pixel in the dev
+browser pane, but confirmed by measuring actual element bounding boxes via
+JS rather than trusting screenshots) that two boxes ran past their
+background panel's right edge on mobile.
+
+- **Food/Log "Logging for" date row** — the real bug, confirmed directly:
+  `<input type="date" style="width:100%">` sits inside a plain `<label>`
+  with no `display` override, so it's inline — and an inline element
+  doesn't establish a containing block for its child's percentage width.
+  The 100% resolved against the whole `.panel` instead of the label, so
+  the date input tried to fill the panel while sitting next to the
+  "Today" button, landing right at (and on narrower renders, past) the
+  panel's edge. Fix: wrapped both instances (`index.html`, Food and Log
+  tabs) in a new `.log-date-row` flex container; the label is now a flex
+  column (same pattern `.stat-card-edit-form label.small` already used
+  elsewhere) with `flex: 1 1 160px; min-width: 0`, so the 100% now
+  resolves against the label's own box. Verified via `getBoundingClientRect`
+  at 375px width: input and "Today" button both sit cleanly inside the
+  panel with room to spare, on both tabs.
+- **Dashboard Sleep edit card** — couldn't reproduce actual overflow in
+  this Chromium test pane (the two `<input type="time">` fields measured
+  as fitting their 140px-wide half-card exactly), but the underlying risk
+  is real: Water/Sleep are squeezed into half the mobile grid width
+  normally, and the edit form (two time inputs + Save/Cancel) has very
+  little room there — native time-picker controls render wider on real
+  phones (locale-dependent AM/PM formatting, Safari's own minimum width)
+  than this pane's. Fix, in `pixel-theme.css`'s mobile breakpoint: added
+  `.pixel-water:has(.stat-card-edit-form),.pixel-sleep:has(.stat-card-edit-form)
+  {grid-column:span 2}` so either card expands to the full row the moment
+  its edit form is open, rather than trying to fit two time pickers into
+  half a phone screen. Verified live: clicking the Sleep card's edit
+  button flips its grid column from `span 1` to `span 2` and the form
+  measures well within the now-full-width frame.
+- Both fixes checked at mobile (375px) and desktop (1024px) — no
+  regressions, same console-error baseline (pre-existing, unrelated
+  Firestore reconnection noise) before and after.
+
 ---
 
 ## 3. The gym system (the most complex part)

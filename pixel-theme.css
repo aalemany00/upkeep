@@ -184,6 +184,9 @@ h1,#app .sidebar-title,#app .sidebar-nav .tab,#app .topbar-brand,#app .bottom-na
  .pixel-overview,.pixel-nutrition,.pixel-workout,.pixel-habits,.pixel-week,.pixel-meals,.pixel-coach-notes,.pixel-vitamins{grid-column:span 2}
  .pixel-water,.pixel-sleep{grid-column:span 1}
  .pixel-weight{grid-column:span 2}
+ /* The edit form (two time/number inputs plus Save/Cancel) doesn't fit the
+    half-width card it normally lives in — give it the full row instead. */
+ .pixel-water:has(.stat-card-edit-form),.pixel-sleep:has(.stat-card-edit-form){grid-column:span 2}
  #app .pixel-overview #dashboard-stats > .stat-card{grid-template-columns:28px minmax(62px,1fr) minmax(116px,1.4fr) minmax(42px,1.4fr);gap:5px;font-size:.93em}
  #app .pixel-dashboard-layout > .pixel-frame > .pixel-section-heading{font-size:1.4em}
  #app .pixel-dashboard-header{font-size:.82em}
