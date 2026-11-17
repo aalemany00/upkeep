@@ -1,101 +1,267 @@
-(function roomModule(){
- 'use strict';
- const art=window.UpkeepCoachSprites;
- const room=document.querySelector('#view-dashboard .pixel-room-hero');
- if(!art||!room||room.dataset.coachSceneReady)return;
- room.dataset.coachSceneReady='true';
- const speech=room.querySelector('.pixel-room-message');
- const oldHotspot=room.querySelector('.pixel-coach-hotspot');
- if(oldHotspot)oldHotspot.hidden=true;
- const actor=document.createElement('button');
- actor.type='button';actor.className='pixel-room-character';actor.setAttribute('aria-label','Talk to your fitness coach');
- // The coach is a CSS window onto the ORIGINAL transparent PNG sprite
- // sheet. We never replace its pixels with SVG rectangles.
- actor.innerHTML=art.markup('atlas','pixel-room-art');room.append(actor);
- const mobile=window.matchMedia('(max-width:760px)');
- const reduce=window.matchMedia('(prefers-reduced-motion: reduce)');
- let current='atlas',stepTimers=[],loopTimer=null,paused=false,talking=false,pose='idle',moving=false;
- const coach=()=>art.roster.find(x=>x.id===current)||art.roster[0];
- const later=(fn,delay)=>{const t=setTimeout(fn,delay);stepTimers.push(t);return t};
- function clearRoutine(){stepTimers.forEach(clearTimeout);stepTimers=[];clearInterval(loopTimer);loopTimer=null;actor.classList.remove('is-walking','is-exercising','is-talking')}
- function setPose(next){pose=next;actor.dataset.pose=next}
- function position(atGym=false){
-  actor.style.left=(mobile.matches?(atGym?39:25):(atGym?54:45))+'%';
- }
- function walk(toGym){
-  if(paused||talking||reduce.matches)return;
-  moving=true;actor.classList.add('is-walking');
-  position(toGym);
-  let n=0;
-  loopTimer=setInterval(()=>setPose(++n%2?'walk1':'walk2'),240);
-  later(()=>{
-   clearInterval(loopTimer);loopTimer=null;
-   actor.classList.remove('is-walking');moving=false;
-   if(toGym)exercise();
-   else {setPose('idle');later(()=>walk(true),7500)}
-  },3400);
- }
- function exercise(){
-  if(paused||talking||reduce.matches)return;
-  actor.classList.add('is-exercising');
-  let n=0;
-  setPose('exercise');
-  loopTimer=setInterval(()=>setPose(++n%2?'exercise':'idle'),570);
-  later(()=>{
-   clearInterval(loopTimer);loopTimer=null;
-   actor.classList.remove('is-exercising');
-   setPose('idle');
-   later(()=>walk(false),1500);
-  },5300);
- }
- function start(){
-  clearRoutine();paused=false;moving=false;talking=false;position(false);setPose('idle');
-  if(!reduce.matches)later(()=>walk(true),6500);
- }
- function select(id){
-  if(!art.roster.some(x=>x.id===id))id='atlas';
-  const changed=id!==current;
-  current=id;
-  const hasPoseArt=art.coreIds.includes(id);
-  actor.classList.toggle('pixel-room-poses',hasPoseArt);
-  actor.classList.toggle('pixel-room-still',!hasPoseArt);
-  actor.dataset.coachId=id;
-  actor.innerHTML=art.markup(current,'pixel-room-art');
-  actor.setAttribute('aria-label','Talk to '+coach().name+', your fitness coach');
-  if(speech&&(changed||!speech.dataset.personalized)){speech.textContent=coach().tagline;speech.dataset.personalized='true'}
-  start();
-  decorateCoachTab();
- }
- function talk(text){
-  clearRoutine();talking=true;
-  // Keep room dialogue readable on small phones. The complete text is
-  // still available in the normal Coach tab and its larger speech bubble.
-  const raw=String(text||coach().tagline).trim();
-  if(speech)speech.textContent=raw.length>75
-    ?raw.slice(0,72).replace(/\s+\S*$/,'')+'…'
-    :raw;
-  actor.classList.add('is-talking');
-  let n=0;setPose('talk');
-  loopTimer=setInterval(()=>setPose(++n%2?'talk':'idle'),170);
-  later(()=>{clearInterval(loopTimer);loopTimer=null;actor.classList.remove('is-talking');talking=false;setPose('idle');later(()=>walk(true),4500)},2400);
- }
- function requestTalk(){
-  const btn=document.getElementById(mobile.matches?'sidebar-avatar-btn-mobile':'sidebar-avatar-btn');
-  if(btn)btn.click();else talk(coach().tagline);
- }
- actor.addEventListener('click',requestTalk);
- mobile.addEventListener('change',()=>position(moving));
- reduce.addEventListener('change',start);
- document.addEventListener('visibilitychange',()=>{
-  if(document.hidden){clearRoutine();paused=true;setPose('idle')}
-  else start();
- });
- function decorateCoachTab(){
-  // app.js uses the same art.markup() as this scene for the Coach tab.
- }
- // The clean room is a separate, committed image asset now.
- // No on-device canvas inpainting, so the original old character
- // cannot ghost through as new coaches move around the room.
- window.UpkeepRoomCoach={select,talk,requestTalk,mount:()=>room,coaches:art.roster};
- select('atlas');
+/* Upkeep room coach — original lossless sprite art, autonomous daily activities,
+   and one conversation bubble only when the user interacts. */
+(function roomCoachScene() {
+  'use strict';
+  const art = window.UpkeepCoachSprites;
+  const room = document.querySelector('#view-dashboard .pixel-room-hero');
+  if (!art || !room || room.dataset.coachSceneReady) return;
+  room.dataset.coachSceneReady = 'true';
+
+  const speech = room.querySelector('.pixel-room-message');
+  const oldHotspot = room.querySelector('.pixel-coach-hotspot');
+  if (oldHotspot) oldHotspot.hidden = true;
+  if (speech) {
+    speech.textContent = '';
+    speech.hidden = true;
+    speech.setAttribute('role', 'status');
+    speech.setAttribute('aria-live', 'polite');
+  }
+
+  const actor = document.createElement('button');
+  actor.type = 'button';
+  actor.className = 'pixel-room-character';
+  actor.setAttribute('aria-label', 'Talk to your fitness coach');
+  actor.style.left = '40%';
+  room.append(actor);
+
+  const mobile = window.matchMedia('(max-width:760px)');
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const randomBetween = (a, b) => a + Math.random() * (b - a);
+  const coreIds = new Set(art.coreIds || []);
+  let selected = null;
+  let currentSpot = 40;
+  let isTalking = false;
+  let isWalking = false;
+  let motionEpoch = 0;
+  let poseTimer = null;
+  let activeTimers = new Set();
+  let previousActivity = '';
+
+  const choice = () => art.roster.find(item => item.id === selected) || art.roster[0];
+  const waypoints = () => mobile.matches ? [21, 30, 43, 54, 65] : [30, 37, 46, 53, 61, 67];
+  const isVisible = () => !document.hidden && room.isConnected && room.getClientRects().length > 0;
+  const setPose = name => { actor.dataset.pose = name; };
+  const schedule = (callback, delay) => {
+    const token = motionEpoch;
+    const t = setTimeout(() => {
+      activeTimers.delete(t);
+      if (token === motionEpoch) callback();
+    }, delay);
+    activeTimers.add(t);
+  };
+  function clearMotion() {
+    motionEpoch++;
+    for (const t of activeTimers) clearTimeout(t);
+    activeTimers.clear();
+    clearInterval(poseTimer);
+    poseTimer = null;
+    actor.classList.remove('is-walking', 'is-exercising', 'is-stretching', 'is-talking');
+    isWalking = false;
+  }
+  function hideSpeech() {
+    if (!speech) return;
+    speech.hidden = true;
+    speech.textContent = '';
+    speech.classList.remove('show');
+  }
+  // Freeze the current interpolated position, not the final destination.
+  // This prevents the coach from sliding away after being clicked mid-walk.
+  function freeze() {
+    const stage = room.getBoundingClientRect();
+    const sprite = actor.getBoundingClientRect();
+    actor.classList.add('is-frozen');
+    if (stage.width && sprite.width) {
+      const x = Math.max(0, sprite.left - stage.left);
+      actor.style.left = x.toFixed(2) + 'px';
+      currentSpot = Math.max(0, Math.min(100, x / stage.width * 100));
+    }
+    actor.style.transitionDuration = '0ms';
+  }
+  function placeAt(percentage) {
+    actor.classList.add('is-frozen');
+    actor.style.left = percentage + '%';
+    actor.style.transitionDuration = '0ms';
+    currentSpot = percentage;
+  }
+  function beginMovement() {
+    if (reduce.matches || isTalking || !isVisible()) {
+      if (!isTalking && !reduce.matches) schedule(nextActivity, 1200);
+      return;
+    }
+    const choices = waypoints().filter(value => Math.abs(value - currentSpot) > 8);
+    const destination = choices[Math.floor(Math.random() * choices.length)] ?? waypoints()[0];
+    const distance = Math.abs(destination - currentSpot);
+    const duration = Math.max(1500, Math.min(5100, distance * 115 + 550));
+    actor.dataset.facing = destination < currentSpot ? 'left' : 'right';
+    actor.classList.add('is-walking');
+    isWalking = true;
+    let phase = 0;
+    setPose('walk1');
+    poseTimer = setInterval(() => setPose(++phase % 2 ? 'walk2' : 'walk1'), 210);
+    // Force one layout read so removing the frozen class starts a real
+    // CSS transition even immediately after previous animations.
+    void actor.offsetWidth;
+    actor.classList.remove('is-frozen');
+    actor.style.transitionDuration = duration + 'ms';
+    actor.style.left = destination + '%';
+    schedule(() => {
+      clearInterval(poseTimer);
+      poseTimer = null;
+      actor.classList.remove('is-walking');
+      isWalking = false;
+      currentSpot = destination;
+      setPose('idle');
+      // Natural sequence: sometimes exercise after reaching the gym.
+      if (Math.random() < .45) doActivity(Math.random() < .7 ? 'exercise' : 'stretch');
+      else schedule(nextActivity, randomBetween(250, 1050));
+    }, duration + 60);
+  }
+  function doActivity(kind) {
+    if (isTalking || reduce.matches || !isVisible()) {
+      if (!isTalking && !reduce.matches) schedule(nextActivity, 1200);
+      return;
+    }
+    const stretching = kind === 'stretch';
+    actor.classList.add(stretching ? 'is-stretching' : 'is-exercising');
+    previousActivity = kind;
+    let n = 0;
+    setPose('exercise');
+    poseTimer = setInterval(() => setPose(++n % 2 ? 'idle' : 'exercise'), stretching ? 900 : 560);
+    schedule(() => {
+      clearInterval(poseTimer);
+      poseTimer = null;
+      actor.classList.remove('is-stretching', 'is-exercising');
+      setPose('idle');
+      schedule(nextActivity, randomBetween(350, 1200));
+    }, stretching ? randomBetween(2500, 4100) : randomBetween(2900, 5300));
+  }
+  function nextActivity() {
+    if (isTalking || reduce.matches) return;
+    if (!isVisible()) { schedule(nextActivity, 1250); return; }
+    const roll = Math.random();
+    if (roll < .56 || previousActivity === 'idle') {
+      previousActivity = 'walk';
+      beginMovement();
+    } else if (roll < .82) {
+      doActivity('exercise');
+    } else if (roll < .96) {
+      doActivity('stretch');
+    } else {
+      previousActivity = 'idle';
+      setPose('idle');
+      schedule(nextActivity, randomBetween(650, 1800));
+    }
+  }
+  function startAutonomous(delay = 350) {
+    if (isTalking) return;
+    clearMotion();
+    setPose('idle');
+    if (!reduce.matches) schedule(nextActivity, delay);
+  }
+  function select(id) {
+    if (!art.roster.some(item => item.id === id)) id = 'atlas';
+    // Critical: goals snapshots rerender coach badges frequently.
+    // Selecting the SAME coach must NOT restart the walking routine.
+    if (selected === id && actor.dataset.coachId === id) return;
+    clearMotion();
+    hideSpeech();
+    isTalking = false;
+    selected = id;
+    const hasFrames = coreIds.has(id);
+    actor.classList.toggle('pixel-room-poses', hasFrames);
+    actor.classList.toggle('pixel-room-still', !hasFrames);
+    actor.dataset.coachId = id;
+    actor.innerHTML = art.markup(id, 'pixel-room-art');
+    actor.setAttribute('aria-label', 'Talk to ' + choice().name + ', your fitness coach');
+    placeAt(mobile.matches ? 30 : 40);
+    setPose('idle');
+    startAutonomous(randomBetween(650, 1400));
+  }
+  function positionSpeech() {
+    if (!speech || speech.hidden) return;
+    if (mobile.matches) {
+      speech.style.left = '50%';
+      speech.style.top = '9px';
+      speech.style.bottom = 'auto';
+      return;
+    }
+    const stage = room.getBoundingClientRect();
+    const sprite = actor.getBoundingClientRect();
+    const width = Math.min(320, Math.max(230, stage.width * .25));
+    const center = sprite.left - stage.left + sprite.width / 2;
+    speech.style.left = Math.max(width / 2 + 16, Math.min(stage.width - width / 2 - 16, center)) + 'px';
+    speech.style.top = 'auto';
+    speech.style.bottom = Math.max(85, stage.bottom - sprite.top + 5) + 'px';
+  }
+  function talk(line) {
+    const message = String(line || choice().tagline).trim();
+    // Exactly ONE message: the room speech bubble. No sidebar click.
+    clearMotion();
+    freeze();
+    isTalking = true;
+    actor.classList.add('is-talking');
+    if (speech) {
+      speech.textContent = message;
+      speech.title = message;
+      speech.hidden = false;
+      speech.classList.add('show');
+      positionSpeech();
+    }
+    setPose('talk');
+    if (!reduce.matches) {
+      let frame = 0;
+      poseTimer = setInterval(() => setPose(++frame % 2 ? 'idle' : 'talk'), 230);
+    }
+    schedule(() => {
+      clearInterval(poseTimer);
+      poseTimer = null;
+      actor.classList.remove('is-talking');
+      setPose('idle');
+      hideSpeech();
+      isTalking = false;
+      startAutonomous(randomBetween(450, 1100));
+    }, 5500);
+  }
+  function dismiss() {
+    if (!isTalking && (!speech || speech.hidden)) return;
+    clearMotion();
+    hideSpeech();
+    isTalking = false;
+    setPose('idle');
+    startAutonomous(650);
+  }
+  function requestTalk() {
+    if (isTalking) return; // avoid overlapping dialogue when tapped repeatedly
+    const detail = { coachId: selected, handled: false };
+    document.dispatchEvent(new CustomEvent('upkeep:request-room-coach-dialogue', { detail }));
+    if (!detail.handled) talk(choice().tagline);
+  }
+  actor.addEventListener('click', requestTalk);
+  speech?.addEventListener('click', dismiss);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      clearMotion();
+      hideSpeech();
+      isTalking = false;
+      setPose('idle');
+    } else {
+      startAutonomous(700);
+    }
+  });
+  const onScreenSizeChange = () => {
+    if (isTalking) positionSpeech();
+    else if (!isWalking) placeAt(Math.max(15, Math.min(68, currentSpot)));
+  };
+  mobile.addEventListener('change', onScreenSizeChange);
+  window.addEventListener('resize', onScreenSizeChange);
+  reduce.addEventListener('change', () => {
+    if (!isTalking) startAutonomous(500);
+  });
+  window.UpkeepRoomCoach = Object.freeze({
+    select, talk, requestTalk, dismiss,
+    mount: () => room,
+    coaches: art.roster,
+    getState: () => ({ coach: selected, activity: isTalking ? 'talk' : actor.className, pose: actor.dataset.pose })
+  });
+  select('atlas');
 })();
