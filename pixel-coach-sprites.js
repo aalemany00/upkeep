@@ -22,12 +22,15 @@
    const who=coach(id);
    const idx=ROSTER.findIndex(x=>x.id===who.id);
    const animated=CORE_IDS.has(who.id);
-   const format=animated?'poses':'atlas';
-   const source=animated?'pixel-assets/'+who.id+'-poses.webp':SOURCE;
-   // The still-image strip has eight cells; the primary sprites are
-   // single columns containing five actual frames, top to bottom.
-   const position=animated?'0%':(idx/7*100).toFixed(6)+'%';
-   const style='--coach-source:url('+source+');--coach-sprite-x:'+position;
+   const format=animated?'poses':'hires-still';
+   const dimensions={nova:[215,357],sage:[200,360],pace:[229,385]};
+   const source=animated?'pixel-assets/'+who.id+'-poses.webp':
+     'pixel-assets/'+who.id+'-full.webp';
+   // Primary coaches have five native-resolution poses. The three
+   // additional coaches each have their own lossless full-body original.
+   const ratio=animated?'1 / 1':dimensions[who.id].join(' / ');
+   const style='--coach-source:url('+source+');--coach-ratio:'+ratio+
+      ';--coach-sprite-x:0%';
    return '<span class="pixel-coach-art '+extraClass+
       '" data-coach-format="'+format+
       '" data-coach-art="'+who.id+'" role="img" aria-label="'+
