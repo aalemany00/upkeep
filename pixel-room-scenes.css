@@ -164,7 +164,7 @@
   height:100%;
   min-width:0;
   min-height:0;
-  background-image:url("pixel-assets/coaches-original.png");
+  background-image:url("pixel-assets/atlas-poses.webp");
   background-position:var(--coach-sprite-x, 0%) 0%;
   background-size:800% 100%;
   background-repeat:no-repeat;
@@ -269,7 +269,7 @@
 
 /* Lossless source-art pose strips (primary five coaches). */
 .pixel-coach-art {
-  background-image:var(--coach-source, url("pixel-assets/coaches-original.png"));
+  background-image:var(--coach-source, url("pixel-assets/atlas-poses.webp"));
 }
 /* Each coach has a single 251x1254 transparent WebP with five real
    251px-high artwork frames. The background MUST be five times taller
