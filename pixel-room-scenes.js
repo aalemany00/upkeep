@@ -9,15 +9,16 @@
  if(oldHotspot)oldHotspot.hidden=true;
  const actor=document.createElement('button');
  actor.type='button';actor.className='pixel-room-character';actor.setAttribute('aria-label','Talk to your fitness coach');
- const img=document.createElement('img');img.alt='';img.width=128;img.height=160;img.decoding='async';img.draggable=false;
- actor.append(img);room.append(actor);
+ // The coach is a CSS window onto the ORIGINAL transparent PNG sprite
+ // sheet. We never replace its pixels with SVG rectangles.
+ actor.innerHTML=art.markup('atlas','pixel-room-art');room.append(actor);
  const mobile=window.matchMedia('(max-width:760px)');
  const reduce=window.matchMedia('(prefers-reduced-motion: reduce)');
  let current='atlas',stepTimers=[],loopTimer=null,paused=false,talking=false,pose='idle',moving=false;
  const coach=()=>art.roster.find(x=>x.id===current)||art.roster[0];
  const later=(fn,delay)=>{const t=setTimeout(fn,delay);stepTimers.push(t);return t};
  function clearRoutine(){stepTimers.forEach(clearTimeout);stepTimers=[];clearInterval(loopTimer);loopTimer=null;actor.classList.remove('is-walking','is-exercising','is-talking')}
- function setPose(next){pose=next;img.src=art.url(current,next)}
+ function setPose(next){pose=next;actor.dataset.pose=next}
  function position(atGym=false){
   actor.style.left=(mobile.matches?(atGym?39:25):(atGym?54:45))+'%';
  }
@@ -55,6 +56,7 @@
   if(!art.roster.some(x=>x.id===id))id='atlas';
   const changed=id!==current;
   current=id;
+  actor.innerHTML=art.markup(current,'pixel-room-art');
   actor.setAttribute('aria-label','Talk to '+coach().name+', your fitness coach');
   if(speech&&(changed||!speech.dataset.personalized)){speech.textContent=coach().tagline;speech.dataset.personalized='true'}
   start();
@@ -80,12 +82,7 @@
   else start();
  });
  function decorateCoachTab(){
-  const existing=document.querySelector('#coach-hero-figure img');
-  if(existing&&existing.dataset.sceneSvg!=='true'){
-   // app.js manages the full-size Coach illustration and its idle/react frames;
-   // that same sprite set is supplied there by avatarSrc() in app.js.
-   existing.dataset.sceneSvg='true';
-  }
+  // app.js uses the same art.markup() as this scene for the Coach tab.
  }
  // The source bedroom image has a baked-in old person. Reconstruct the
  // narrow wall/rug region once from nearby room pixels so the new sprite
