@@ -1,4 +1,4 @@
-var CACHE_NAME = "upkeep-v9-facing-grounded-squat";
+var CACHE_NAME = "upkeep-v10-five-portraits-grounded-poses";
 // Only the true app shell is precached at install time. exercises.json
 // (a large data file) and gym.js are deliberately left out of cache.addAll:
 // precaching them here competes with the page's own fetch for the same
@@ -6,7 +6,7 @@ var CACHE_NAME = "upkeep-v9-facing-grounded-squat";
 // net::ERR_ABORTED in testing). They still get cached lazily the first
 // time the fetch handler below sees them succeed over the network.
 // Original lossless coach pose strips are cached lazily on first display
-// to keep install fast on mobile, while the fallback PNG is precached.
+// to keep install fast on mobile. Five cropped portraits are precached.
 var SHELL_FILES = [
   "./",
   "./index.html",
@@ -16,7 +16,11 @@ var SHELL_FILES = [
   "./pixel-room-scenes.js",
   "./pixel-room-scenes.css",
   "./pixel-coach-sprites.js",
-  "./pixel-assets/coaches-original.png",
+  "./pixel-assets/atlas-portrait.png",
+  "./pixel-assets/pixel-portrait.png",
+  "./pixel-assets/mira-portrait.png",
+  "./pixel-assets/rex-portrait.png",
+  "./pixel-assets/luna-portrait.png",
   "./pixel-assets/room-empty.webp",
   "./pixel-assets/room-desktop.webp",
   "./pixel-assets/room-mobile.webp",
