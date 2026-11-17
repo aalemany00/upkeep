@@ -861,6 +861,15 @@ textarea { font-family: inherit; resize: vertical; }
   }
   @media (hover: hover) { .more-sheet-item:hover { background: var(--bg); } }
   .more-sheet-close { color: var(--subtle); justify-content: center; margin-top: 6px; }
+
+  /* Native date/time pickers on iOS Safari can render wider than their CSS
+     box says and spill past it instead of actually shrinking, no matter
+     what width/min-width is set on them — so on phones, don't ask one to
+     share a row with a button or another date/time field. Each gets its
+     own full-width line instead. */
+  .log-date-row { flex-direction: column; align-items: stretch; }
+  .row:has(> label.grow input[type="date"]),
+  .row:has(> label.grow input[type="time"]) { flex-direction: column; }
 }
 
 /* Calendar (Gym tab) */

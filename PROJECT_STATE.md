@@ -973,6 +973,48 @@ background panel's right edge on mobile.
   regressions, same console-error baseline (pre-existing, unrelated
   Firestore reconnection noise) before and after.
 
+### 2l. 2k's fix wasn't enough — real iPhone Safari screenshots showed it was still broken, plus a third spot (2026-11-17)
+
+Adrian sent screenshots from his actual iPhone (Safari) right after 2k
+shipped: the Food date row still showed "Today" overlapping the date
+box, and the Calendar event form's Starts/Ends row was broken too — a
+spot 2k never touched. None of this reproduced in the dev browser pane
+(same as 2k), confirmed by asking Adrian directly which device/browser.
+
+- **Root cause, now actually identified**: iOS Safari's native
+  `<input type="date">`/`<input type="time">` controls have their own
+  minimum rendering width that doesn't shrink to fit a CSS box the way
+  Chromium's does in this dev pane — `min-width: 0` (2k's fix) only
+  changes the flex *layout math*, it can't make the native control's own
+  paint stay inside a box smaller than its real minimum. Any row that
+  asks a date/time input to share horizontal space with something else
+  (a button, a second date input) is at risk on an actual iPhone,
+  independent of how much room the numbers say it should have.
+- **The actual fix: stop sharing rows, not resize them.** In `style.css`'s
+  mobile breakpoint (`@media (max-width: 760px)`):
+  - `.log-date-row { flex-direction: column; align-items: stretch; }` —
+    the date input and "Today" button now stack, each full-width, instead
+    of sitting side by side.
+  - `.row:has(> label.grow input[type="date"]), .row:has(> label.grow
+    input[type="time"]) { flex-direction: column; }` — catches the
+    Calendar event form's Starts/Ends row and its Start time/End time row
+    (both `app.js`'s `eventFormHtml()`, lines ~1547 and ~1556) without
+    touching any other `.row` usage elsewhere (checked: no other `.row` in
+    the codebase pairs a date/time input with another field).
+  - Sleep's card from 2k wasn't touched again — its edit form is already
+    full-card-width there, comfortably inside typical native-control
+    widths, and Adrian's third screenshot didn't flag it as still broken.
+- **Verified by direct measurement** (`getBoundingClientRect`, not
+  screenshots — this pane's own narrow-crop rendering quirk makes
+  screenshots unreliable for this kind of check) on both `localhost` and
+  the live `aalemany00.github.io/upkeep` deploy at 375px: all three spots
+  now stack into full-width rows with no shared horizontal space, and at
+  1024px desktop they're confirmed still side-by-side (`flex-direction:
+  row`) — no regression.
+- Used two throwaway accounts this round — one local, one on the live
+  site (to rule out a stale-cache explanation before concluding it was a
+  real rendering gap) — both deleted via the in-app flow before finishing.
+
 ---
 
 ## 3. The gym system (the most complex part)
