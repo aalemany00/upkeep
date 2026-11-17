@@ -156,3 +156,113 @@
   #settings-avatar-picker .avatar-option,
   #onboarding-avatar-picker .avatar-option { transition:none; transform:none; }
 }
+
+/* Render the original PNG sprites as actual image-backed layers. */
+.pixel-coach-art {
+  display:block;
+  width:100%;
+  height:100%;
+  min-width:0;
+  min-height:0;
+  background-image:url("pixel-assets/coaches-original.png");
+  background-position:var(--coach-sprite-x, 0%) 0%;
+  background-size:800% 100%;
+  background-repeat:no-repeat;
+  image-rendering:pixelated;
+  image-rendering:crisp-edges;
+  flex-shrink:0;
+  pointer-events:none;
+  overflow:hidden;
+}
+/* Do not stretch the original 80x110 source frame: every canvas
+   is 8:11, even when the parent card is rectangular. */
+#app .avatar-thumb .pixel-coach-full {
+  width:min(100%,78px);
+  height:auto;
+  aspect-ratio:8/11;
+  margin:auto;
+}
+#app .avatar-thumb {
+  display:flex;
+  align-items:flex-end;
+  justify-content:center;
+}
+#view-coach .coach-hero-figure {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+#view-coach .coach-hero-figure .pixel-coach-full {
+  width:min(100%,155px);
+  height:auto;
+  aspect-ratio:8/11;
+}
+#app .coach-avatar-sm,
+#app .sidebar-avatar-face,
+#app .topbar-avatar-face {
+  position:relative;
+  overflow:hidden;
+  border-radius:50%;
+  background:#eedbc3;
+}
+#app .sidebar-avatar-face {
+  display:block;
+  width:56px;
+  height:56px;
+  border:2px solid var(--panel-border);
+}
+#app .coach-avatar-sm .pixel-coach-face,
+#app .sidebar-avatar-face .pixel-coach-face,
+#app .topbar-avatar-face .pixel-coach-face {
+  position:absolute;
+  width:200%;
+  height:auto;
+  aspect-ratio:8/11;
+  left:50%;
+  top:-14%;
+  transform:translateX(-50%);
+}
+#app .pixel-room-character {
+  aspect-ratio:8/11;
+  transform-origin:center bottom;
+}
+#app .pixel-room-character > .pixel-coach-art {
+  width:100%;
+  height:100%;
+  filter:drop-shadow(0 2px 0 rgba(41,30,23,.22));
+  transform-origin:center bottom;
+}
+#app .pixel-room-character.is-walking .pixel-coach-art {
+  animation:upkeep-raster-step .48s steps(2,end) infinite;
+}
+#app .pixel-room-character.is-exercising {
+  animation:none;
+}
+#app .pixel-room-character.is-exercising .pixel-coach-art {
+  animation:upkeep-raster-squat 1.15s steps(3,end) infinite;
+}
+#app .pixel-room-character.is-talking {
+  animation:none;
+}
+#app .pixel-room-character.is-talking .pixel-coach-art {
+  animation:upkeep-raster-talk .36s steps(2,end) infinite;
+}
+#app .coach-hero-figure.is-talking .pixel-coach-art {
+  animation:upkeep-raster-talk .36s steps(2,end) 5;
+}
+@keyframes upkeep-raster-step {
+  0%,100% {transform:translateY(0) rotate(0deg);}
+  50% {transform:translateY(-3px) rotate(1.3deg);}
+}
+@keyframes upkeep-raster-squat {
+  0%,100% {transform:translateY(0) scaleY(1);}
+  50% {transform:translateY(5px) scaleY(.9);}
+}
+@keyframes upkeep-raster-talk {
+  0%,100% {transform:translateY(0) rotate(0deg);}
+  50% {transform:translateY(-2px) rotate(-1.4deg);}
+}
+@media(prefers-reduced-motion:reduce){
+ #app .pixel-room-character .pixel-coach-art,
+ #app .coach-hero-figure .pixel-coach-art {animation:none!important;}
+}
