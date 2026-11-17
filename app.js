@@ -308,14 +308,21 @@ function maybeRebuildStaleSplit() {
 // ---------------------------------------------------------------------
 function pixelCoachMarkup(avatar, face = false) {
   const art = window.UpkeepCoachSprites;
-  // Use the exact same original PNG sprite strip everywhere, with no
-  // hand-coded SVG substitutions. The fallback is only for blocked JS.
-  if (!art) return `<img src="${face ? avatar.face : avatar.full}" alt="${avatar.name}" />`;
-  return art.markup(avatar.id, face ? "pixel-coach-face" : "pixel-coach-full");
+  if (face) {
+    // A separate head-and-shoulders crop of the same original character,
+    // never a zoomed background strip or an adjacent pose.
+    const src = art?.portrait(avatar.id) || avatar.face;
+    return `<img class="pixel-coach-portrait" src="${src}" alt="${avatar.name}, head and shoulders" />`;
+  }
+  return art?.markup(avatar.id, "pixel-coach-full") ||
+    `<img src="${avatar.full}" alt="${avatar.name}" />`;
 }
 
 function renderAvatarPicker(container, selectedId, onPick) {
   if (!container) return;
+  // Older accounts may have selected one of the three unfinished coaches.
+  // Display Atlas as the valid fallback until the user chooses another.
+  selectedId = coachAvatarById(selectedId).id;
   container.innerHTML = COACH_AVATARS.map((a) => `
     <button type="button" class="avatar-option${a.id === selectedId ? " selected" : ""}" data-avatar-id="${a.id}" title="${a.tagline}" aria-pressed="${a.id === selectedId}">
       <span class="avatar-thumb">${pixelCoachMarkup(a)}</span>

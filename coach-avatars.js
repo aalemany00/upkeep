@@ -1,9 +1,9 @@
 // Upkeep coach selection metadata. IDs are persisted in Firebase, so
 // existing choices remain stable. The displayed portraits, full-body
-// coaches and dashboard actor all use the SAME original raster artwork
-// from pixel-assets/coaches-original.png via pixel-coach-sprites.js.
+// coaches and dashboard actor all use the same five individual lossless
+// pose sheets and cropped portrait images in pixel-assets/.
 // Legacy avatars/*.png paths are fallback only, not the active design.
-// Animated movement is CSS applied to those original image pixels.
+// Movement cycles the original sprite frames, preserving their artwork.
 
 export const COACH_AVATARS = [
   {
@@ -70,54 +70,6 @@ export const COACH_AVATARS = [
     full: "avatars/luna-full.png",
     idle: ["avatars/luna-full.png", "avatars/luna-idle2.png"],
     react: "avatars/luna-react.png"
-  },
-  {
-    "id": "nova",
-    "name": "Nova",
-    "title": "The Cardio Coach",
-    "tagline": "Find your rhythm, one step at a time.",
-    "subtitle": "Move a little. Feel a lot.",
-    "badgeIcon": "footprints",
-    "accent": "#d85e51",
-    "face": "avatars/mira-face.png",
-    "full": "avatars/mira-full.png",
-    "idle": [
-      "avatars/mira-full.png",
-      "avatars/mira-idle2.png"
-    ],
-    "react": "avatars/mira-react.png"
-  },
-  {
-    "id": "sage",
-    "name": "Sage",
-    "title": "The Wellness Coach",
-    "tagline": "Progress includes caring for yourself.",
-    "subtitle": "Breathe, stretch, and grow.",
-    "badgeIcon": "lotus",
-    "accent": "#6b9455",
-    "face": "avatars/mira-face.png",
-    "full": "avatars/mira-full.png",
-    "idle": [
-      "avatars/mira-full.png",
-      "avatars/mira-idle2.png"
-    ],
-    "react": "avatars/mira-react.png"
-  },
-  {
-    "id": "pace",
-    "name": "Pace",
-    "title": "The Movement Coach",
-    "tagline": "Consistency is built in small moves.",
-    "subtitle": "Find what keeps you moving.",
-    "badgeIcon": "bicep",
-    "accent": "#b98332",
-    "face": "avatars/atlas-face.png",
-    "full": "avatars/atlas-full.png",
-    "idle": [
-      "avatars/atlas-full.png",
-      "avatars/atlas-idle2.png"
-    ],
-    "react": "avatars/atlas-react.png"
   }
 ];
 
