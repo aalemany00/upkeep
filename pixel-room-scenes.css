@@ -39,3 +39,120 @@
 @media(prefers-reduced-motion:reduce){
  .pixel-room-character { transition:none!important; animation:none!important; }
 }
+/* Settings and onboarding: show full-body sprites, not interchangeable
+   circular face crops. This is the same vector artwork used in the room
+   and in the Coach tab. */
+#settings-avatar-picker,
+#onboarding-avatar-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));
+  gap: 12px;
+}
+#settings-avatar-picker .avatar-option,
+#onboarding-avatar-picker .avatar-option {
+  width: 100%;
+  min-width: 0;
+  min-height: 171px;
+  gap: 5px;
+  padding: 11px 8px;
+  border: 2px solid var(--panel-border);
+  border-radius: 9px;
+  background: var(--panel);
+  box-shadow: 0 3px 0 rgba(53, 41, 33, .18);
+}
+#settings-avatar-picker .avatar-option:hover,
+#onboarding-avatar-picker .avatar-option:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+#settings-avatar-picker .avatar-option.selected,
+#onboarding-avatar-picker .avatar-option.selected {
+  background: var(--success-bg);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+#settings-avatar-picker .avatar-thumb,
+#onboarding-avatar-picker .avatar-thumb {
+  width: 84px;
+  height: 108px;
+  background: linear-gradient(#eadac5, #d9c6a5);
+  border: 2px solid #9c8976;
+  border-radius: 7px;
+  margin: 0 0 4px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+#settings-avatar-picker .avatar-thumb img,
+#onboarding-avatar-picker .avatar-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+  image-rendering: pixelated;
+}
+#settings-avatar-picker .avatar-name,
+#onboarding-avatar-picker .avatar-name {
+  font-size: .94em;
+  font-weight: 700;
+}
+#settings-avatar-picker .avatar-title,
+#onboarding-avatar-picker .avatar-title {
+  font-size: .73em;
+  line-height: 1.2;
+}
+#view-coach .coach-hero-panel {
+  background: var(--panel);
+}
+#view-coach .coach-hero {
+  align-items: center;
+  gap: clamp(14px, 2.5vw, 30px);
+}
+#view-coach .coach-hero-figure {
+  width: clamp(124px, 15vw, 165px);
+  height: clamp(168px, 21vw, 215px);
+  border: 2px solid var(--panel-border);
+  border-radius: 9px;
+  background: linear-gradient(#efdfc9, #dfc7ab);
+  padding: 7px;
+  flex-shrink: 0;
+}
+#view-coach .coach-hero-figure img {
+  width: 100%;
+  height: 100%;
+  object-position: center bottom;
+  image-rendering: pixelated;
+}
+#coach-bubble-hero {
+  left: clamp(140px, 18vw, 182px);
+  max-width: min(420px, 65%);
+  z-index: 5;
+}
+@media(max-width:760px) {
+  #settings-avatar-picker, #onboarding-avatar-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  #settings-avatar-picker .avatar-option, #onboarding-avatar-picker .avatar-option {
+    min-height: 169px;
+  }
+  #view-coach .coach-hero-figure {
+    width: 116px;
+    height: 160px;
+  }
+  #coach-bubble-hero {
+    left: 126px;
+    max-width: calc(100% - 135px);
+  }
+}
+@media(max-width:350px) {
+  #settings-avatar-picker .avatar-option, #onboarding-avatar-picker .avatar-option {
+    padding: 7px 5px;
+  }
+  #view-coach .coach-hero { gap: 8px; }
+  #view-coach .coach-hero-figure { width: 95px; height: 140px; }
+  #coach-bubble-hero { left: 107px; max-width: calc(100% - 115px); }
+}
+@media(prefers-reduced-motion:reduce) {
+  #settings-avatar-picker .avatar-option,
+  #onboarding-avatar-picker .avatar-option { transition:none; transform:none; }
+}
