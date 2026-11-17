@@ -333,6 +333,44 @@ own repo, as required.
 - Still need to confirm the second fix looks right on my actual phone
   once GitHub Pages redeploys — that's on me to check.
 
+## 2026-11-17 — Session gap: found a duplicate project folder + a stray credential, fixed the Sleep card sizing
+
+- New Claude session, no memory of the ~70 commits of work done since the
+  last one (sleep tracking, the everything-calendar, a full pixel-art
+  redesign, GitHub Actions automation, USDA food API, and more). Caught up
+  by reading `LOG.md`/`PROJECT_STATE.md`, but those were in a stale local
+  clone — a second, abandoned `artifact-3/` folder sitting next to the
+  real `upkeep/` one, both pointing at the same GitHub repo but the local
+  one many commits behind. Pulled it up to date, confirmed `upkeep/` is
+  the one `.claude/launch.json` actually serves, and stopped touching
+  `artifact-3/` (reverted one stray edit I'd made there before noticing).
+  Worth deleting that folder at some point to stop this happening again.
+- Also noticed a loose Firebase service account key
+  (`health-coach-36a28-firebase-adminsdk-fbsvc-7d380ac963.json`) sitting
+  in the shared `TCSS_490_Artifacts` root, outside any repo/gitignore
+  protection. Not committed anywhere, but worth moving into
+  `upkeep/scripts/` (where it's actually gitignored) or deleting if it's a
+  leftover duplicate of the one already in place.
+- Reported two mobile issues: the Food/Log date box still overflowing
+  despite the 2l fix, and specifically asked that the Sleep edit card go
+  back to its original half-width size instead of expanding (2k's fix) —
+  "I liked it better when the box stayed the same size and you just put
+  in the time."
+- **Sleep**: removed the `grid-column:span 2`-on-edit override in
+  `pixel-theme.css`. The two time fields already stack vertically inside
+  `.stat-card-edit-form`, so the card didn't actually need the extra room —
+  verified at 375px width, no page overflow, card stays half-width.
+- **Food date box**: re-checked the actual deployed code (not just the
+  local dev pane) — the 2l stacking fix for `.log-date-row` genuinely is
+  live on GitHub Pages, and `sw.js` is network-first, not cache-first, so
+  a stale PWA cache shouldn't be the explanation either. Couldn't find a
+  code-level reason it would still be broken. Given this project's own
+  established lesson about dev-pane vs. real-iPhone-Safari rendering,
+  didn't want to guess a third time — asked for a fresh screenshot from
+  the actual phone instead of changing code with no new evidence.
+- Bumped `sw.js`'s `CACHE_NAME` (v3→v4) as cheap insurance alongside the
+  Sleep fix, even though the network-first fetch handler shouldn't need it.
+
 ## Open items
 
 - Delete the `test-coach@example.com` test account and its food entry from

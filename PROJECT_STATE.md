@@ -19,6 +19,18 @@ means: clone the repo, read this file + `CLAUDE.md`, and everything else
 needed (service account key aside — see Secrets below) is either in the repo
 or in this document.
 
+**⚠️ Working directory trap (hit 2026-11-17):** the real, actively-used
+clone of this repo is `TCSS_490_Artifacts/upkeep/` — NOT
+`TCSS_490_Artifacts/artifact-3/`. An old `artifact-3/` clone of the exact
+same GitHub repo still exists alongside it, many commits behind, and is
+easy to start editing by habit/old memory (this project started life as
+"artifact-3" before the `upkeep/` folder existed). **Before editing
+anything, confirm which folder `.claude/launch.json`'s `"upkeep"` server
+config actually points at** (`runtimeArgs` second element) — that's the
+real one. Any edit made in the wrong folder silently does nothing (wrong
+files get served, `git push` fails to reflect it, hours can be lost before
+noticing). `artifact-3/` should probably just be deleted at some point.
+
 ---
 
 ## 1. What this is

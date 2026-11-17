@@ -1,4 +1,4 @@
-var CACHE_NAME = "upkeep-v3-pixel";
+var CACHE_NAME = "upkeep-v4-pixel";
 // Only the true app shell is precached at install time. exercises.json
 // (a large data file) and gym.js are deliberately left out of cache.addAll:
 // precaching them here competes with the page's own fetch for the same
