@@ -318,7 +318,7 @@ function renderAvatarPicker(container, selectedId, onPick) {
   if (!container) return;
   container.innerHTML = COACH_AVATARS.map((a) => `
     <button type="button" class="avatar-option${a.id === selectedId ? " selected" : ""}" data-avatar-id="${a.id}" title="${a.tagline}" aria-pressed="${a.id === selectedId}">
-      <span class="avatar-thumb"><img src="${pixelCoachUrl(a, "idle", true)}" alt="${a.name}" /></span>
+      <span class="avatar-thumb"><img src="${pixelCoachUrl(a)}" alt="${a.name} full-body pixel-art coach" /></span>
       <span class="avatar-name"><span class="avatar-badge-icon" style="color:${a.accent}">${icon(a.badgeIcon, { size: 13 })}</span>${a.name}</span>
       <span class="avatar-title subtle small">${a.title}</span>
     </button>
@@ -381,7 +381,7 @@ function renderCoachHero() {
     }, 2200);
   }
   document.getElementById("coach-hero-figure")?.addEventListener("click", () => {
-    triggerCoachTalk("coach-hero-figure", "coach-bubble-hero", pixelCoachUrl(avatar, "exercise"), pixelCoachUrl(avatar));
+    triggerCoachTalk("coach-hero-figure", "coach-bubble-hero", pixelCoachUrl(avatar, "talk"), pixelCoachUrl(avatar));
   });
 }
 
@@ -441,18 +441,34 @@ function triggerCoachTalk(faceId, bubbleId, reactSrc, restoreSrc) {
     face.classList.remove("coach-talking");
     void face.offsetWidth;
     face.classList.add("coach-talking");
+    // Alternate mouth frames instead of holding a single static reaction.
+    // Keep the hero's artwork from the same sprite renderer as Settings.
     if (reactSrc) {
       const img = face.querySelector("img");
       if (img) {
+        const existing = coachReactTimers[faceId];
+        if (existing) { clearInterval(existing.interval); clearTimeout(existing.timeout); }
+        let mouthOpen = true;
         img.src = reactSrc;
-        clearTimeout(coachReactTimers[faceId]);
-        coachReactTimers[faceId] = setTimeout(() => {
+        const interval = setInterval(() => {
+          if (!img.isConnected) { clearInterval(interval); return; }
+          mouthOpen = !mouthOpen;
+          img.src = mouthOpen ? reactSrc : restoreSrc;
+        }, 190);
+        const timeout = setTimeout(() => {
+          clearInterval(interval);
           if (img.isConnected) img.src = restoreSrc;
-        }, 900);
+          delete coachReactTimers[faceId];
+        }, 1700);
+        coachReactTimers[faceId] = { interval, timeout };
       }
     }
   }
-  showCoachBubble(bubbleId, randomCoachLine());
+  const line = randomCoachLine();
+  showCoachBubble(bubbleId, line);
+  // The dashboard room should speak the exact same line when tapped,
+  // and when a sidebar/Coach-tab avatar starts a speech animation.
+  window.UpkeepRoomCoach?.talk(line);
 }
 document.getElementById("sidebar-avatar-btn")?.addEventListener("click", () => triggerCoachTalk("sidebar-avatar", "coach-bubble"));
 document.getElementById("sidebar-avatar-btn-mobile")?.addEventListener("click", () => triggerCoachTalk("sidebar-avatar-mobile", "coach-bubble-mobile"));
