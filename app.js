@@ -413,21 +413,47 @@ function randomCoachLine() {
 }
 
 const coachBubbleTimers = {};
+function hideCoachBubbles() {
+  // Only one message is ever visible, regardless of where it originated.
+  for (const id of ["coach-bubble", "coach-bubble-mobile", "coach-bubble-hero"]) {
+    clearTimeout(coachBubbleTimers[id]);
+    const bubble = document.getElementById(id);
+    if (!bubble) continue;
+    bubble.classList.remove("show");
+    bubble.hidden = true;
+  }
+}
 function showCoachBubble(bubbleId, text) {
-  const bubble = document.getElementById(bubbleId);
+  hideCoachBubbles();
+  const onDashboard = document.getElementById("view-dashboard")?.classList.contains("active");
+  if (onDashboard && window.UpkeepRoomCoach) {
+    // The illustrated coach owns the ONLY visible dialogue on Dashboard.
+    // Do not show an extra sidebar/topbar bubble behind it.
+    window.UpkeepRoomCoach.talk(text);
+    return;
+  }
+  // Do not leave a stale room message behind when talking elsewhere.
+  window.UpkeepRoomCoach?.dismiss();
+  const onCoachTab = document.getElementById("view-coach")?.classList.contains("active");
+  const id = onCoachTab ? "coach-bubble-hero" : bubbleId;
+  const bubble = document.getElementById(id);
   if (!bubble) return;
   bubble.textContent = text;
-  window.UpkeepRoomCoach?.talk(text);
   bubble.hidden = false;
   bubble.classList.remove("show");
-  void bubble.offsetWidth; // restart the transition if it's already showing
+  void bubble.offsetWidth;
   bubble.classList.add("show");
-  clearTimeout(coachBubbleTimers[bubbleId]);
-  coachBubbleTimers[bubbleId] = setTimeout(() => {
+  coachBubbleTimers[id] = setTimeout(() => {
     bubble.classList.remove("show");
-    setTimeout(() => { bubble.hidden = true; }, 200);
-  }, 5000);
+    bubble.hidden = true;
+  }, 5500);
 }
+document.addEventListener("upkeep:request-room-coach-dialogue", event => {
+  if (!window.UpkeepRoomCoach) return;
+  event.detail.handled = true;
+  hideCoachBubbles();
+  window.UpkeepRoomCoach.talk(randomCoachLine());
+});
 
 // reactSrc/restoreSrc are only passed for the hero figure (it has real
 // sprite frames to swap to); the small face badges just get the CSS wobble
