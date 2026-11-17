@@ -11,7 +11,7 @@
     // Labels are intentionally provisional until the user supplies names.
     // Stable IDs allow renaming later without losing Firebase selections.
     {id:'outdoor-coach',name:'Outdoor Coach',title:'Outdoor Movement',tagline:'Take your fitness journey one step at a time.',subtitle:'Explore, breathe, and keep moving.',badgeIcon:'footprints',accent:'#5a8864',kind:'outdoors'},
-    {id:'red-hoodie-coach',name:'Red Hoodie Coach',title:'Movement & Progress',tagline:'A little progress every day adds up.',subtitle:'Find your pace and enjoy the work.',badgeIcon:'bicep',accent:'#b96658',kind:'wellness'}
+    {id:'red-hoodie-coach',name:'Red Hoodie Coach',title:'Movement & Progress',tagline:'A little progress every day adds up.',subtitle:'Find your pace and enjoy the work.',badgeIcon:'dumbbell',accent:'#b96658',kind:'wellness'}
   ];
   const DIMENSIONS={atlas:[314,314],pixel:[305,323],mira:[305,323],rex:[314,314],luna:[314,314],'outdoor-coach':[305,323],'red-hoodie-coach':[305,323]};
   // Sequence ordering is based on the uploaded individual frames—not a
