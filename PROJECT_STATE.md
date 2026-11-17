@@ -875,6 +875,64 @@ Adrian asked to go through the whole app at mobile width and fix anything that l
 - **Two stale "Gym tab" strings**: the Calendar event form's Cardio-tagging hint and the "Scheduled — go log it" line (calendar day panel) still said "Gym tab" from before the 2h rename — found while reading through copy at mobile width, not strictly a layout bug, but the same kind of leftover-reference issue. Both now say "Fitness tab."
 - Everything else held up at 375px without changes: the 2-column stat-card grid, onboarding, the coach-picker grid, Calendar's month grid, Settings' two-column info fields and equipment chips, and the Sleep/Weight tap-to-edit cards from 2h. The one remaining rough edge, left as-is: native `<select>` elements (Diet suggestions' meal picker, Cardio's Type picker) truncate long option text at this width — inherent to the native control, not something CSS can fix without replacing it with a custom dropdown, which felt like a bigger change than this pass called for.
 
+### 2j. Pixel-art visual theme merged — a cozy reskin layered on top, not a rewrite (2026-11-16)
+
+Adrian had ChatGPT build a full pixel-art redesign on its own branch
+(`feature/pixel-art-responsive-redesign`) — a cozy bedroom-themed look
+(warm parchment light mode, forest-green dark mode, "Pixelify Sans" font,
+a pixel bedroom scene with the selected coach standing in it) applied to
+the *existing* app rather than a rebuild. Asked to review it, decide
+whether it was worth merging, fix what needed fixing, then merge — all
+three happened in this session.
+
+- **How it works, without touching `app.js`**: `pixel-theme.css` overrides
+  the shared design-token CSS variables (`--bg`, `--panel`, `--accent`, the
+  font, etc. — the same variables `style.css` already used everywhere), so
+  every existing view picks up the new palette automatically, no per-view
+  changes needed. `pixel-theme.js` (loaded `defer`, before the `app.js`
+  module) runs once per Dashboard mount and *reparents* the real Dashboard
+  DOM nodes — the actual Firestore-backed stat cards, Water/Sleep/Weight's
+  tap-to-edit forms and all — into new pixel-framed sections, rather than
+  rebuilding any of it. A `MutationObserver` on `#dashboard-stats` re-grabs
+  the Water/Sleep/Weight card nodes by their `.stat-card-label` text every
+  time `app.js` replaces that container's innerHTML (which it does on
+  every date change, save, or data update), so the live cards stay correctly
+  slotted into their new homes no matter how often the real app re-renders
+  them. `pixel-assets/*.webp` are the room/sidebar artwork; `sw.js`'s cache
+  list and version bumped to pick them up offline.
+- **Verified this approach actually holds up**, not just assumed: created
+  a throwaway account and exercised sign-up, onboarding, editing
+  Steps/Sleep/Weight/Water (all four survive being physically moved
+  elsewhere in the DOM — the edit forms, Save/Cancel, and Firestore writes
+  all still work), date navigation, every other tab (Food, Fitness, Log,
+  Calendar, Coach, Settings — the theme's CSS reaches these too, not just
+  the Dashboard), light mode, dark mode, and mobile (bottom nav stays put,
+  no horizontal overflow) — zero console errors anywhere across all of it.
+- **Found and fixed before merging: digit legibility.** Pixelify Sans's
+  numerals (5 especially) were genuinely hard to tell apart from 8/S — real
+  enough that "5000 steps" got misread as "8000" four separate times across
+  different screens during testing, confirmed each time that the actual
+  data was correct and only the rendering was ambiguous. Not acceptable for
+  a tracker whose entire job is showing you your own numbers back
+  accurately. Fix: flipped which font is the default. The legible system
+  font (`-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`
+  — the same stack Upkeep already used before this theme) is now `body`'s
+  font, and Pixelify Sans is the explicit exception applied only to
+  decorative chrome that never contains a live number: `h1`, sidebar/nav/
+  topbar/bottom-nav labels, `.panel-title`, `.pixel-section-heading`, the
+  Dashboard greeting. This means every stat value, every form input, and
+  every button (including the water quick-add chips showing "+250ml") is
+  legible by default, without having to enumerate and patch each one
+  individually — safer than chasing down every place a number could appear.
+- **Branch management**: the branch was already based on an older master
+  commit when found, so it got rebased onto latest master first (clean,
+  no conflicts — the branch never touches `app.js`, only adds new files
+  plus a 2-line `index.html` diff) before the font fix and merge, so the
+  Water quick-add card from 2h/3f wasn't lost.
+- Merged via fast-forward (`git merge --ff-only`) straight onto `master`
+  and pushed — no merge commit, no divergent history, since the rebase
+  already put the branch directly on top of master's tip.
+
 ---
 
 ## 3. The gym system (the most complex part)
@@ -1671,6 +1729,10 @@ needed when new subcollections were added.
 ```
 index.html              # all screens/views (auth, onboarding, app shell: desktop sidebar + mobile topbar/bottom-nav + 6 views)
 style.css               # design tokens (light/dark via CSS vars) + all component styling
+pixel-theme.css         # cozy pixel-art visual theme (2j) — overrides style.css's own design-token vars, doesn't replace it
+pixel-theme.js          # reparents the real Dashboard DOM into the pixel layout on mount (2j) — no app.js changes, no duplicated logic
+pixel-assets/           # pixel-art room/sidebar artwork (.webp) used by pixel-theme.css
+PIXEL_REDESIGN.md       # the pixel theme's own implementation notes (written on its source branch, see 2j)
 app.js                  # all client logic: auth, Firestore subscriptions, every view's render + handlers
 gym.js                  # pure functions: assignSplit, targetFor (no DOM/Firebase)
 nutrition.js            # pure functions: computeDailyGoals, GOAL_LABELS, ACTIVITY_LEVELS (no DOM/Firebase)
@@ -1690,6 +1752,7 @@ scripts/
   coach-note.js         # the weekly AI coach — run manually, see scripts/README.md
   seed-exercises.js     # one-time (re-runnable) catalog builder from wger.de; exports classify()
   reclassify-exercises.js  # re-applies classify() to the existing catalog in place, no live fetch
+  fix-untagged-machine-equipment.js  # one-off: retags exercises.json's wger-fallback "Bodyweight" entries to "Cable machine" where the name/id says otherwise (see 3d)
   refresh-cues.js        # re-fetches full (untruncated) wger descriptions, updates cue field only
   serviceAccountKey.json  # GITIGNORED — Firebase Admin credential, never commit
   package.json / package-lock.json / node_modules/  # deps for the scripts above
