@@ -473,3 +473,53 @@
 @media(prefers-reduced-motion:reduce){
   #app .pixel-room-character.is-stretching > .pixel-coach-art { animation:none!important; }
 }
+
+/* Facing and floor-contact corrections.
+   Flip a dedicated outer layer, never the layer whose pose is animated.
+   The artwork remains the exact original lossless sprite pixels. */
+#app .pixel-room-character > .pixel-room-facing {
+  display:block;
+  width:100%;
+  height:100%;
+  transform-origin:50% 100%;
+  transform:scaleX(1);
+}
+#app .pixel-room-character[data-facing="left"] > .pixel-room-facing {
+  transform:scaleX(-1);
+}
+#app .pixel-room-character[data-facing="right"] > .pixel-room-facing {
+  transform:scaleX(1);
+}
+#app .pixel-room-character .pixel-room-facing > .pixel-coach-art {
+  display:block;
+  width:100%;
+  height:100%;
+  transform-origin:50% 100%;
+  filter:drop-shadow(0 2px 0 rgba(41,30,23,.22));
+}
+/* The actual squat is the hand-drawn 'exercise' frame. Remove the older
+   translateY(+5px) animation, which pushed feet below the floor. */
+#app .pixel-room-character.is-exercising .pixel-room-facing > .pixel-coach-art[data-coach-format="poses"] {
+  animation:none;
+  transform:none;
+}
+#app .pixel-room-character.is-exercising .pixel-room-facing > .pixel-coach-art[data-coach-format="hires-still"] {
+  animation:upkeep-grounded-bend 1.15s ease-in-out infinite;
+  transform-origin:50% 100%;
+}
+@keyframes upkeep-grounded-bend {
+  0%,100% {transform:scaleY(1);}
+  50% {transform:scaleY(.94);}
+}
+/* Walking and stretching now animate the inner sprite while the parent
+   wrapper independently maintains the direction of travel. */
+#app .pixel-room-character.is-stretching .pixel-room-facing > .pixel-coach-art {
+  animation:upkeep-coach-stretch 1.6s ease-in-out infinite;
+  transform-origin:50% 100%;
+}
+@media(prefers-reduced-motion:reduce) {
+  #app .pixel-room-character.is-exercising .pixel-room-facing > .pixel-coach-art,
+  #app .pixel-room-character.is-stretching .pixel-room-facing > .pixel-coach-art {
+    animation:none!important;
+  }
+}
