@@ -184,9 +184,12 @@ h1,#app .sidebar-title,#app .sidebar-nav .tab,#app .topbar-brand,#app .bottom-na
  .pixel-overview,.pixel-nutrition,.pixel-workout,.pixel-habits,.pixel-week,.pixel-meals,.pixel-coach-notes,.pixel-vitamins{grid-column:span 2}
  .pixel-water,.pixel-sleep{grid-column:span 1}
  .pixel-weight{grid-column:span 2}
- /* The edit form (two time/number inputs plus Save/Cancel) doesn't fit the
-    half-width card it normally lives in — give it the full row instead. */
- .pixel-water:has(.stat-card-edit-form),.pixel-sleep:has(.stat-card-edit-form){grid-column:span 2}
+ /* Adrian's call: keep Water/Sleep at their normal half-width card even
+    while editing — the two time/number fields already stack vertically
+    inside .stat-card-edit-form (see style.css), so they fit without
+    needing the card to expand. (Previously forced grid-column:span 2 here
+    on edit; removed per explicit request — "I liked it better when the
+    box stayed the same size and you just put in the time.") */
  #app .pixel-overview #dashboard-stats > .stat-card{grid-template-columns:28px minmax(62px,1fr) minmax(116px,1.4fr) minmax(42px,1.4fr);gap:5px;font-size:.93em}
  #app .pixel-dashboard-layout > .pixel-frame > .pixel-section-heading{font-size:1.4em}
  #app .pixel-dashboard-header{font-size:.82em}
