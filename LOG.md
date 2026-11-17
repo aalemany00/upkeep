@@ -268,6 +268,71 @@ own repo, as required.
   tried a few automated fixes, one of them visibly broke the crop, so I had
   Claude revert and leave it for later rather than risk the art.
 
+## 2026-11-16 — Mobile audit, Dashboard quick-add moves, pixel-art theme merged, Food tab cleanup
+
+- Asked for a mobile-view pass. Fixed a sticky-hover CSS bug, a cramped
+  Fitness header, a clipped placeholder, and leftover "Gym tab" copy that
+  never got updated when that tab was renamed.
+- Asked to move Steps from the Fitness tab's Activity form onto its own
+  tap-to-edit card on the Dashboard, matching how Water/Sleep/Weight
+  already worked there. Then asked for the same treatment for Water
+  specifically ("as well" — so it's a Dashboard quick-add card *alongside*
+  the Food tab's existing water form, not a replacement at that point).
+- Had ChatGPT build a full pixel-art visual redesign on its own branch
+  (cozy bedroom theme, warm/forest palettes, a pixel coach standing in a
+  bedroom scene). Asked Claude to review it, decide whether it was worth
+  merging, fix anything real, then merge.
+  - Found one real issue before merging: Pixelify Sans's digits (5
+    especially) were genuinely hard to tell apart from 8/S — got "5000
+    steps" misread as "8000" multiple times during testing. Fixed by
+    making the legible system font the default everywhere a number can
+    appear, keeping Pixelify Sans only for decorative headings/nav.
+  - Verified sign-up, onboarding, every stat card's edit form, every tab,
+    light/dark mode, and mobile with a throwaway account before merging.
+    Merged clean (fast-forward, no conflicts).
+- Once Water had its own Dashboard card, asked to remove the now-redundant
+  water form from the Food tab — Dashboard is the only place to log it now.
+
+## 2026-11-16 — Reviewed the animated-coaches branch (not merged yet)
+
+- Asked Claude to check out a second ChatGPT branch adding 3 new coach
+  personalities (8 total) and replacing the static pixel-art coach with a
+  live animated character (walks, exercises, talks) inside the bedroom
+  scene from the theme merge above.
+- Reviewed the code (no unsafe patterns) and tested it live: onboarding
+  picker, Dashboard room animation + talk interaction, Settings
+  coach-switching, Coach tab hero, mobile viewport, dark mode — all
+  working, one pre-existing benign console-noise pattern investigated and
+  ruled out as unrelated.
+- Decision: told Claude not yet to merge. Sitting on its own branch for
+  now, reviewed and ready whenever I say go.
+
+## 2026-11-17 — Mobile overflow bugs: took two tries to actually fix
+
+- Reported two spots where a box ran past its panel's right edge on
+  mobile: the Dashboard's Sleep edit card, and the date picker at the top
+  of the Food tab.
+- First fix (didn't actually work): Claude traced the Food/Log date
+  input's overflow to a real CSS bug (a `width:100%` date input inside a
+  plain inline `<label>`, resolving its percentage width against the
+  whole panel instead of the label) and fixed that, plus made the Sleep
+  card expand to full width while its edit form is open. Verified in the
+  dev browser — looked right there.
+- I sent screenshots from my actual iPhone right after that shipped: the
+  Food date row was still broken, and the Calendar event form's
+  Starts/Ends row (never even touched by the first fix) was too. Told
+  Claude which device this was on, which turned out to matter.
+- Real fix: iOS Safari's native date/time picker controls have their own
+  minimum rendering width that just doesn't shrink to fit a CSS box the
+  way the dev browser's did — no amount of `min-width`/flex tweaking
+  changes that. The actual fix was to stop asking a date/time field to
+  share a row with anything else: the Food/Log date row and both Calendar
+  rows (Starts/Ends, Start time/End time) now stack into full-width rows
+  on mobile instead of trying to resize. Checked on the live site and
+  localhost this time, not just the dev pane.
+- Still need to confirm the second fix looks right on my actual phone
+  once GitHub Pages redeploys — that's on me to check.
+
 ## Open items
 
 - Delete the `test-coach@example.com` test account and its food entry from
@@ -294,3 +359,10 @@ own repo, as required.
   wanted. I wanted pure convenience (tracking health stuff is already a
   hassle); the fix was one shared, free mechanism (the coach script loops
   over every signed-up user) instead of pushing setup or cost onto them.
+- The first mobile date/time overflow fix (2026-11-17) got called "fixed,
+  verified" after only checking it in Claude's own dev browser pane —
+  which, it turned out, doesn't reproduce how iOS Safari actually renders
+  native date/time pickers. It took me sending real phone screenshots for
+  Claude to realize the dev-pane check wasn't good enough and find the
+  real cause. Lesson for next time: "verified" on a mobile CSS fix should
+  mean an actual phone, not just a resized browser window.
