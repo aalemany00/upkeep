@@ -126,7 +126,9 @@
     previousActivity = kind;
     let n = 0;
     setPose('exercise');
-    poseTimer = setInterval(() => setPose(++n % 2 ? 'idle' : 'exercise'), stretching ? 900 : 560);
+    // Only swap the original artwork frames. No downward translate or
+    // vertical scaling: the soles stay anchored to the room floor.
+    poseTimer = setInterval(() => setPose(++n % 2 ? 'idle' : 'exercise'), stretching ? 900 : 700);
     schedule(() => {
       clearInterval(poseTimer);
       poseTimer = null;
@@ -171,7 +173,10 @@
     actor.classList.toggle('pixel-room-poses', hasFrames);
     actor.classList.toggle('pixel-room-still', !hasFrames);
     actor.dataset.coachId = id;
-    actor.innerHTML = art.markup(id, 'pixel-room-art');
+    // Keep the left/right facing transform on a separate wrapper so it
+    // cannot be overridden by the sprite's walk, talk or stretch animation.
+    actor.innerHTML = '<span class="pixel-room-facing">' +
+      art.markup(id, 'pixel-room-art') + '</span>';
     actor.setAttribute('aria-label', 'Talk to ' + choice().name + ', your fitness coach');
     placeAt(mobile.matches ? 30 : 40);
     setPose('idle');
