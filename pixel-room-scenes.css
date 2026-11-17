@@ -364,3 +364,40 @@
 @media(max-width:760px) {
  #app .pixel-room-character.pixel-room-still { width:min(23%,94px); }
 }
+
+/* Independent clean room image: no baked-in coach and no static text. */
+.pixel-room-hero {
+ background-image:url("pixel-assets/room-empty.webp");
+ aspect-ratio:1411 / 470;
+ background-size:100% 100%;
+ background-position:center;
+}
+.pixel-room-message {
+ z-index:3;
+ top:14%;
+ left:57.7%;
+ width:21.4%;
+ height:24%;
+ border:none;
+ border-radius:0;
+ background:transparent;
+ padding:0;
+ font-size:clamp(11px,1.35vw,20px);
+ line-height:1.12;
+ overflow:hidden;
+}
+@media(max-width:760px) {
+ .pixel-room-hero {
+  aspect-ratio:auto;
+  background-size:auto 100%;
+  background-position:56% center;
+ }
+ .pixel-room-message {
+  top:13%;
+  left:56%;
+  width:37%;
+  height:29%;
+  font-size:clamp(10px,2.6vw,14px)!important;
+  line-height:1.09;
+ }
+}
