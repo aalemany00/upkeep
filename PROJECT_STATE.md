@@ -1027,6 +1027,21 @@ spot 2k never touched. None of this reproduced in the dev browser pane
   site (to rule out a stale-cache explanation before concluding it was a
   real rendering gap) — both deleted via the in-app flow before finishing.
 
+**2026-11-17 update — the Food tab's date row doesn't exist anymore.**
+Despite the above, Adrian kept seeing the Food date box run off the right
+edge on his actual phone. Rather than chase the native `<input
+type="date">` control's iOS-Safari rendering quirk a fourth time, removed
+it from the Food tab entirely: `#food-log-date`/`#food-log-date-today` are
+gone from `index.html`, replaced by a Dashboard-style day-nav header
+(`renderFoodDateHeader()` in `app.js` — day label, prev/next arrows,
+"jump to today" link, date on the right) at the top of the Diet
+suggestions panel, driven by the same `selectedDateKey` via
+`gymJumpDay`/`gymJumpToDate`. No native date input left on that tab, so
+there's nothing left for iOS Safari to size differently than the dev
+pane. The **Log tab still has its own separate `#log-log-date` date-input
+row** (untouched, same `.log-date-row` styling/mobile-stacking fix
+described above still applies there).
+
 ---
 
 ## 3. The gym system (the most complex part)

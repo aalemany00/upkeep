@@ -371,6 +371,33 @@ own repo, as required.
 - Bumped `sw.js`'s `CACHE_NAME` (v3→v4) as cheap insurance alongside the
   Sleep fix, even though the network-first fetch handler shouldn't need it.
 
+## 2026-11-17 — Food tab: date row replaced with a Dashboard-style header
+
+- Asked to drop the plain "Logging for" date-input row at the top of the
+  Food tab (the thing the overflow fix above never fully resolved on real
+  phones) and replace it with a header like the Dashboard's — a day label,
+  prev/next arrows, a "jump to today" link when not on today, and the full
+  date on the right — placed at the top of the Diet suggestions panel
+  instead of its own separate row.
+- Removed `#food-log-date`/`#food-log-date-today` from `index.html`
+  entirely; the Log tab keeps its own separate date row (`#log-log-date`),
+  unaffected.
+- Added `renderFoodDateHeader()` (`app.js`), mirroring
+  `renderDashboardHeader()`: "Today"/weekday+date heading, "Logging for
+  today" vs. a "Jump to today" link, full date on the right. Wired to the
+  same `selectedDateKey` the Dashboard/Gym/Log tabs already share, via the
+  existing `gymJumpDay`/`gymJumpToDate` functions — no new date-state
+  logic, just a new view of the same state. Called from `renderDashboard()`
+  (so every existing date-navigation path already refreshes it for free)
+  and from `setSelectedDate()` (the Log tab's picker and the calendar).
+- Verified at 375px width via the dev pane: no horizontal overflow
+  (`scrollWidth === innerWidth`), all header elements measured well within
+  the viewport via `getBoundingClientRect`, and prev/today navigation both
+  update the heading/subtitle correctly. This sidesteps the native
+  `<input type="date">` entirely — it was that control's own intrinsic
+  mobile-Safari width that the 2l/2m fixes couldn't pin down — so there's
+  nothing left for iOS Safari to render differently.
+
 ## Open items
 
 - Delete the `test-coach@example.com` test account and its food entry from

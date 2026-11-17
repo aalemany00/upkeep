@@ -803,16 +803,14 @@ document.querySelectorAll("[data-settings-subview]").forEach((btn) => {
   });
 });
 
-// Food/Log's "Logging for" date pickers — a shared selectedDateKey (also
-// used by the Dashboard/Gym calendar), so picking a past date here and
-// logging something actually backdates it, instead of every entry always
-// landing on today. Changing either picker, or the Dashboard calendar, or
-// the Gym tab's stepper, moves all of them together.
+// Log tab's "Logging for" date picker — a shared selectedDateKey (also
+// used by the Dashboard/Gym calendar and the Food tab's day-nav header), so
+// picking a past date here and logging something actually backdates it,
+// instead of every entry always landing on today. Changing it, or the
+// Dashboard calendar, or the Gym tab's stepper, moves everything together.
 function syncLogDatePickers() {
   const key = selectedDateKey || todayKey();
-  const foodInput = document.getElementById("food-log-date");
   const logInput = document.getElementById("log-log-date");
-  if (foodInput) foodInput.value = key;
   if (logInput) logInput.value = key;
 }
 
@@ -825,10 +823,9 @@ function setSelectedDate(dateKey) {
   renderTodayEntries();
   renderFoodEntries();
   renderDietSuggestions();
+  renderFoodDateHeader();
 }
 
-document.getElementById("food-log-date")?.addEventListener("change", (e) => setSelectedDate(e.target.value));
-document.getElementById("food-log-date-today")?.addEventListener("click", () => setSelectedDate(todayKey()));
 document.getElementById("log-log-date")?.addEventListener("change", (e) => setSelectedDate(e.target.value));
 document.getElementById("log-log-date-today")?.addEventListener("click", () => setSelectedDate(todayKey()));
 
@@ -868,8 +865,36 @@ function renderDashboardHeader() {
 document.getElementById("dash-day-prev")?.addEventListener("click", () => gymJumpDay(-1));
 document.getElementById("dash-day-next")?.addEventListener("click", () => gymJumpDay(1));
 
+// Food tab's day-nav header — same "which day am I logging for" header as
+// the Dashboard's, just scoped to the Diet suggestions panel. Replaced the
+// old plain "Logging for" date-input row (that row's native date input ran
+// off the right edge of the card on mobile Safari and couldn't be reliably
+// fixed with CSS alone — see PROJECT_STATE.md).
+function renderFoodDateHeader() {
+  const headingText = document.getElementById("food-heading-text");
+  const dateText = document.getElementById("food-date-text");
+  const subtitle = document.getElementById("food-subtitle");
+  const viewingToday = (selectedDateKey || todayKey()) === todayKey();
+  const shownDate = dateFromKey(selectedDateKey || todayKey());
+
+  if (headingText) headingText.textContent = viewingToday ? "Today" : shownDate.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+  if (dateText) dateText.textContent = shownDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  if (subtitle) {
+    subtitle.innerHTML = viewingToday
+      ? "Logging for today"
+      : `<button type="button" class="link-btn" id="food-day-today">Jump to today</button>`;
+  }
+  // food-day-today is rebuilt into subtitle.innerHTML above, so it needs a
+  // fresh listener every render; food-day-prev/next are static elements in
+  // index.html wired once below, not here.
+  document.getElementById("food-day-today")?.addEventListener("click", () => gymJumpToDate(todayKey()));
+}
+document.getElementById("food-day-prev")?.addEventListener("click", () => gymJumpDay(-1));
+document.getElementById("food-day-next")?.addEventListener("click", () => gymJumpDay(1));
+
 function renderDashboard() {
   renderDashboardHeader();
+  renderFoodDateHeader();
 
   const today = entriesForSelectedDate();
   const calories = sumByType(today, "food", "calories");

@@ -265,14 +265,18 @@
     <!-- Food -->
     <section id="view-food" class="view">
 
-      <div class="panel log-date-row">
-        <label class="small">Logging for
-          <input type="date" id="food-log-date" />
-        </label>
-        <button type="button" class="link-btn" id="food-log-date-today">Today</button>
-      </div>
-
       <div class="panel">
+        <div class="dash-header">
+          <div class="row" style="align-items:center;gap:8px;">
+            <button type="button" class="btn small" id="food-day-prev">&lsaquo;</button>
+            <div>
+              <h2 class="dash-greeting" id="food-heading"><span id="food-heading-text">Today</span></h2>
+              <p class="subtle small" id="food-subtitle">Logging for today</p>
+            </div>
+            <button type="button" class="btn small" id="food-day-next">&rsaquo;</button>
+          </div>
+          <div class="dash-date"><span class="tab-icon" data-icon="calendar" data-icon-size="16" aria-hidden="true"></span><span id="food-date-text"></span></div>
+        </div>
         <div class="panel-head">
           <h2 class="panel-title"><span class="tab-icon" data-icon="utensils" aria-hidden="true"></span>Diet suggestions</h2>
           <button type="button" class="link-btn" id="food-shuffle-all-btn">Shuffle all</button>
