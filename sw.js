@@ -1,4 +1,4 @@
-var CACHE_NAME = "upkeep-v8-autonomous-coach-dialogue";
+var CACHE_NAME = "upkeep-v9-facing-grounded-squat";
 // Only the true app shell is precached at install time. exercises.json
 // (a large data file) and gym.js are deliberately left out of cache.addAll:
 // precaching them here competes with the page's own fetch for the same
