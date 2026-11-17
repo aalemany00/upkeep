@@ -572,3 +572,73 @@
   transform:none !important;
   image-rendering:auto;
 }
+
+/* Original-cutout atlas renderer 2026
+   Every image is an untouched 4×4 mosaic of the user's 16 PNG frames.
+   Frame changes happen solely through background-position in JS. */
+#app .pixel-coach-art[data-coach-format="cutout"] {
+  display:block;
+  width:100%;
+  height:100%;
+  background-image:var(--coach-source);
+  background-size:400% 400% !important;
+  background-repeat:no-repeat;
+  background-position:0% 0%;
+  aspect-ratio:var(--coach-frame-ratio,1 / 1);
+  image-rendering:pixelated;
+  filter:none;
+  animation:none!important;
+  transform:none!important;
+  flex-shrink:0;
+}
+#app .pixel-room-character.pixel-room-poses {
+  width:min(15.3%,190px);
+  transform:none!important;
+  animation:none!important;
+}
+#app .pixel-room-character .pixel-room-facing {
+  width:100%;
+  height:100%;
+  transform-origin:center bottom;
+}
+#app .pixel-room-character .pixel-room-facing > .pixel-coach-art[data-coach-format="cutout"] {
+  transform:none!important;
+  animation:none!important;
+}
+#app .pixel-room-character[data-pose="exercise"] .pixel-room-facing > .pixel-coach-art[data-coach-format="cutout"],
+#app .pixel-room-character.is-stretching .pixel-room-facing > .pixel-coach-art[data-coach-format="cutout"] {
+  transform:none!important; /* Remove obsolete pose-strip baseline offsets. */
+  animation:none!important;
+}
+#app .avatar-thumb .pixel-coach-full[data-coach-format="cutout"] {
+  display:block;
+  width:min(100%,110px);
+  height:auto;
+  aspect-ratio:var(--coach-frame-ratio,1 / 1);
+  margin:auto;
+  background-size:400% 400%!important;
+  image-rendering:pixelated;
+}
+#view-coach .coach-hero-figure .pixel-coach-full[data-coach-format="cutout"] {
+  width:min(100%,190px);
+  height:auto;
+  aspect-ratio:var(--coach-frame-ratio,1 / 1);
+  margin:auto;
+  background-size:400% 400%!important;
+  image-rendering:pixelated;
+}
+#app .sidebar-avatar-face img.pixel-coach-portrait,
+#app .topbar-avatar-face img.pixel-coach-portrait,
+#app .coach-avatar-sm img.pixel-coach-portrait {
+  width:100%!important;
+  height:100%!important;
+  object-fit:cover;
+  background:transparent!important;
+  image-rendering:auto;
+}
+@media(max-width:760px) {
+  #app .pixel-room-character.pixel-room-poses {width:min(33%,120px);}
+}
+@media(prefers-reduced-motion:reduce) {
+  #app .pixel-coach-art[data-coach-format="cutout"] {animation:none!important;}
+}
