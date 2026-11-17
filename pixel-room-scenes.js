@@ -88,64 +88,9 @@
  function decorateCoachTab(){
   // app.js uses the same art.markup() as this scene for the Coach tab.
  }
- // The source bedroom image has a baked-in old person. Reconstruct the
- // narrow wall/rug region once from nearby room pixels so the new sprite
- // can actually replace them, rather than appearing on top of a ghost.
- function cleanBackground(){
-  const original=new Image();
-  original.onload=()=>{
-   const canvas=document.createElement('canvas');
-   const w=original.naturalWidth,h=original.naturalHeight;canvas.width=w;canvas.height=h;
-   const ctx=canvas.getContext('2d',{willReadFrequently:true});
-   if(!ctx)return;
-   ctx.drawImage(original,0,0);
-   const data=ctx.getImageData(0,0,w,h),pixels=data.data,source=new Uint8ClampedArray(pixels);
-   function sample(x,y,c){return source[(Math.max(0,Math.min(h-1,y))*w+Math.max(0,Math.min(w-1,x)))*4+c]}
-   // Portrait occupies x638-748, from y85 to the floor. Keep the right
-   // gym equipment, lamp, bookcase, and speech bubble entirely untouched.
-   for(let y=87;y<308;y++){
-    const x0=y<152?641:y<255?638:642;
-    const x1=y<152?745:y<255?746:743;
-    for(let x=x0;x<x1;x++){
-     // 3px staggered blocks retain a handmade pixel-art texture.
-     const wall=y<263;
-     const left=wall?Math.max(592,x0-24):Math.max(520,x0-31);
-     const right=wall?Math.min(w-1,x1+14):Math.min(w-1,x1+37);
-     const t=(x-x0)/(x1-x0);
-     const grain=((Math.floor(x/4)*17+Math.floor(y/4)*29)%7)-3;
-     const i=(y*w+x)*4;
-     for(let c=0;c<3;c++){
-      const v=sample(left,y,c)*(1-t)+sample(right,y,c)*t;
-      pixels[i+c]=Math.max(0,Math.min(255,v+grain*.5));
-     }
-     pixels[i+3]=255;
-    }
-   }
-   ctx.putImageData(data,0,0);
-   // Restore the rug's cream trim as small crisp pixels under the sprite.
-   ctx.fillStyle='#d29d71';ctx.fillRect(642,279,101,4);
-   ctx.fillStyle='#e6af74';ctx.fillRect(642,283,101,4);
-   ctx.fillStyle='#bc7d58';ctx.fillRect(642,304,101,4);
-   canvas.toBlob(blob=>{
-    if(!blob)return;
-    const url=URL.createObjectURL(blob);
-    room.style.backgroundImage='url("'+url+'")';
-    // On a phone, use the exact central section of the same cleaned
-    // scene instead of the old mobile crop with the fixed character.
-    if(mobile.matches){
-      room.style.backgroundSize='auto 100%';
-      room.style.backgroundPosition='56% center';
-    }
-    mobile.addEventListener('change',()=>{
-     room.style.backgroundSize=mobile.matches?'auto 100%':'100% 100%';
-     room.style.backgroundPosition=mobile.matches?'56% center':'center';
-    });
-    window.addEventListener('pagehide',()=>URL.revokeObjectURL(url),{once:true});
-   },'image/png');
-  };
-  original.src='pixel-assets/room-desktop.webp';
- }
- cleanBackground();
+ // The clean room is a separate, committed image asset now.
+ // No on-device canvas inpainting, so the original old character
+ // cannot ghost through as new coaches move around the room.
  window.UpkeepRoomCoach={select,talk,requestTalk,mount:()=>room,coaches:art.roster};
  select('atlas');
 })();
