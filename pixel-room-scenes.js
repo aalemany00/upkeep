@@ -72,7 +72,7 @@
   // still available in the normal Coach tab and its larger speech bubble.
   const raw=String(text||coach().tagline).trim();
   if(speech)speech.textContent=raw.length>75
-    ?raw.slice(0,72).replace(/\\s+\\S*$/,'')+'…'
+    ?raw.slice(0,72).replace(/\s+\S*$/,'')+'…'
     :raw;
   actor.classList.add('is-talking');
   let n=0;setPose('talk');

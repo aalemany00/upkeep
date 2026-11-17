@@ -1,11 +1,13 @@
-var CACHE_NAME = "upkeep-v6-original-coach-poses";
+var CACHE_NAME = "upkeep-v7-original-coach-poses";
 // Only the true app shell is precached at install time. exercises.json
 // (a large data file) and gym.js are deliberately left out of cache.addAll:
 // precaching them here competes with the page's own fetch for the same
 // URL on first load and can abort one of the two requests (confirmed via
 // net::ERR_ABORTED in testing). They still get cached lazily the first
 // time the fetch handler below sees them succeed over the network.
-// Original lossless coach pose strips are cached lazily on first display\n// to keep install fast on mobile, while the fallback PNG is precached.\nvar SHELL_FILES = [
+// Original lossless coach pose strips are cached lazily on first display
+// to keep install fast on mobile, while the fallback PNG is precached.
+var SHELL_FILES = [
   "./",
   "./index.html",
   "./style.css",
