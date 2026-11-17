@@ -81,7 +81,7 @@ let dietPicks = {}; // { breakfast: id, lunch: id, dinner: id, snack1: id, snack
 let calViewDate = new Date();   // month currently shown on the Dashboard
 let selectedDateKey = null;     // date both the Dashboard and Gym day panels show
 let showingOnboardingReview = false; // gate: stay on onboarding screen to show the just-built plan
-let dashboardEditingCard = null; // "steps" | "sleep" | "weight" | null — which Dashboard stat card (if any) shows its inline edit form instead of its normal ring/value; survives renderDashboard() replacing dashboard-stats' innerHTML, cleared on Save/Cancel
+let dashboardEditingCard = null; // "water" | "steps" | "sleep" | "weight" | null — which Dashboard stat card (if any) shows its inline edit form instead of its normal ring/value; survives renderDashboard() replacing dashboard-stats' innerHTML, cleared on Save/Cancel/Done
 
 async function fetchJsonWithRetry(url, attempts = 2) {
   for (let i = 0; i < attempts; i++) {
@@ -884,8 +884,7 @@ function renderDashboard() {
 
   const ringStats = [
     { label: "Calories", iconName: "flame", value: calories, goal: goals.calorieGoal, unit: "" },
-    { label: "Protein", iconName: "bicep", value: protein, goal: goals.proteinGoal, unit: "g" },
-    { label: "Water", iconName: "droplet", value: water, goal: goals.waterGoal, unit: "ml" }
+    { label: "Protein", iconName: "bicep", value: protein, goal: goals.proteinGoal, unit: "g" }
   ];
 
   const container = document.getElementById("dashboard-stats");
@@ -908,6 +907,7 @@ function renderDashboard() {
         </div>`;
     })
     .join("")
+    + (dashboardEditingCard === "water" ? dashboardWaterEditHtml() : dashboardWaterCardHtml(water))
     + (dashboardEditingCard === "steps" ? dashboardStepsEditHtml(activityEntry) : dashboardStepsCardHtml(steps))
     + (dashboardEditingCard === "sleep" ? dashboardSleepEditHtml(sleepEntry) : dashboardSleepCardHtml(sleep))
     + (dashboardEditingCard === "weight" ? dashboardWeightEditHtml(weightEntry) : dashboardWeightCardHtml(weightEntry));
@@ -925,6 +925,49 @@ function renderDashboard() {
   renderDailyStretch();
   renderMealsList();
   renderWorkoutPlanPanel();
+}
+
+// Water is unlike Sleep/Weight/Steps: there's no single "the" value for a
+// day, it's a running tally from however many times you drank water today
+// (quick-add chips, same as the Food tab's own water form, still there
+// unchanged — this is "added on the Dashboard as well," not moved away).
+// So instead of a Save/Cancel pair that commits one corrected value and
+// closes, each chip/Add tap here commits immediately (addEntry, same as
+// Food's chips) and the card stays open in edit mode (dashboardEditingCard
+// isn't cleared) so you can log a few times in a row without re-tapping —
+// only "Done" closes it back to the ring.
+function dashboardWaterCardHtml(water) {
+  const goal = goals.waterGoal;
+  const hasGoal = !!goal;
+  const pct = hasGoal ? barWidth(water, goal) : 0;
+  const over = hasGoal && water > goal;
+  return `
+    <button type="button" class="stat-card stat-card-editable" data-edit-card="water">
+      <div class="stat-card-top">
+        <span class="stat-card-icon">${icon("droplet", { size: 18 })}</span>
+        ${hasGoal ? progressRingSvg(pct, { size: 44, stroke: 4 }) : ""}
+      </div>
+      <div class="stat-card-label">Water</div>
+      <div class="stat-card-value">${water}ml${hasGoal ? `<span class="stat-goal"> / ${goal}ml</span>` : ""}</div>
+      ${hasGoal ? `<div class="bar-track"><div class="bar-fill ${over ? "over" : ""}" style="width:${pct}%"></div></div>` : ""}
+    </button>`;
+}
+
+function dashboardWaterEditHtml() {
+  return `
+    <div class="stat-card stat-card-edit-form" data-edit-form="water">
+      <div class="stat-card-label">Water</div>
+      <div class="chip-row">
+        <button type="button" class="chip-btn" data-dash-quick-ml="250">+250ml</button>
+        <button type="button" class="chip-btn" data-dash-quick-ml="500">+500ml</button>
+        <button type="button" class="chip-btn" data-dash-quick-ml="750">+750ml</button>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <input type="number" id="dash-water-input" min="0" placeholder="Amount (ml)" />
+        <button type="button" class="btn primary small" id="dash-water-add">Add</button>
+      </div>
+      <button type="button" class="btn small" id="dash-water-done" style="margin-top:8px;">Done</button>
+    </div>`;
 }
 
 // Steps/calories-burned are logged together as one "activity" entry
@@ -1029,6 +1072,26 @@ function wireDashboardStatEdits(container) {
       renderDashboard();
     });
   });
+
+  const waterForm = container.querySelector('[data-edit-form="water"]');
+  if (waterForm) {
+    waterForm.querySelectorAll("[data-dash-quick-ml]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await addEntry("water", { ml: Number(btn.dataset.dashQuickMl) });
+        renderDashboard(); // dashboardEditingCard stays "water", so this re-opens in edit mode for another quick-add
+      });
+    });
+    document.getElementById("dash-water-add").addEventListener("click", async () => {
+      const ml = Number(document.getElementById("dash-water-input").value);
+      if (!ml) return;
+      await addEntry("water", { ml });
+      renderDashboard();
+    });
+    document.getElementById("dash-water-done").addEventListener("click", () => {
+      dashboardEditingCard = null;
+      renderDashboard();
+    });
+  }
 
   if (container.querySelector('[data-edit-form="steps"]')) {
     document.getElementById("dash-steps-cancel").addEventListener("click", () => {
@@ -1154,7 +1217,7 @@ function renderDailyHabits() {
       label: "Water",
       detail: `${(water / 1000).toFixed(1)} / ${goals.waterGoal ? (goals.waterGoal / 1000).toFixed(1) : "—"} L`,
       met: !!goals.waterGoal && water >= goals.waterGoal,
-      switchView: "food" // logged on the Food tab now
+      action: "open-water" // logged right on the Dashboard's own stat card now too, not just the Food tab
     },
     {
       iconName: "pill",
@@ -1202,6 +1265,11 @@ function renderDailyHabits() {
     const panel = document.getElementById("fitness-stretch");
     panel.querySelector("details")?.setAttribute("open", "");
     panel.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  el.querySelector('[data-habit-action="open-water"]')?.addEventListener("click", () => {
+    dashboardEditingCard = "water";
+    renderDashboard();
+    document.getElementById("dashboard-stats")?.scrollIntoView({ behavior: "smooth", block: "center" });
   });
   el.querySelector('[data-habit-action="open-steps"]')?.addEventListener("click", () => {
     dashboardEditingCard = "steps";

@@ -60,18 +60,19 @@ is the *current* layout, not the original one; 2h has the reasoning.)
   panel (curated 60-item catalog, `foods.json`: 15 each of breakfast/lunch/
   dinner/snack, varied across cuisines/diets, approximate macros) with
   shuffle and one-tap logging (per-device only, localStorage, not synced) +
-  **Water** quick-add/manual logging (moved here from Log in 2h).
+  **Water** quick-add/manual logging (moved here from Log in 2h; also
+  logged from the Dashboard since 3f — see below, not an either/or move).
 - **Fitness** (renamed from "Gym" in 2h): see section 3 for the gym program
   itself, it's the biggest piece. Also holds Cardio logging and the **Daily
   stretch** checklist (moved here from the Dashboard in 2h) — Activity
   (steps/calories burned) lived here too in 2h but moved again to the
   Dashboard in 3e (see below).
-- **Dashboard**: goal-progress stat cards (Calories/Protein/Water — read-
-  only, ring + bar), **Steps**, a **Sleep** card, and a **Weight** card that
-  are logging controls *and* displays (see below), the vitamins/supplements
-  checklist (kept here per Adrian's request — "keep the medication stuff on
-  the dashboard"), the coach note preview, meals preview, and workout-plan
-  preview.
+- **Dashboard**: goal-progress stat cards (Calories/Protein — read-only,
+  ring + bar), **Water**, **Steps**, a **Sleep** card, and a **Weight** card
+  that are logging controls *and* displays (see below), the vitamins/
+  supplements checklist (kept here per Adrian's request — "keep the
+  medication stuff on the dashboard"), the coach note preview, meals
+  preview, and workout-plan preview.
 - **Steps/Sleep/Weight tap-to-edit cards (2h, Steps added in 3e)**: tapping
   any of the three swaps its ring/value for an inline form (steps +
   calories burned for Steps, bedtime+wake for Sleep, a number field for
@@ -83,6 +84,14 @@ is the *current* layout, not the original one; 2h has the reasoning.)
   `removeEntry` then `addEntry`). State (`dashboardEditingCard`) is reset
   whenever the viewed date changes, so flipping to another day never lands
   you mid-edit on the wrong day's data.
+- **Water's Dashboard card (3f) is a different shape from the other three**:
+  Water has no single daily value to correct — it's a running tally from
+  however many times you drink water that day — so there's no Save/Cancel
+  pair. Tapping it reveals the same quick-add chips (+250/+500/+750ml) +
+  manual-amount-and-Add the Food tab's water form already has; each tap
+  commits immediately via `addEntry` and the card *stays open* (only "Done"
+  closes it back to the ring), so you can log several times in a row
+  without re-tapping the card each time.
 - **Log**: now the detailed, date-navigable *journal* of everything for the
   selected day — food, water, weight, sleep, vitamins, stretches (all from
   the `entries` collection) plus that day's gym sets and session notes (from
@@ -1375,6 +1384,51 @@ the exact tap-to-edit pattern Sleep/Weight already established in 2h.
   adding to it (delete-then-add, no duplicate entry). Confirmed the Daily
   Habits row's new click target opens the Dashboard form directly without
   switching views. Confirmed the Fitness tab's Activity panel is gone.
+
+### 3f. Water added to the Dashboard too — not moved, added (2026-11-16)
+
+Adrian: "I also want the water to be added on the dashboard as well." Worth
+noting the phrasing difference from 3e's Steps ask ("rather than in the
+fitness section" — a move) vs. this one ("as well" — an addition): Water
+now logs from *both* the Food tab (unchanged) and the Dashboard, not
+relocated away from Food. Made sense to treat it differently from Steps/
+Sleep/Weight for a structural reason, not just the wording: those three are
+each a single corrected value per day, but Water is a running tally (you
+drink water several times a day, each a separate `addEntry("water", {ml})`
+the same way the Food tab's quick-add chips already worked) — collapsing
+that into a single-entry Save/Cancel pair like Sleep/Weight would have
+silently discarded every other glass logged that day.
+
+- `dashboardWaterCardHtml(water)` (ring, tappable, same shape as the other
+  stat cards) and `dashboardWaterEditHtml()` (the Dashboard's new edit-mode
+  markup — same three quick-add chips plus a manual-amount-and-Add row the
+  Food tab's water form already has, read from `app.js`, not duplicated
+  logic) pulled Water out of `renderDashboard()`'s plain `ringStats` array,
+  same pattern as Steps in 3e.
+- Different interaction shape from Steps/Sleep/Weight on purpose: no Save/
+  Cancel. Each chip tap or "Add" click calls `addEntry` immediately and
+  `dashboardEditingCard` is deliberately *not* cleared afterward, so the
+  card stays open for another quick-add instead of closing after every
+  single tap — only the new "Done" button closes it back to the ring.
+  Wired per-render inside `wireDashboardStatEdits` (the global one-time
+  `[data-quick-ml]` wiring from the Food tab's own chips, set up once at
+  script load, can't reach these — they don't exist in the DOM yet at that
+  point — so these use a distinct `data-dash-quick-ml` attribute with their
+  own listener, re-attached fresh on every render, same reasoning as the
+  habit-row/meal-item `[data-switch-view]` fix from the mobile-view pass).
+- The Daily Habits "Water" row's click target changed from
+  `switchView: "food"` to a new `open-water` action (mirrors `open-steps`/
+  `open-sleep`): opens the Dashboard's own water card instead of switching
+  tabs, now that logging it doesn't require leaving the Dashboard.
+- Live-tested: tapped the Water card, hit +250ml then +500ml — both
+  summed (750ml total) and the card stayed open for the second tap without
+  needing to re-tap the card. Typed 300 into the manual amount field,
+  clicked Add, hit Done — total correctly reached 1050ml, closed back to
+  the ring. Confirmed the Food tab's own water form is untouched and still
+  works (added another 250ml from there — total correctly reached 1300ml,
+  proving both entry points write to the same cumulative total without
+  conflicting). Confirmed the Daily Habits row opens the Dashboard card
+  directly rather than switching to Food.
 
 ---
 
