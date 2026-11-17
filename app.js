@@ -466,9 +466,7 @@ function triggerCoachTalk(faceId, bubbleId, reactSrc, restoreSrc) {
   }
   const line = randomCoachLine();
   showCoachBubble(bubbleId, line);
-  // The dashboard room should speak the exact same line when tapped,
-  // and when a sidebar/Coach-tab avatar starts a speech animation.
-  window.UpkeepRoomCoach?.talk(line);
+  // showCoachBubble already synchronizes this line with the room scene.
 }
 document.getElementById("sidebar-avatar-btn")?.addEventListener("click", () => triggerCoachTalk("sidebar-avatar", "coach-bubble"));
 document.getElementById("sidebar-avatar-btn-mobile")?.addEventListener("click", () => triggerCoachTalk("sidebar-avatar-mobile", "coach-bubble-mobile"));
