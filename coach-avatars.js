@@ -1,4 +1,4 @@
-// Coach characters — real sprite art (Atlas, Pixel, Mira, Rex, Luna), each
+// Coach characters — eight fitness and wellness personalities, each
 // cropped from an AI-generated sprite pack Adrian supplied. Pure data, no
 // DOM/Firebase — same boundary as gym.js/nutrition.js/calendar.js.
 //
@@ -80,6 +80,54 @@ export const COACH_AVATARS = [
     full: "avatars/luna-full.png",
     idle: ["avatars/luna-full.png", "avatars/luna-idle2.png"],
     react: "avatars/luna-react.png"
+  },
+  {
+    "id": "nova",
+    "name": "Nova",
+    "title": "The Cardio Coach",
+    "tagline": "Find your rhythm, one step at a time.",
+    "subtitle": "Move a little. Feel a lot.",
+    "badgeIcon": "footprints",
+    "accent": "#d85e51",
+    "face": "avatars/mira-face.png",
+    "full": "avatars/mira-full.png",
+    "idle": [
+      "avatars/mira-full.png",
+      "avatars/mira-idle2.png"
+    ],
+    "react": "avatars/mira-react.png"
+  },
+  {
+    "id": "sage",
+    "name": "Sage",
+    "title": "The Wellness Coach",
+    "tagline": "Progress includes caring for yourself.",
+    "subtitle": "Breathe, stretch, and grow.",
+    "badgeIcon": "lotus",
+    "accent": "#6b9455",
+    "face": "avatars/mira-face.png",
+    "full": "avatars/mira-full.png",
+    "idle": [
+      "avatars/mira-full.png",
+      "avatars/mira-idle2.png"
+    ],
+    "react": "avatars/mira-react.png"
+  },
+  {
+    "id": "pace",
+    "name": "Pace",
+    "title": "The Movement Coach",
+    "tagline": "Consistency is built in small moves.",
+    "subtitle": "Find what keeps you moving.",
+    "badgeIcon": "bicep",
+    "accent": "#b98332",
+    "face": "avatars/atlas-face.png",
+    "full": "avatars/atlas-full.png",
+    "idle": [
+      "avatars/atlas-full.png",
+      "avatars/atlas-idle2.png"
+    ],
+    "react": "avatars/atlas-react.png"
   }
 ];
 

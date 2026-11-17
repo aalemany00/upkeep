@@ -306,17 +306,25 @@ function maybeRebuildStaleSplit() {
 // shown next to coach notes. Picking one is cosmetic only (see
 // coach-avatars.js); it never changes what the coach says.
 // ---------------------------------------------------------------------
+function pixelCoachUrl(avatar, pose = "idle", face = false) {
+  const art = window.UpkeepCoachSprites;
+  if (!art) return face ? avatar.face : (avatar.full || avatar.face);
+  const raw = art.svg(avatar.id, pose);
+  const scene = face ? raw.replace('viewBox="0 0 64 80"', 'viewBox="12 5 42 34"') : raw;
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(scene);
+}
+
 function renderAvatarPicker(container, selectedId, onPick) {
   if (!container) return;
   container.innerHTML = COACH_AVATARS.map((a) => `
     <button type="button" class="avatar-option${a.id === selectedId ? " selected" : ""}" data-avatar-id="${a.id}" title="${a.tagline}" aria-pressed="${a.id === selectedId}">
-      <span class="avatar-thumb"><img src="${a.face}" alt="${a.name}" /></span>
+      <span class="avatar-thumb"><img src="${pixelCoachUrl(a, "idle", true)}" alt="${a.name}" /></span>
       <span class="avatar-name"><span class="avatar-badge-icon" style="color:${a.accent}">${icon(a.badgeIcon, { size: 13 })}</span>${a.name}</span>
       <span class="avatar-title subtle small">${a.title}</span>
     </button>
   `).join("");
   container.querySelectorAll("[data-avatar-id]").forEach((btn) => {
-    btn.addEventListener("click", () => onPick(btn.dataset.avatarId));
+    btn.addEventListener("click", () => { window.UpkeepRoomCoach?.select(btn.dataset.avatarId); onPick(btn.dataset.avatarId); });
   });
 }
 
@@ -325,7 +333,7 @@ function renderAvatarPicker(container, selectedId, onPick) {
 // is reserved for the one hero panel at the top of the Coach tab.
 function renderCoachAvatarBadges() {
   const avatar = coachAvatarById(goals.coachAvatar);
-  const faceImg = `<img src="${avatar.face}" alt="${avatar.name}" />`;
+  const faceImg = `<img src="${pixelCoachUrl(avatar, "idle", true)}" alt="${avatar.name}" />`;
   const dashBadge = document.getElementById("dashboard-coach-avatar");
   const coachBadge = document.getElementById("coach-view-avatar");
   const sidebarAvatar = document.getElementById("sidebar-avatar");
@@ -335,6 +343,7 @@ function renderCoachAvatarBadges() {
   if (sidebarAvatar) sidebarAvatar.innerHTML = faceImg;
   if (sidebarAvatarMobile) sidebarAvatarMobile.innerHTML = faceImg;
   renderCoachHero();
+  window.UpkeepRoomCoach?.select(avatar.id);
 }
 
 // The Coach tab's "meet your coach" panel: full body, idle animation,
@@ -354,7 +363,7 @@ function renderCoachHero() {
   const avatar = coachAvatarById(goals.coachAvatar);
   el.innerHTML = `
     <button type="button" class="coach-hero-figure" id="coach-hero-figure" aria-label="Get a note from ${avatar.name}">
-      <img src="${avatar.idle[0]}" alt="${avatar.name}, ${avatar.title}" />
+      <img src="${pixelCoachUrl(avatar)}" alt="${avatar.name}, ${avatar.title}" />
     </button>
     <div class="coach-hero-text">
       <h3><span class="avatar-badge-icon" style="color:${avatar.accent}">${icon(avatar.badgeIcon, { size: 16 })}</span>${avatar.name} <span class="subtle">· ${avatar.title}</span></h3>
@@ -368,11 +377,11 @@ function renderCoachHero() {
     coachIdleTimer = setInterval(() => {
       if (!heroImg.isConnected) { clearInterval(coachIdleTimer); return; }
       idleFrame = (idleFrame + 1) % avatar.idle.length;
-      heroImg.src = avatar.idle[idleFrame];
+      heroImg.src = pixelCoachUrl(avatar, idleFrame === 0 ? "idle" : "blink");
     }, 2200);
   }
   document.getElementById("coach-hero-figure")?.addEventListener("click", () => {
-    triggerCoachTalk("coach-hero-figure", "coach-bubble-hero", avatar.react, avatar.idle[0]);
+    triggerCoachTalk("coach-hero-figure", "coach-bubble-hero", pixelCoachUrl(avatar, "exercise"), pixelCoachUrl(avatar));
   });
 }
 
@@ -410,6 +419,7 @@ function showCoachBubble(bubbleId, text) {
   const bubble = document.getElementById(bubbleId);
   if (!bubble) return;
   bubble.textContent = text;
+  window.UpkeepRoomCoach?.talk(text);
   bubble.hidden = false;
   bubble.classList.remove("show");
   void bubble.offsetWidth; // restart the transition if it's already showing
