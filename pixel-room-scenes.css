@@ -406,7 +406,15 @@
    contains no pre-drawn bubble. CSS, not the background, owns the bubble. */
 #app .pixel-room-hero .pixel-room-message[hidden] { display:none!important; }
 #app .pixel-room-hero .pixel-room-message {
-  display:block;
+  /* Clamp to a fixed number of lines with a trailing ellipsis instead of
+     an internal scrollbar -- a real coach-note summary (not just a short
+     tagline) can easily run past what fits here, and scrolling inside a
+     tiny speech bubble to read it is worse than a shorter, glanceable
+     line. The full, untruncated text is always still readable in the
+     Coach tab's own larger panel. */
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:5;
   z-index:12;
   position:absolute;
   top:auto;
@@ -414,8 +422,6 @@
   bottom:48%;
   width:min(320px,calc(100% - 24px));
   height:auto;
-  min-height:0;
-  max-height:42%;
   margin:0;
   padding:12px 15px;
   transform:translateX(-50%);
@@ -428,7 +434,8 @@
   font-weight:600;
   font-size:clamp(12px,1.25vw,17px);
   line-height:1.24;
-  overflow-y:auto;
+  overflow:hidden;
+  text-overflow:ellipsis;
   overflow-wrap:anywhere;
   cursor:pointer;
   pointer-events:auto;
@@ -446,13 +453,7 @@
   background:#fff0d7;
 }
 #app .pixel-room-character.is-frozen { transition:none!important; }
-#app .pixel-room-character[data-facing="left"] > .pixel-coach-art { scale:-1 1; }
-#app .pixel-room-character[data-facing="right"] > .pixel-coach-art { scale:1 1; }
 #app .pixel-room-character.is-stretching { animation:none; }
-#app .pixel-room-character.is-stretching > .pixel-coach-art {
-  animation:upkeep-coach-stretch 1.6s ease-in-out infinite;
-  transform-origin:50% 88%;
-}
 @keyframes upkeep-coach-stretch {
   0%,100% { transform:rotate(-3deg) translateY(0); }
   50% { transform:rotate(5deg) translateY(2px); }
@@ -463,17 +464,13 @@
     bottom:auto;
     left:50%;
     width:min(92%,380px);
-    max-height:72px;
+    -webkit-line-clamp:4;
     padding:8px 10px;
     font-size:clamp(12px,3.3vw,14px)!important;
     line-height:1.17;
   }
   #app .pixel-room-hero .pixel-room-message::after { display:none; }
 }
-@media(prefers-reduced-motion:reduce){
-  #app .pixel-room-character.is-stretching > .pixel-coach-art { animation:none!important; }
-}
-
 /* Facing and floor-contact corrections.
    Flip a dedicated outer layer, never the layer whose pose is animated.
    The artwork remains the exact original lossless sprite pixels. */

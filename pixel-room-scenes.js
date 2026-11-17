@@ -84,10 +84,11 @@
     currentSpot = percentage;
   }
   function beginMovement() {
-    if (reduce.matches || isTalking || !isVisible()) {
-      if (!isTalking && !reduce.matches) schedule(nextActivity, 1200);
-      return;
-    }
+    // No self-rescheduling here when not visible: roomVisibility (below)
+    // restarts the routine the moment the Dashboard actually comes back
+    // into view, instead of this polling every ~1.2s forever in the
+    // background on every other tab for as long as the page stays open.
+    if (reduce.matches || isTalking || !isVisible()) return;
     const choices = waypoints().filter(value => Math.abs(value - currentSpot) > 8);
     const destination = choices[Math.floor(Math.random() * choices.length)] ?? waypoints()[0];
     const distance = Math.abs(destination - currentSpot);
@@ -117,10 +118,7 @@
     }, duration + 60);
   }
   function doActivity(kind) {
-    if (isTalking || reduce.matches || !isVisible()) {
-      if (!isTalking && !reduce.matches) schedule(nextActivity, 1200);
-      return;
-    }
+    if (isTalking || reduce.matches || !isVisible()) return;
     const stretching = kind === 'stretch';
     actor.classList.add(stretching ? 'is-stretching' : 'is-exercising');
     previousActivity = kind;
@@ -138,8 +136,7 @@
     }, stretching ? randomBetween(2500, 4100) : randomBetween(2900, 5300));
   }
   function nextActivity() {
-    if (isTalking || reduce.matches) return;
-    if (!isVisible()) { schedule(nextActivity, 1250); return; }
+    if (isTalking || reduce.matches || !isVisible()) return;
     const roll = Math.random();
     if (roll < .56 || previousActivity === 'idle') {
       previousActivity = 'walk';
@@ -262,6 +259,21 @@
   reduce.addEventListener('change', () => {
     if (!isTalking) startAutonomous(500);
   });
+  // The Dashboard view is just display:none (not removed) when another
+  // tab is open, so this is what actually restarts the routine when it
+  // comes back -- beginMovement/doActivity/nextActivity no longer poll
+  // for that themselves.
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(entries => {
+      const entry = entries[entries.length - 1];
+      if (entry.isIntersecting) {
+        if (!document.hidden) startAutonomous(400);
+      } else if (!isTalking) {
+        clearMotion();
+        setPose('idle');
+      }
+    }, { threshold: 0 }).observe(room);
+  }
   window.UpkeepRoomCoach = Object.freeze({
     select, talk, requestTalk, dismiss,
     mount: () => room,
