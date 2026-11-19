@@ -389,7 +389,13 @@
 @media(max-width:760px) {
  .pixel-room-hero {
   aspect-ratio:auto;
-  background-size:auto 100%;
+  /* cover, not "auto 100%": the mobile room height is a fixed clamp()
+     independent of viewport width (pixel-theme.css), so on anything
+     wider than a single-column phone -- a split-screen pane, a tablet --
+     "auto 100%" only matches the image to that height and leaves the
+     base cream background showing through as tan bars on both sides.
+     cover always fills the box, cropping overflow instead of gapping. */
+  background-size:cover;
   background-position:56% center;
  }
  .pixel-room-message {
