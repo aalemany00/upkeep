@@ -34,7 +34,8 @@
   }
   const room = element('div', 'pixel-room-hero', 'Cozy pixel-art bedroom, exercise equipment, and Upkeep coach');
   const speech = element('div', 'pixel-room-message');
-  speech.textContent = 'Today’s a good day to keep your momentum going!';
+  speech.textContent = '';
+  speech.hidden = true; // Bubble appears only after interacting with the coach.
   const coachLink = element('button', 'pixel-coach-hotspot', 'Visit your coach');
   coachLink.type = 'button';
   coachLink.dataset.switchView = 'coach';

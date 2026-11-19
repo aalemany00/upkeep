@@ -306,17 +306,32 @@ function maybeRebuildStaleSplit() {
 // shown next to coach notes. Picking one is cosmetic only (see
 // coach-avatars.js); it never changes what the coach says.
 // ---------------------------------------------------------------------
+function pixelCoachMarkup(avatar, face = false) {
+  const art = window.UpkeepCoachSprites;
+  if (face) {
+    // A separate head-and-shoulders crop of the same original character,
+    // never a zoomed background strip or an adjacent pose.
+    const src = art?.portrait(avatar.id) || avatar.face;
+    return `<img class="pixel-coach-portrait" src="${src}" alt="${avatar.name}, head and shoulders" />`;
+  }
+  return art?.markup(avatar.id, "pixel-coach-full") ||
+    `<img src="${avatar.full}" alt="${avatar.name}" />`;
+}
+
 function renderAvatarPicker(container, selectedId, onPick) {
   if (!container) return;
+  // Older accounts may have selected one of the three unfinished coaches.
+  // Display Atlas as the valid fallback until the user chooses another.
+  selectedId = coachAvatarById(selectedId).id;
   container.innerHTML = COACH_AVATARS.map((a) => `
     <button type="button" class="avatar-option${a.id === selectedId ? " selected" : ""}" data-avatar-id="${a.id}" title="${a.tagline}" aria-pressed="${a.id === selectedId}">
-      <span class="avatar-thumb"><img src="${a.face}" alt="${a.name}" /></span>
+      <span class="avatar-thumb">${pixelCoachMarkup(a)}</span>
       <span class="avatar-name"><span class="avatar-badge-icon" style="color:${a.accent}">${icon(a.badgeIcon, { size: 13 })}</span>${a.name}</span>
       <span class="avatar-title subtle small">${a.title}</span>
     </button>
   `).join("");
   container.querySelectorAll("[data-avatar-id]").forEach((btn) => {
-    btn.addEventListener("click", () => onPick(btn.dataset.avatarId));
+    btn.addEventListener("click", () => { window.UpkeepRoomCoach?.select(btn.dataset.avatarId); onPick(btn.dataset.avatarId); });
   });
 }
 
@@ -325,7 +340,7 @@ function renderAvatarPicker(container, selectedId, onPick) {
 // is reserved for the one hero panel at the top of the Coach tab.
 function renderCoachAvatarBadges() {
   const avatar = coachAvatarById(goals.coachAvatar);
-  const faceImg = `<img src="${avatar.face}" alt="${avatar.name}" />`;
+  const faceImg = pixelCoachMarkup(avatar, true);
   const dashBadge = document.getElementById("dashboard-coach-avatar");
   const coachBadge = document.getElementById("coach-view-avatar");
   const sidebarAvatar = document.getElementById("sidebar-avatar");
@@ -335,6 +350,7 @@ function renderCoachAvatarBadges() {
   if (sidebarAvatar) sidebarAvatar.innerHTML = faceImg;
   if (sidebarAvatarMobile) sidebarAvatarMobile.innerHTML = faceImg;
   renderCoachHero();
+  window.UpkeepRoomCoach?.select(avatar.id);
 }
 
 // The Coach tab's "meet your coach" panel: full body, idle animation,
@@ -347,14 +363,17 @@ function renderCoachAvatarBadges() {
 // CSS sway/wobble (style.css) still runs on the container underneath this,
 // so the two layer together rather than replacing each other.
 let coachIdleTimer = null;
+let coachHeroReactTimer = null;
 function renderCoachHero() {
   const el = document.getElementById("coach-hero");
   if (!el) return;
   clearInterval(coachIdleTimer);
+  clearInterval(coachHeroReactTimer);
   const avatar = coachAvatarById(goals.coachAvatar);
+  const art = window.UpkeepCoachSprites;
   el.innerHTML = `
     <button type="button" class="coach-hero-figure" id="coach-hero-figure" aria-label="Get a note from ${avatar.name}">
-      <img src="${avatar.idle[0]}" alt="${avatar.name}, ${avatar.title}" />
+      ${pixelCoachMarkup(avatar)}
     </button>
     <div class="coach-hero-text">
       <h3><span class="avatar-badge-icon" style="color:${avatar.accent}">${icon(avatar.badgeIcon, { size: 16 })}</span>${avatar.name} <span class="subtle">· ${avatar.title}</span></h3>
@@ -362,17 +381,40 @@ function renderCoachHero() {
       <p class="subtle small">${avatar.subtitle}</p>
     </div>
   `;
-  const heroImg = el.querySelector("#coach-hero-figure img");
-  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    let idleFrame = 0;
-    coachIdleTimer = setInterval(() => {
-      if (!heroImg.isConnected) { clearInterval(coachIdleTimer); return; }
-      idleFrame = (idleFrame + 1) % avatar.idle.length;
-      heroImg.src = avatar.idle[idleFrame];
-    }, 2200);
+  const figure = el.querySelector("#coach-hero-figure");
+  const sprite = figure?.querySelector(".pixel-coach-art");
+  if (sprite && art) {
+    let idleIndex = 0;
+    const idleFrames = art.frameSequence(avatar.id, "idle");
+    art.setFrame(sprite, idleFrames[0]);
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      coachIdleTimer = setInterval(() => {
+        if (!sprite.isConnected) { clearInterval(coachIdleTimer); return; }
+        art.setFrame(sprite, idleFrames[++idleIndex % idleFrames.length]);
+      }, 700);
+    }
   }
-  document.getElementById("coach-hero-figure")?.addEventListener("click", () => {
-    triggerCoachTalk("coach-hero-figure", "coach-bubble-hero", avatar.react, avatar.idle[0]);
+  figure?.addEventListener("click", () => {
+    triggerCoachTalk("coach-hero-figure", "coach-bubble-hero");
+    if (!sprite || !art) return;
+    clearInterval(coachIdleTimer);
+    clearInterval(coachHeroReactTimer);
+    const talkFrames = art.frameSequence(avatar.id, "talk");
+    let step = 0;
+    figure.classList.add("is-talking");
+    art.setFrame(sprite, talkFrames[0]);
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      coachHeroReactTimer = setInterval(() => {
+        if (!sprite.isConnected) { clearInterval(coachHeroReactTimer); return; }
+        art.setFrame(sprite, talkFrames[++step % talkFrames.length]);
+      }, 280);
+    }
+    setTimeout(() => {
+      if (!figure.isConnected) return;
+      clearInterval(coachHeroReactTimer);
+      figure.classList.remove("is-talking");
+      if (sprite.isConnected) art.setFrame(sprite, art.frameSequence(avatar.id,"idle")[0]);
+    }, 1700);
   });
 }
 
@@ -406,20 +448,47 @@ function randomCoachLine() {
 }
 
 const coachBubbleTimers = {};
+function hideCoachBubbles() {
+  // Only one message is ever visible, regardless of where it originated.
+  for (const id of ["coach-bubble", "coach-bubble-mobile", "coach-bubble-hero"]) {
+    clearTimeout(coachBubbleTimers[id]);
+    const bubble = document.getElementById(id);
+    if (!bubble) continue;
+    bubble.classList.remove("show");
+    bubble.hidden = true;
+  }
+}
 function showCoachBubble(bubbleId, text) {
-  const bubble = document.getElementById(bubbleId);
+  hideCoachBubbles();
+  const onDashboard = document.getElementById("view-dashboard")?.classList.contains("active");
+  if (onDashboard && window.UpkeepRoomCoach) {
+    // The illustrated coach owns the ONLY visible dialogue on Dashboard.
+    // Do not show an extra sidebar/topbar bubble behind it.
+    window.UpkeepRoomCoach.talk(text);
+    return;
+  }
+  // Do not leave a stale room message behind when talking elsewhere.
+  window.UpkeepRoomCoach?.dismiss();
+  const onCoachTab = document.getElementById("view-coach")?.classList.contains("active");
+  const id = onCoachTab ? "coach-bubble-hero" : bubbleId;
+  const bubble = document.getElementById(id);
   if (!bubble) return;
   bubble.textContent = text;
   bubble.hidden = false;
   bubble.classList.remove("show");
-  void bubble.offsetWidth; // restart the transition if it's already showing
+  void bubble.offsetWidth;
   bubble.classList.add("show");
-  clearTimeout(coachBubbleTimers[bubbleId]);
-  coachBubbleTimers[bubbleId] = setTimeout(() => {
+  coachBubbleTimers[id] = setTimeout(() => {
     bubble.classList.remove("show");
-    setTimeout(() => { bubble.hidden = true; }, 200);
-  }, 5000);
+    bubble.hidden = true;
+  }, 5500);
 }
+document.addEventListener("upkeep:request-room-coach-dialogue", event => {
+  if (!window.UpkeepRoomCoach) return;
+  event.detail.handled = true;
+  hideCoachBubbles();
+  window.UpkeepRoomCoach.talk(randomCoachLine());
+});
 
 // reactSrc/restoreSrc are only passed for the hero figure (it has real
 // sprite frames to swap to); the small face badges just get the CSS wobble
@@ -431,18 +500,32 @@ function triggerCoachTalk(faceId, bubbleId, reactSrc, restoreSrc) {
     face.classList.remove("coach-talking");
     void face.offsetWidth;
     face.classList.add("coach-talking");
+    // Alternate mouth frames instead of holding a single static reaction.
+    // Keep the hero's artwork from the same sprite renderer as Settings.
     if (reactSrc) {
       const img = face.querySelector("img");
       if (img) {
+        const existing = coachReactTimers[faceId];
+        if (existing) { clearInterval(existing.interval); clearTimeout(existing.timeout); }
+        let mouthOpen = true;
         img.src = reactSrc;
-        clearTimeout(coachReactTimers[faceId]);
-        coachReactTimers[faceId] = setTimeout(() => {
+        const interval = setInterval(() => {
+          if (!img.isConnected) { clearInterval(interval); return; }
+          mouthOpen = !mouthOpen;
+          img.src = mouthOpen ? reactSrc : restoreSrc;
+        }, 190);
+        const timeout = setTimeout(() => {
+          clearInterval(interval);
           if (img.isConnected) img.src = restoreSrc;
-        }, 900);
+          delete coachReactTimers[faceId];
+        }, 1700);
+        coachReactTimers[faceId] = { interval, timeout };
       }
     }
   }
-  showCoachBubble(bubbleId, randomCoachLine());
+  const line = randomCoachLine();
+  showCoachBubble(bubbleId, line);
+  // showCoachBubble already synchronizes this line with the room scene.
 }
 document.getElementById("sidebar-avatar-btn")?.addEventListener("click", () => triggerCoachTalk("sidebar-avatar", "coach-bubble"));
 document.getElementById("sidebar-avatar-btn-mobile")?.addEventListener("click", () => triggerCoachTalk("sidebar-avatar-mobile", "coach-bubble-mobile"));

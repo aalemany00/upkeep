@@ -1,20 +1,6 @@
-// Coach characters — real sprite art (Atlas, Pixel, Mira, Rex, Luna), each
-// cropped from an AI-generated sprite pack Adrian supplied. Pure data, no
-// DOM/Firebase — same boundary as gym.js/nutrition.js/calendar.js.
-//
-// `face`/`full` are the static poses (avatar picker thumbnail, and the
-// first frame the Coach hero paints before animation kicks in). `idle`
-// is a 2-frame full-body loop (same pose, blink/alt-idle variant) the
-// Coach hero cycles through continuously; `react` is a third full-body
-// celebratory frame swapped in briefly when the coach is clicked — a
-// thumbs-up for Atlas/Pixel, an arms-up cheer for Mira/Rex/Luna (their
-// pack's own thumbs-up pose had a source-art defect — a disconnected
-// hand/arm for Luna, a paw clipped by the sprite sheet's own cell edge
-// for Rex — so the cheer pose was used instead; same crop pipeline, just
-// a different source frame). Actual cycling/swapping is plain JS + CSS
-// (see app.js/style.css); this module only describes who each coach is
-// and where their art lives.
-
+// Upkeep coach metadata and stable saved IDs. Displayed artwork is the
+// original 16-frame PNG cutout atlas from pixel-coach-sprites.js, not the
+// legacy five-pose placeholders. All seven coaches have approved names.
 export const COACH_AVATARS = [
   {
     id: "atlas",
@@ -80,7 +66,35 @@ export const COACH_AVATARS = [
     full: "avatars/luna-full.png",
     idle: ["avatars/luna-full.png", "avatars/luna-idle2.png"],
     react: "avatars/luna-react.png"
+  },
+
+  // Scout and Blaze retain their original IDs to preserve saved selections
+  // and existing cutout asset paths.
+  {
+    id: "outdoor-coach",
+    name: "Scout",
+    title: "Outdoor Movement",
+    tagline: "Take your fitness journey one step at a time.",
+    subtitle: "Explore, breathe, and keep moving.",
+    badgeIcon: "footprints",
+    accent: "#5a8864",
+    face: "pixel-assets/cutouts/outdoor-coach-portrait.png",
+    full: "pixel-assets/cutouts/outdoor-coach-atlas.png",
+    idle: [], react: ""
+  },
+  {
+    id: "red-hoodie-coach",
+    name: "Blaze",
+    title: "Movement & Progress",
+    tagline: "A little progress every day adds up.",
+    subtitle: "Find your pace and enjoy the work.",
+    badgeIcon: "dumbbell",
+    accent: "#b96658",
+    face: "pixel-assets/cutouts/red-hoodie-coach-portrait.png",
+    full: "pixel-assets/cutouts/red-hoodie-coach-atlas.png",
+    idle: [], react: ""
   }
+
 ];
 
 export function coachAvatarById(id) {
