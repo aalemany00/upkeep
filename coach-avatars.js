@@ -1,6 +1,6 @@
 // Upkeep coach metadata and stable saved IDs. Displayed artwork is the
 // original 16-frame PNG cutout atlas from pixel-coach-sprites.js, not the
-// legacy five-pose placeholders. Two extra coaches have provisional labels.
+// legacy five-pose placeholders. All seven coaches have approved names.
 export const COACH_AVATARS = [
   {
     id: "atlas",
@@ -68,11 +68,11 @@ export const COACH_AVATARS = [
     react: "avatars/luna-react.png"
   },
 
-  // These names are temporary descriptors; the user has not named the two
-  // additional characters. Stable IDs can remain when display names change.
+  // Scout and Blaze retain their original IDs to preserve saved selections
+  // and existing cutout asset paths.
   {
     id: "outdoor-coach",
-    name: "Outdoor Coach",
+    name: "Scout",
     title: "Outdoor Movement",
     tagline: "Take your fitness journey one step at a time.",
     subtitle: "Explore, breathe, and keep moving.",
@@ -84,7 +84,7 @@ export const COACH_AVATARS = [
   },
   {
     id: "red-hoodie-coach",
-    name: "Red Hoodie Coach",
+    name: "Blaze",
     title: "Movement & Progress",
     tagline: "A little progress every day adds up.",
     subtitle: "Find your pace and enjoy the work.",
