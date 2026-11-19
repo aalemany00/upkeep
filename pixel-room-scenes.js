@@ -131,6 +131,14 @@
     actor.classList.add(stretching ? 'is-stretching' : 'is-exercising');
     previousActivity = kind;
     let n = 0;
+    // Stops this activity's OWN step loop specifically. schedule()'s epoch
+    // check only catches an external interrupt (talk, tab hidden, a new
+    // select()) -- it does nothing when this activity simply runs out its
+    // own clock below, so without this flag the step loop would keep
+    // recursing forever after "ending", left running underneath whatever
+    // activity comes next (that's what caused the runaway speed-up and
+    // e.g. a tablet frame flashing in mid-walk).
+    let active = true;
     const action = stretching ? 'stretch' : 'exercise';
     const frames = art.frameSequence(selected, action);
     // Coaches whose "exercise" is pulling out a tablet/map (not a rep)
@@ -142,10 +150,12 @@
     const base = art.frameInterval(selected, action);
     poseFrame(action, n);
     (function stepFrame() {
+      if (!active) return;
       const dwell = hold && (n % frames.length) === hold.at ? randomBetween(hold.min, hold.max) : base;
-      schedule(() => { n++; poseFrame(action, n); stepFrame(); }, dwell);
+      schedule(() => { if (!active) return; n++; poseFrame(action, n); stepFrame(); }, dwell);
     })();
     schedule(() => {
+      active = false;
       actor.classList.remove('is-stretching', 'is-exercising');
       setPose('idle');
       schedule(nextActivity, randomBetween(350, 1200));
