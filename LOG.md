@@ -398,6 +398,78 @@ own repo, as required.
   mobile-Safari width that the 2l/2m fixes couldn't pin down — so there's
   nothing left for iOS Safari to render differently.
 
+## 2026-11-17 to 2026-11-19 — Animated coaches (ChatGPT-built PR #2), reviewed, fixed, merged
+
+- A second AI tool (ChatGPT/Codex) opened its own PR against this repo —
+  an animated pixel-art coach that walks/exercises/stretches/talks in the
+  Dashboard room, built from real uploaded cutout sprite sheets (7
+  coaches: Atlas, Pixel, Mira, Rex, Luna, Scout, Blaze). Reviewed and
+  fixed it over several rounds before merging, rather than merging it
+  blind:
+  - **Breaking bug**: a mangled comment in `sw.js` swallowed
+    `var SHELL_FILES = [` into itself, so the array was never declared —
+    `cache.addAll(SHELL_FILES)` threw on every install, meaning the
+    service worker never installed for anyone. Fixed, verified by
+    forcing a clean install and confirming all 18 shell files actually
+    cached.
+  - Dead CSS left over from a refactor, a speech bubble that needed an
+    internal scrollbar for a real coach-note-length line, and a
+    background-activity timer that polled every ~1.2s forever even on
+    tabs other than Dashboard (replaced with an `IntersectionObserver`
+    that only restarts the routine when the Dashboard is actually
+    visible).
+  - **Content review, not just code review**: went through all 7
+    coaches' actual source sprite sheets frame-by-frame. Nearly every
+    one had animations splicing together two unrelated real motions —
+    Luna's "stretch" was bookended by a meditation-breathing frame and
+    her "exercise" was a seated breathing clip with a standing frame
+    jump-cut into the middle of it; Pixel's/Mira's/Scout's/Blaze's
+    "exercise" turned out to be holding up a stats chart / journaling /
+    reading a map / checking a tablet — not a workout at all, just
+    whatever hand-busy frame existed. Rewrote every coach's
+    `ANIMATIONS` map so each action only ever plays frames from one
+    consistent motion, and gave each action (and some per-coach
+    sequences) their own pacing instead of one flat speed shared by
+    everything (`FRAME_SPEEDS`/`SPEED_OVERRIDES` in
+    `pixel-coach-sprites.js`).
+  - Added a randomized "stare at the tablet/map for a beat before
+    putting it away" pause (`DEVICE_HOLDS`) for the four coaches whose
+    exercise is really checking a device — this needed `doActivity`'s
+    frame stepper to become a self-rescheduling step instead of a flat
+    `setInterval` so a single step could have its own delay.
+  - **Self-inflicted regression, caught and fixed same day**: that
+    stepper rewrite never told the step loop when its activity ended,
+    so every exercise/stretch left an orphaned loop still running
+    forever underneath whatever came next — reported back as "all messed
+    up and super fast" with a tablet frame flashing in mid-walk. Root
+    cause was multiple concurrent loops stacking up, not one broken
+    animation. Fixed with a local `active` flag the loop checks before
+    recursing.
+  - Found (by rendering frame-by-frame comparison strips, not just
+    eyeballing the sheet) that Mira's walk frame 4 is cropped visibly
+    shorter/smaller than her other two walk frames on the source sheet
+    — a real registration mistake in that one frame, not a CSS bug —
+    causing a shrink-pop every third step right as she stopped to pull
+    out the tablet, which read as "sliding." Checked all 7 coaches the
+    same way; isolated to that one frame. Dropped it, walks on the two
+    good frames.
+  - Fixed a tan letterbox gap beside the room image on wide/non-phone
+    aspect ratios (a split-screen pane, a tablet): `pixel-room-scenes.css`
+    redeclared the same mobile breakpoint `pixel-theme.css` already had
+    working with `background-size:cover`, and the redeclaration
+    accidentally reverted it to `auto 100%`, which only matches the
+    fixed-height mobile room to the image's height and leaves gaps on
+    the sides once the container is wider than a single-column phone.
+  - Merged into `master` via `gh pr merge` (merge commit, branch kept)
+    once the above were all fixed and approved.
+- **Testing note for next time**: this browser-pane's screenshot capture
+  is unreliable specifically at narrow mobile emulation widths — it
+  visually rendered a 2-column settings grid as one overlapping full-
+  width card while `getBoundingClientRect()` on the same live page
+  confirmed two clean, non-overlapping 150px columns. Same lesson as
+  2l/2m: trust direct DOM measurement over this pane's own screenshots
+  for layout checks, especially at mobile widths.
+
 ## Open items
 
 - Delete the `test-coach@example.com` test account and its food entry from

@@ -1044,6 +1044,56 @@ described above still applies there).
 
 ---
 
+## 2b. Animated Dashboard coach (merged 2026-11-19, built by ChatGPT/Codex)
+
+A second AI tool opened its own PR against this repo (not Claude Code) —
+reviewed over several rounds and fixed before merging, see `LOG.md`'s
+2026-11-17→19 entry for the full blow-by-blow. Current state on `master`:
+
+- **What it is**: in the Dashboard room scene, the selected coach (one of
+  7: Atlas, Pixel, Mira, Rex, Luna, Scout `outdoor-coach`, Blaze
+  `red-hoodie-coach` — display names Scout/Blaze, stable ids kept for
+  saved selections) wanders the room, exercises/stretches at the gym
+  corner, and talks (one speech bubble, click to trigger) — all from real
+  uploaded 4x4 cutout sprite sheets (`pixel-assets/cutouts/*-atlas.png`,
+  16 frames each), not synthetic CSS deformation of a single image.
+  `pixel-coach-sprites.js` owns the roster/frame data; `pixel-room-scenes.js`
+  owns the autonomous behavior (walk/exercise/stretch/talk/idle, picked
+  randomly, restarted only when the Dashboard is actually visible via an
+  `IntersectionObserver` — no background polling on other tabs).
+- **Every coach's `ANIMATIONS` map only plays one real motion per
+  action** — this took a full frame-by-frame content review to get right;
+  most coaches' sheets have no literal workout-rep frame, so "exercise"
+  is each coach's own persona-appropriate substitute (Pixel checks a
+  stats readout, Mira journals, Scout reads a map, Blaze checks a
+  tablet, Luna does a guided breath — a real fit for "The Recovery
+  Coach"). Those four device-checking coaches pause on the "look at it"
+  frame for a random 800-2200ms (`DEVICE_HOLDS`) before continuing.
+  Per-action pacing lives in `FRAME_SPEEDS`/`SPEED_OVERRIDES`, not one
+  flat speed for everything.
+- **Known-good, checked against the source art**: don't re-add a frame
+  to a sequence without opening the actual atlas PNG and checking what
+  it depicts first — this is exactly how the original mismatches (and
+  Mira's one badly-cropped walk frame) got in. A bbox/centroid heuristic
+  is NOT reliable for this (tried it, too much false-positive noise from
+  held props/hair/tails) — render a side-by-side comparison strip and
+  look at it.
+- **Known trap**: `doActivity`'s frame stepper is a self-rescheduling
+  `schedule()` loop (needed so `DEVICE_HOLDS` can vary one step's
+  delay), not a plain `setInterval`. If you touch it again, it MUST
+  check a local `active` flag before recursing, flipped false by the
+  same callback that ends the activity — `schedule()`'s epoch guard only
+  catches an external interrupt, not the activity simply running out its
+  own clock. Forgetting this leaves an orphaned loop running forever
+  under whatever comes next (this exact regression shipped and got
+  caught the same day — see LOG.md).
+- **Testing note**: this project's dev-pane browser screenshots are
+  unreliable at narrow mobile emulation widths specifically — confirm
+  layout with `getBoundingClientRect()` on the live page, not by eyeballing
+  a screenshot, same lesson as the mobile date/time-input saga below.
+
+---
+
 ## 3. The gym system (the most complex part)
 
 - **Exercise catalog** (`exercises.json`, 932 exercises): seeded once from
