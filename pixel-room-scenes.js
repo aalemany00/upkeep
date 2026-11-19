@@ -132,14 +132,20 @@
     previousActivity = kind;
     let n = 0;
     const action = stretching ? 'stretch' : 'exercise';
+    const frames = art.frameSequence(selected, action);
+    // Coaches whose "exercise" is pulling out a tablet/map (not a rep)
+    // pause on the "looking at it" frame for a random, reasonable beat
+    // instead of cycling through on the same clock as an actual exercise
+    // -- see DEVICE_HOLDS. Driven by a self-rescheduling step rather than
+    // setInterval specifically so each step can have its own delay.
+    const hold = !stretching && art.deviceHold ? art.deviceHold(selected) : null;
+    const base = art.frameInterval(selected, action);
     poseFrame(action, n);
-    // Each coach's own pace for this action, not one flat speed for
-    // every coach and every action (a held stretch and a rep shouldn't
-    // move at the same rate -- see FRAME_SPEEDS/SPEED_OVERRIDES).
-    poseTimer = setInterval(() => poseFrame(action, ++n), art.frameInterval(selected, action));
+    (function stepFrame() {
+      const dwell = hold && (n % frames.length) === hold.at ? randomBetween(hold.min, hold.max) : base;
+      schedule(() => { n++; poseFrame(action, n); stepFrame(); }, dwell);
+    })();
     schedule(() => {
-      clearInterval(poseTimer);
-      poseTimer = null;
       actor.classList.remove('is-stretching', 'is-exercising');
       setPose('idle');
       schedule(nextActivity, randomBetween(350, 1200));

@@ -26,7 +26,11 @@
   const ANIMATIONS={
     atlas:{idle:[0,1,0],walk:[4,5,4,5],exercise:[9,6,7,8,7,6,9],stretch:[9,13,9],talk:[9,10,11,10],celebrate:[9,12,14,15,9]},
     pixel:{idle:[0,1,15,0],walk:[2,3,4],exercise:[9,7,8,7,9],stretch:[9,6,9],talk:[9,10,11,10],celebrate:[9,13,14,9]},
-    mira:{idle:[0,1,5,0],walk:[2,3,4],exercise:[9,6,7,8,7,6,9],stretch:[9,12,15,12,9],talk:[9,10,11,10],celebrate:[9,13,14,9]},
+    // walk frame 4 is a noticeably smaller/shorter crop than 2 and 3 on
+    // this particular sheet (checked against both, side by side) -- it
+    // made her visibly shrink-pop every third step. Two good frames beat
+    // three where one doesn't match.
+    mira:{idle:[0,1,5,0],walk:[2,3],exercise:[9,6,7,8,7,6,9],stretch:[9,12,15,12,9],talk:[9,10,11,10],celebrate:[9,13,14,9]},
     rex:{idle:[0,1,8,0],walk:[2,3,4],exercise:[6,7,6,7],stretch:[9,14,15,14,9],talk:[9,10,11,10],celebrate:[9,12,13,9]},
     // Luna's sheet is really two clips: standing stretches (6/7/8/15) and a
     // seated breathing/meditation clip (9/10/11). The old mapping bookended
@@ -57,6 +61,19 @@
     const cid=coach(id).id;
     return (SPEED_OVERRIDES[cid]&&SPEED_OVERRIDES[cid][action])||FRAME_SPEEDS[action]||FRAME_SPEEDS.idle;
   }
+  // Coaches whose "exercise" is really them pulling out a device/map and
+  // looking at it (not a rep) should pause on that look, for a random but
+  // reasonable beat, before putting it away -- not cycle through on the
+  // same metronome as an actual exercise rep. `at` is the index INTO that
+  // coach's own exercise array (not a raw sprite frame number) of the
+  // "looking at it" pose.
+  const DEVICE_HOLDS={
+    pixel:{at:2,min:900,max:2000},
+    mira:{at:3,min:900,max:2200},
+    'red-hoodie-coach':{at:3,min:900,max:2200},
+    'outdoor-coach':{at:1,min:800,max:1800}
+  };
+  function deviceHold(id){return DEVICE_HOLDS[coach(id).id]||null;}
   const CORE_IDS=Object.freeze(ROSTER.map(coach=>coach.id));
   const coach=id=>ROSTER.find(c=>c.id===id)||ROSTER[0];
   function frameSequence(id,action){return ANIMATIONS[coach(id).id][action]||ANIMATIONS[coach(id).id].idle;}
@@ -75,5 +92,5 @@
     sprite.style.backgroundPosition=(n%4*100/3).toFixed(6)+'% '+(Math.floor(n/4)*100/3).toFixed(6)+'%';
   }
   window.UpkeepCoachSprites=Object.freeze({roster:ROSTER,markup,portrait,coach,coreIds:CORE_IDS,
-    frameSequence,setFrame,dimensions:DIMENSIONS,animations:ANIMATIONS,frameInterval});
+    frameSequence,setFrame,dimensions:DIMENSIONS,animations:ANIMATIONS,frameInterval,deviceHold});
 })();
