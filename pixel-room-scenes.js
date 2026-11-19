@@ -106,7 +106,7 @@
     isWalking = true;
     let phase = 0;
     poseFrame('walk', phase);
-    poseTimer = setInterval(() => poseFrame('walk', ++phase), 190);
+    poseTimer = setInterval(() => poseFrame('walk', ++phase), art.frameInterval(selected, 'walk'));
     // Force one layout read so removing the frozen class starts a real
     // CSS transition even immediately after previous animations.
     void actor.offsetWidth;
@@ -133,8 +133,10 @@
     let n = 0;
     const action = stretching ? 'stretch' : 'exercise';
     poseFrame(action, n);
-    // Play the actual distinct frames for THIS coach's movement.
-    poseTimer = setInterval(() => poseFrame(action, ++n), stretching ? 430 : 310);
+    // Each coach's own pace for this action, not one flat speed for
+    // every coach and every action (a held stretch and a rep shouldn't
+    // move at the same rate -- see FRAME_SPEEDS/SPEED_OVERRIDES).
+    poseTimer = setInterval(() => poseFrame(action, ++n), art.frameInterval(selected, action));
     schedule(() => {
       clearInterval(poseTimer);
       poseTimer = null;
@@ -158,7 +160,7 @@
       let phase = 0;
       poseFrame('idle', 0);
       clearInterval(poseTimer);
-      poseTimer = setInterval(() => poseFrame('idle', ++phase), 390);
+      poseTimer = setInterval(() => poseFrame('idle', ++phase), art.frameInterval(selected, 'idle'));
       schedule(() => { clearInterval(poseTimer); poseTimer = null; nextActivity(); }, randomBetween(850, 1900));
     }
   }
@@ -225,7 +227,7 @@
     poseFrame('talk', 0);
     if (!reduce.matches) {
       let frame = 0;
-      poseTimer = setInterval(() => poseFrame('talk', ++frame), 250);
+      poseTimer = setInterval(() => poseFrame('talk', ++frame), art.frameInterval(selected, 'talk'));
     }
     schedule(() => {
       clearInterval(poseTimer);
