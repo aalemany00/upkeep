@@ -470,6 +470,34 @@ own repo, as required.
   2l/2m: trust direct DOM measurement over this pane's own screenshots
   for layout checks, especially at mobile widths.
 
+## 2026-11-19 — Animations on/off toggle for the Dashboard coach
+
+- Added a toggle in the top-left corner of the Dashboard room (a small
+  pixel-styled switch, "Animations") that turns the coach's autonomous
+  wandering/exercise/stretch routine off and on.
+- **Off**: the coach walks smoothly to the middle of the room (a fixed
+  `CENTER_SPOT`, not wherever they happened to be wandering) and settles
+  facing right, as if just standing there — even if turned off mid-walk
+  or mid-talk. Never a teleport: reuses the same CSS-transition walk
+  mechanism as the normal wander (`parkAtCenter()` in
+  `pixel-room-scenes.js`), just with a fixed destination instead of a
+  random waypoint.
+- **On**: resumes the normal routine from wherever the coach currently
+  is (center, since that's where "off" leaves them) — smooth walking
+  resumes via the existing `startAutonomous()`/`nextActivity()` chain,
+  no snapping anywhere.
+- Preference is per-device only (`localStorage`, same treatment as the
+  diet-suggestion shuffle picks) — cosmetic, not real data, so it
+  doesn't need Firestore sync.
+- Verified live: toggled off mid-walk (confirmed the CSS transition
+  retargeted to 50% smoothly, not a jump), confirmed it stays parked for
+  several seconds with no drift, reloaded the page and confirmed it
+  loads already parked with the toggle correctly unchecked, then toggled
+  on and confirmed the resumed walk started from the parked position
+  with its own normal transition duration — never from 0 or snapping.
+  Also checked the toggle's layout at mobile width (375px): no overflow,
+  switch shrinks and drops its text label below 380px to stay compact.
+
 ## Open items
 
 - Delete the `test-coach@example.com` test account and its food entry from

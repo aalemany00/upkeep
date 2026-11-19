@@ -24,6 +24,21 @@
   actor.style.left = '40%';
   room.append(actor);
 
+  // Lets you turn off the autonomous wandering/exercise/stretch routine --
+  // the coach just stands in the middle of the room, facing right, until
+  // you turn it back on. Per-device preference (cosmetic, not real data),
+  // same localStorage-only treatment as the diet-suggestion shuffle picks.
+  const ANIM_PREF_KEY = 'upkeepRoomAnimationsEnabled';
+  const CENTER_SPOT = 50;
+  const animToggle = document.createElement('label');
+  animToggle.className = 'pixel-room-anim-toggle';
+  animToggle.innerHTML =
+    '<input type="checkbox" />' +
+    '<span class="pixel-room-anim-toggle-track"><span class="pixel-room-anim-toggle-knob"></span></span>' +
+    '<span class="pixel-room-anim-toggle-label">Animations</span>';
+  room.append(animToggle);
+  const animToggleInput = animToggle.querySelector('input');
+
   const mobile = window.matchMedia('(max-width:760px)');
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
   const randomBetween = (a, b) => a + Math.random() * (b - a);
@@ -36,6 +51,9 @@
   let poseTimer = null;
   let activeTimers = new Set();
   let previousActivity = '';
+  let paused = false;
+  try { paused = localStorage.getItem(ANIM_PREF_KEY) === '0'; } catch (e) { /* ignore */ }
+  animToggleInput.checked = !paused;
 
   const choice = () => art.roster.find(item => item.id === selected) || art.roster[0];
   const waypoints = () => mobile.matches ? [21, 30, 43, 54, 65] : [30, 37, 46, 53, 61, 67];
@@ -91,12 +109,61 @@
     actor.style.transitionDuration = '0ms';
     currentSpot = percentage;
   }
+  // Walks smoothly to the middle of the room and settles facing right, as
+  // if just standing there -- used when animations get turned off. Reuses
+  // the same CSS-transition mechanism beginMovement uses (never a jump),
+  // and freezes first so a walk already in flight doesn't keep sliding
+  // toward its old, no-longer-relevant destination underneath this one.
+  function parkAtCenter() {
+    clearMotion();
+    freeze();
+    if (reduce.matches || Math.abs(CENTER_SPOT - currentSpot) < 1) {
+      placeAt(CENTER_SPOT);
+      actor.dataset.facing = 'right';
+      setPose('idle');
+      return;
+    }
+    const distance = Math.abs(CENTER_SPOT - currentSpot);
+    const duration = Math.max(1500, Math.min(5100, distance * 115 + 550));
+    actor.dataset.facing = CENTER_SPOT < currentSpot ? 'left' : 'right';
+    actor.classList.add('is-walking');
+    isWalking = true;
+    let phase = 0;
+    poseFrame('walk', phase);
+    poseTimer = setInterval(() => poseFrame('walk', ++phase), art.frameInterval(selected, 'walk'));
+    void actor.offsetWidth;
+    actor.classList.remove('is-frozen');
+    actor.style.transitionDuration = duration + 'ms';
+    actor.style.left = CENTER_SPOT + '%';
+    schedule(() => {
+      clearInterval(poseTimer);
+      poseTimer = null;
+      actor.classList.remove('is-walking');
+      isWalking = false;
+      currentSpot = CENTER_SPOT;
+      actor.dataset.facing = 'right';
+      setPose('idle');
+    }, duration + 60);
+  }
+  function setAnimationsEnabled(enabled) {
+    paused = !enabled;
+    try { localStorage.setItem(ANIM_PREF_KEY, enabled ? '1' : '0'); } catch (e) { /* ignore */ }
+    if (!enabled) {
+      // A hard "off" means standing in the middle, full stop -- even if
+      // they were mid-sentence, not just mid-walk.
+      if (isTalking) { hideSpeech(); isTalking = false; }
+      parkAtCenter();
+    } else if (!isTalking) {
+      startAutonomous(400);
+    }
+  }
+  animToggleInput.addEventListener('change', () => setAnimationsEnabled(animToggleInput.checked));
   function beginMovement() {
     // No self-rescheduling here when not visible: roomVisibility (below)
     // restarts the routine the moment the Dashboard actually comes back
     // into view, instead of this polling every ~1.2s forever in the
     // background on every other tab for as long as the page stays open.
-    if (reduce.matches || isTalking || !isVisible()) return;
+    if (reduce.matches || isTalking || paused || !isVisible()) return;
     const choices = waypoints().filter(value => Math.abs(value - currentSpot) > 8);
     const destination = choices[Math.floor(Math.random() * choices.length)] ?? waypoints()[0];
     const distance = Math.abs(destination - currentSpot);
@@ -126,7 +193,7 @@
     }, duration + 60);
   }
   function doActivity(kind) {
-    if (isTalking || reduce.matches || !isVisible()) return;
+    if (isTalking || reduce.matches || paused || !isVisible()) return;
     const stretching = kind === 'stretch';
     actor.classList.add(stretching ? 'is-stretching' : 'is-exercising');
     previousActivity = kind;
@@ -162,7 +229,7 @@
     }, stretching ? randomBetween(2500, 4100) : randomBetween(2900, 5300));
   }
   function nextActivity() {
-    if (isTalking || reduce.matches || !isVisible()) return;
+    if (isTalking || reduce.matches || paused || !isVisible()) return;
     const roll = Math.random();
     if (roll < .56 || previousActivity === 'idle') {
       previousActivity = 'walk';
@@ -184,7 +251,8 @@
     if (isTalking) return;
     clearMotion();
     setPose('idle');
-    if (!reduce.matches) schedule(nextActivity, delay);
+    if (paused || reduce.matches) return;
+    schedule(nextActivity, delay);
   }
   function select(id) {
     if (!art.roster.some(item => item.id === id)) id = 'atlas';
@@ -206,9 +274,15 @@
     actor.innerHTML = '<span class="pixel-room-facing">' +
       art.markup(id, 'pixel-room-art') + '</span>';
     actor.setAttribute('aria-label', 'Talk to ' + choice().name + ', your fitness coach');
-    placeAt(mobile.matches ? 30 : 40);
-    setPose('idle');
-    startAutonomous(randomBetween(650, 1400));
+    if (paused) {
+      placeAt(CENTER_SPOT);
+      actor.dataset.facing = 'right';
+      setPose('idle');
+    } else {
+      placeAt(mobile.matches ? 30 : 40);
+      setPose('idle');
+      startAutonomous(randomBetween(650, 1400));
+    }
   }
   function positionSpeech() {
     if (!speech || speech.hidden) return;

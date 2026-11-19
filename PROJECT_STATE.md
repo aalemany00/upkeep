@@ -1071,6 +1071,13 @@ reviewed over several rounds and fixed before merging, see `LOG.md`'s
   frame for a random 800-2200ms (`DEVICE_HOLDS`) before continuing.
   Per-action pacing lives in `FRAME_SPEEDS`/`SPEED_OVERRIDES`, not one
   flat speed for everything.
+- **Animations on/off toggle** (top-left of the room, added 2026-11-19):
+  flips `paused` in `pixel-room-scenes.js`. Off walks the coach smoothly
+  to a fixed `CENTER_SPOT` (50%) and parks them facing right via
+  `parkAtCenter()` — same CSS-transition walk mechanic as the normal
+  wander, never a jump, even mid-walk or mid-talk. On resumes
+  `startAutonomous()` from wherever they currently are. Per-device only
+  (`localStorage` key `upkeepRoomAnimationsEnabled`), not synced.
 - **Known-good, checked against the source art**: don't re-add a frame
   to a sequence without opening the actual atlas PNG and checking what
   it depicts first — this is exactly how the original mismatches (and
