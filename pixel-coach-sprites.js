@@ -8,10 +8,10 @@
     {id:'mira',name:'Mira',title:'The Mindset Coach',tagline:"You're doing better than you think. Keep going.",subtitle:'A healthier mind builds a stronger you.',badgeIcon:'lotus',accent:'#8a6fd1',kind:'mind'},
     {id:'rex',name:'Rex',title:'The Progress Coach',tagline:'Every rep, every step, gets you closer!',subtitle:'Progress over perfection.',badgeIcon:'paw',accent:'#c9892f',kind:'dog'},
     {id:'luna',name:'Luna',title:'The Recovery Coach',tagline:"Rest isn't lazy — it's part of the plan.",subtitle:'Recover. Refuel. Come back stronger.',badgeIcon:'moon',accent:'#2e8f82',kind:'recovery'},
-    // Labels are intentionally provisional until the user supplies names.
-    // Stable IDs allow renaming later without losing Firebase selections.
-    {id:'outdoor-coach',name:'Outdoor Coach',title:'Outdoor Movement',tagline:'Take your fitness journey one step at a time.',subtitle:'Explore, breathe, and keep moving.',badgeIcon:'footprints',accent:'#5a8864',kind:'outdoors'},
-    {id:'red-hoodie-coach',name:'Red Hoodie Coach',title:'Movement & Progress',tagline:'A little progress every day adds up.',subtitle:'Find your pace and enjoy the work.',badgeIcon:'dumbbell',accent:'#b96658',kind:'wellness'}
+    // Display names are Scout and Blaze; keep the original stable IDs so
+    // saved coach selections and sprite filenames continue to work.
+    {id:'outdoor-coach',name:'Scout',title:'Outdoor Movement',tagline:'Take your fitness journey one step at a time.',subtitle:'Explore, breathe, and keep moving.',badgeIcon:'footprints',accent:'#5a8864',kind:'outdoors'},
+    {id:'red-hoodie-coach',name:'Blaze',title:'Movement & Progress',tagline:'A little progress every day adds up.',subtitle:'Find your pace and enjoy the work.',badgeIcon:'dumbbell',accent:'#b96658',kind:'wellness'}
   ];
   const DIMENSIONS={atlas:[314,314],pixel:[305,323],mira:[305,323],rex:[314,314],luna:[314,314],'outdoor-coach':[305,323],'red-hoodie-coach':[305,323]};
   // Sequence ordering is based on the uploaded individual frames—not a
